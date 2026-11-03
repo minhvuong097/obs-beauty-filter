@@ -1,0 +1,556 @@
+/*
+ * OBS Beauty Filter
+ *
+ * Multi-pass GPU filter:
+ *   MaskPass      - skin mask with neighbourhood coherence, texture rejection
+ *                   and temporal stabilisation (half resolution RGBA8)
+ *   MaskAnalysis  - tiny downscale used for CPU face-region estimation
+ *   Draw*         - bilateral smoothing, complexion, teeth/eye and HDR-safe
+ *                   output
+ *
+ * Copyright (C) 2026 OBS Beauty Filter contributors
+ * SPDX-License-Identifier: GPL-2.0-or-later
+ */
+
+uniform float4x4 ViewProj;
+
+uniform texture2d image;        /* captured source (linear, SDR-relative) */
+uniform texture2d mask_tex;     /* r = raw skin mask, g = stabilised mask   */
+uniform texture2d history_tex;  /* previous stabilised mask (g channel)      */
+
+/* Per-frame parameters. */
+uniform float2 texel_size;       /* 1 / source width, 1 / source height */
+uniform float2 analysis_texel;   /* 1 / analysis width, 1 / analysis height */
+uniform float radius;            /* blur radius in source pixels        */
+uniform float amount;            /* 0..1 smoothing strength             */
+uniform float detail;            /* 0..1 high-frequency retention      */
+uniform float skin_detect;       /* 0 = whole frame, 1 = skin only      */
+uniform float skin_sensitivity;  /* 0..1 widen/tighten the skin mask    */
+uniform float brightness;        /* -0.5..0.5, skin weighted            */
+uniform float warmth;            /* -0.5..0.5, skin weighted            */
+uniform float saturation;        /* -0.5..0.5, skin weighted            */
+uniform float rosy;              /* 0..1, skin weighted                 */
+uniform float clarity;           /* 0..1, non-skin detail               */
+uniform float glow;              /* 0..1, soft skin glow                */
+uniform float opacity;           /* 0..1, global mix                    */
+uniform float mask_preview;      /* 0/1                                 */
+uniform float split_view;        /* 0/1, left = original                */
+
+uniform float temporal_strength; /* 0..1 mask history blend             */
+uniform float history_valid;     /* 0/1                                 */
+uniform float use_mask_tex;      /* 0/1                                 */
+
+uniform float face_aware;        /* 0/1 face-zone processing            */
+uniform float face_valid;        /* 0/1 face rectangle available        */
+uniform float2 face_center;      /* normalised face centre              */
+uniform float2 face_size;        /* normalised half width/height        */
+uniform float teeth_whiten;      /* 0..1                                */
+uniform float eye_brighten;      /* 0..1                                */
+uniform float zone_preview;      /* 0/1 show face/eye/mouth zones       */
+
+uniform float hdr_scale;         /* output linear -> SDR-relative linear */
+uniform float is_hdr;            /* 0/1                                  */
+
+sampler_state def_sampler {
+	Filter   = Linear;
+	AddressU = Clamp;
+	AddressV = Clamp;
+};
+
+sampler_state data_sampler {
+	Filter   = Linear;
+	AddressU = Clamp;
+	AddressV = Clamp;
+};
+
+sampler_state history_sampler {
+	Filter   = Point;
+	AddressU = Clamp;
+	AddressV = Clamp;
+};
+
+struct VertInOut {
+	float4 pos : POSITION;
+	float2 uv  : TEXCOORD0;
+};
+
+struct VertOut {
+	float4 pos : POSITION;
+	float2 uv  : TEXCOORD0;
+};
+
+VertOut VSDefault(VertInOut vert_in)
+{
+	VertOut vert_out;
+	vert_out.pos = mul(float4(vert_in.pos.xyz, 1.0), ViewProj);
+	vert_out.uv  = vert_in.uv;
+	return vert_out;
+}
+
+float luminance(float3 c)
+{
+	return dot(c, float3(0.299, 0.587, 0.114));
+}
+
+/* OBS_SOURCE_SRGB gives us linear-light samples.  Skin thresholds were tuned
+ * against display-referred sRGB, so convert only for the mask and for small
+ * feature detection. */
+float linear_to_srgb_channel(float x)
+{
+	x = max(x, 0.0);
+	return (x <= 0.0031308) ? (12.92 * x) : (1.055 * pow(x, 1.0 / 2.4) - 0.055);
+}
+
+float3 linear_to_srgb(float3 c)
+{
+	return float3(linear_to_srgb_channel(c.r), linear_to_srgb_channel(c.g),
+	              linear_to_srgb_channel(c.b));
+}
+
+float srgb_to_linear_channel(float x)
+{
+	x = saturate(x);
+	return (x <= 0.04045) ? (x / 12.92) : pow((x + 0.055) / 1.055, 2.4);
+}
+
+float3 srgb_to_linear(float3 c)
+{
+	return float3(srgb_to_linear_channel(c.r), srgb_to_linear_channel(c.g),
+	              srgb_to_linear_channel(c.b));
+}
+
+float3 sample_linear(float2 uv)
+{
+	float4 c = image.Sample(def_sampler, uv);
+	/* OBS captured the frame in the output space.  Bring it into
+	 * SDR-relative linear units for all mask/tone maths. */
+	return c.rgb * hdr_scale / max(c.a, 0.0001);
+}
+
+/*
+ * Soft skin probability in YCbCr space.  The chroma ellipse shifts with luma
+ * so deep and light skin tones share one sensitivity control.  It remains a
+ * colour heuristic: the face prior and neighbourhood coherence below remove
+ * most wood/wall false positives, but not all of them.
+ */
+float skin_mask(float3 c, float sensitivity)
+{
+	float y  = luminance(c);
+	float cb = dot(c, float3(-0.168736, -0.331264, 0.5)) + 0.5;
+	float cr = dot(c, float3(0.5, -0.418688, -0.081312)) + 0.5;
+
+	float t = smoothstep(0.05, 0.55, y);
+	float2 center = lerp(float2(0.455, 0.555), float2(0.385, 0.600), t);
+	float2 radii  = lerp(float2(0.060, 0.065), float2(0.100, 0.090), t);
+
+	float2 d = (float2(cb, cr) - center) / radii;
+	float chroma = 1.0 - smoothstep(0.55, 1.30, length(d));
+
+	float luma_gate = smoothstep(0.015, 0.080, y) *
+	                  (1.0 - smoothstep(0.95, 1.0, y));
+
+	float red_dom = smoothstep(-0.020, 0.060, c.r - c.b) *
+	                smoothstep(-0.035, 0.035, c.r - c.g);
+
+	float p = saturate(chroma * luma_gate * red_dom);
+	return pow(p, lerp(1.70, 0.55, saturate(sensitivity)));
+}
+
+float skin_probability(float2 uv, float sensitivity)
+{
+	float3 c = sample_linear(uv);
+	return skin_mask(linear_to_srgb(saturate(c)), sensitivity);
+}
+
+float ellipse_zone(float2 uv, float2 center, float2 radii)
+{
+	float2 d = (uv - center) / max(radii, float2(0.0001, 0.0001));
+	return 1.0 - smoothstep(0.72, 1.0, length(d));
+}
+
+/* Soft face+neck prior used to reject skin-coloured walls and furniture. */
+float face_prior(float2 uv)
+{
+	float2 center = face_center + float2(0.0, face_size.y * 0.22);
+	float2 radii = max(face_size * float2(1.15, 1.55), float2(0.0001, 0.0001));
+	float2 d = (uv - center) / radii;
+	return 1.0 - smoothstep(0.85, 1.20, length(d));
+}
+
+/* ------------------------------------------------------------------------- */
+/* Pass 1: skin mask                                                          */
+/* ------------------------------------------------------------------------- */
+
+float4 PSMask(VertOut vert_in) : TARGET
+{
+	float2 uv = vert_in.uv;
+	float3 center = sample_linear(uv);
+	float center_p = skin_mask(linear_to_srgb(saturate(center)), skin_sensitivity);
+
+	/* Neighbourhood support: isolated skin-coloured pixels are rejected. */
+	float2 o = texel_size * 1.5;
+	float support = 0.0;
+	support += skin_probability(uv + float2( o.x, 0.0), skin_sensitivity);
+	support += skin_probability(uv + float2(-o.x, 0.0), skin_sensitivity);
+	support += skin_probability(uv + float2(0.0,  o.y), skin_sensitivity);
+	support += skin_probability(uv + float2(0.0, -o.y), skin_sensitivity);
+	support += skin_probability(uv + float2( o.x,  o.y) * 0.7071, skin_sensitivity);
+	support += skin_probability(uv + float2(-o.x,  o.y) * 0.7071, skin_sensitivity);
+	support += skin_probability(uv + float2( o.x, -o.y) * 0.7071, skin_sensitivity);
+	support += skin_probability(uv + float2(-o.x, -o.y) * 0.7071, skin_sensitivity);
+	support *= 0.125;
+
+	float coherence = smoothstep(0.10, 0.45, support);
+
+	/* Local luma gradient rejects hair strands, wood grain and other
+	 * high-frequency false positives without eroding smooth skin. */
+	float yl = luminance(sample_linear(uv + float2(-texel_size.x, 0.0)));
+	float yr = luminance(sample_linear(uv + float2( texel_size.x, 0.0)));
+	float yu = luminance(sample_linear(uv + float2(0.0,  texel_size.y)));
+	float yd = luminance(sample_linear(uv + float2(0.0, -texel_size.y)));
+	float gx = yr - yl;
+	float gy = yu - yd;
+	float gradient = sqrt(gx * gx + gy * gy);
+	float texture_guard = 1.0 - 0.85 * smoothstep(0.035, 0.16, gradient);
+
+	float raw = saturate(center_p * lerp(0.55, 1.0, coherence) * texture_guard);
+
+	/* Motion-adaptive temporal blend: stable regions keep history, while
+	 * large changes (head movement, cuts) trust the current frame. */
+	float previous = history_tex.Sample(history_sampler, uv).g;
+	float motion = smoothstep(0.10, 0.45, abs(raw - previous));
+	float keep = saturate(temporal_strength) * (1.0 - motion) * history_valid;
+	float stabilized = lerp(raw, previous, keep);
+
+	/* Apply the face prior only to the stabilised mask.  The raw channel is
+	 * used by the CPU face tracker, so it must not depend on its own output. */
+	float prior = face_prior(uv);
+	stabilized *= lerp(1.0, prior, 0.90 * saturate(face_valid * face_aware));
+	stabilized = saturate(stabilized);
+
+	return float4(raw, stabilized, 0.0, 1.0);
+}
+
+/* ------------------------------------------------------------------------- */
+/* Pass 2: tiny mask downscale for CPU face-region estimation                 */
+/* ------------------------------------------------------------------------- */
+
+float4 PSMaskAnalysis(VertOut vert_in) : TARGET
+{
+	float sum = 0.0;
+	int i;
+	int j;
+
+	for (j = 0; j < 4; ++j) {
+		for (i = 0; i < 4; ++i) {
+			/* Function-style casts only: the OBS effect parser
+			 * does not accept C-style casts in constructors. */
+			float2 offset = (float2(float(i), float(j)) - 1.5) *
+			                analysis_texel * 0.25;
+			sum += mask_tex.Sample(data_sampler, vert_in.uv + offset).r;
+		}
+	}
+
+	float m = sum * (1.0 / 16.0);
+	return float4(m, m, m, 1.0);
+}
+
+/* ------------------------------------------------------------------------- */
+/* Bilateral blurs                                                            */
+/* ------------------------------------------------------------------------- */
+
+float bilateral_weight(float3 center, float3 sample_color, float range_sigma)
+{
+	float d = luminance(sample_color - center);
+	return exp(-(d * d) / (2.0 * range_sigma * range_sigma + 0.000001));
+}
+
+#define SAMPLE_FAST(dx, dy, spatial)                                        \
+	{                                                                       \
+		float3 s = sample_linear(uv + float2((dx), (dy)) * step_px);        \
+		float w = (spatial) * bilateral_weight(center, s, range_sigma);     \
+		sum += s * w;                                                       \
+		weight += w;                                                        \
+	}
+
+float3 blur9(float2 uv, float3 center, float2 step_px, float range_sigma)
+{
+	float3 sum = center;
+	float weight = 1.0;
+
+	SAMPLE_FAST( 1.0000,  0.0000, 0.90)
+	SAMPLE_FAST(-1.0000,  0.0000, 0.90)
+	SAMPLE_FAST( 0.0000,  1.0000, 0.90)
+	SAMPLE_FAST( 0.0000, -1.0000, 0.90)
+	SAMPLE_FAST( 0.7071,  0.7071, 0.65)
+	SAMPLE_FAST(-0.7071,  0.7071, 0.65)
+	SAMPLE_FAST( 0.7071, -0.7071, 0.65)
+	SAMPLE_FAST(-0.7071, -0.7071, 0.65)
+
+	return sum / max(weight, 0.0001);
+}
+
+#define SAMPLE_BALANCED(dx, dy, spatial)                                    \
+	{                                                                       \
+		float3 s = sample_linear(uv + float2((dx), (dy)) * step_px);        \
+		float w = (spatial) * bilateral_weight(center, s, range_sigma);     \
+		sum += s * w;                                                       \
+		weight += w;                                                        \
+	}
+
+float3 blur13(float2 uv, float3 center, float2 step_px, float range_sigma)
+{
+	float3 sum = center;
+	float weight = 1.0;
+
+	SAMPLE_BALANCED( 0.6500,  0.0000, 0.85)
+	SAMPLE_BALANCED(-0.6500,  0.0000, 0.85)
+	SAMPLE_BALANCED( 0.0000,  0.6500, 0.85)
+	SAMPLE_BALANCED( 0.0000, -0.6500, 0.85)
+	SAMPLE_BALANCED( 0.4596,  0.4596, 0.60)
+	SAMPLE_BALANCED(-0.4596,  0.4596, 0.60)
+	SAMPLE_BALANCED( 0.4596, -0.4596, 0.60)
+	SAMPLE_BALANCED(-0.4596, -0.4596, 0.60)
+	SAMPLE_BALANCED( 1.3500,  0.0000, 0.45)
+	SAMPLE_BALANCED(-1.3500,  0.0000, 0.45)
+	SAMPLE_BALANCED( 0.0000,  1.3500, 0.45)
+	SAMPLE_BALANCED( 0.0000, -1.3500, 0.45)
+
+	return sum / max(weight, 0.0001);
+}
+
+#define SAMPLE_HIGH(dx, dy, spatial)                                        \
+	{                                                                       \
+		float3 s = sample_linear(uv + float2((dx), (dy)) * step_px);        \
+		float w = (spatial) * bilateral_weight(center, s, range_sigma);     \
+		sum += s * w;                                                       \
+		weight += w;                                                        \
+	}
+
+float3 blur25(float2 uv, float3 center, float2 step_px, float range_sigma)
+{
+	float3 sum = center;
+	float weight = 1.0;
+
+	SAMPLE_HIGH( 0.5000,  0.0000, 0.90)
+	SAMPLE_HIGH(-0.5000,  0.0000, 0.90)
+	SAMPLE_HIGH( 0.0000,  0.5000, 0.90)
+	SAMPLE_HIGH( 0.0000, -0.5000, 0.90)
+	SAMPLE_HIGH( 0.3536,  0.3536, 0.70)
+	SAMPLE_HIGH(-0.3536,  0.3536, 0.70)
+	SAMPLE_HIGH( 0.3536, -0.3536, 0.70)
+	SAMPLE_HIGH(-0.3536, -0.3536, 0.70)
+
+	SAMPLE_HIGH( 1.0000,  0.0000, 0.55)
+	SAMPLE_HIGH(-1.0000,  0.0000, 0.55)
+	SAMPLE_HIGH( 0.0000,  1.0000, 0.55)
+	SAMPLE_HIGH( 0.0000, -1.0000, 0.55)
+	SAMPLE_HIGH( 0.7071,  0.7071, 0.40)
+	SAMPLE_HIGH(-0.7071,  0.7071, 0.40)
+	SAMPLE_HIGH( 0.7071, -0.7071, 0.40)
+	SAMPLE_HIGH(-0.7071, -0.7071, 0.40)
+
+	SAMPLE_HIGH( 1.6000,  0.0000, 0.25)
+	SAMPLE_HIGH(-1.6000,  0.0000, 0.25)
+	SAMPLE_HIGH( 0.0000,  1.6000, 0.25)
+	SAMPLE_HIGH( 0.0000, -1.6000, 0.25)
+	SAMPLE_HIGH( 1.1314,  1.1314, 0.18)
+	SAMPLE_HIGH(-1.1314,  1.1314, 0.18)
+	SAMPLE_HIGH( 1.1314, -1.1314, 0.18)
+	SAMPLE_HIGH(-1.1314, -1.1314, 0.18)
+
+	return sum / max(weight, 0.0001);
+}
+
+/* ------------------------------------------------------------------------- */
+/* Final pass                                                                 */
+/* ------------------------------------------------------------------------- */
+
+float4 beauty_finish(float2 uv, float4 src, float3 center, float3 base)
+{
+	float alpha = src.a;
+
+	float skin = 1.0;
+	if (use_mask_tex > 0.5)
+		skin = mask_tex.Sample(data_sampler, uv).g;
+	else
+		skin = skin_mask(linear_to_srgb(saturate(center)),
+		                 skin_sensitivity);
+
+	float mask = lerp(1.0, skin, skin_detect);
+	float3 high_freq = center - base;
+
+	float edge_guard = 1.0 - smoothstep(0.03, 0.12, abs(luminance(high_freq)));
+	mask *= lerp(1.0, edge_guard, skin_detect);
+
+	/* Detail reconstruction on skin, clarity away from skin. */
+	float3 result = lerp(center, base + high_freq * (detail * 0.45),
+	                     amount * mask);
+	result += high_freq * (clarity * 1.35 * (1.0 - mask * 0.85));
+
+	/* Complexion adjustments, skin weighted. */
+	float luma = luminance(result);
+	result = lerp(float3(luma, luma, luma), result, 1.0 + saturation);
+	result += brightness * 0.12 * mask;
+	result.r += warmth * 0.10 * mask;
+	result.b -= warmth * 0.10 * mask;
+	result += float3(0.10, 0.02, 0.045) * (rosy * mask);
+
+	/* Soft glow.  The HDR path is additive so values above SDR white are not
+	 * clipped by the screen blend. */
+	if (is_hdr > 0.5) {
+		result += max(base, float3(0.0, 0.0, 0.0)) *
+		          (glow * 0.22 * mask);
+	} else {
+		float3 bloom = 1.0 - (1.0 - saturate(result)) *
+		                     (1.0 - saturate(base) * 0.5);
+		result = lerp(result, bloom, glow * 0.35 * mask);
+	}
+
+	/* Face-aware zones.  Without a valid face box these are disabled, so
+	 * teeth/eye controls never affect arbitrary parts of the frame. */
+	float face_ok = saturate(face_aware * face_valid);
+	float2 fh = max(face_size, float2(0.0001, 0.0001));
+	float eye_y = face_center.y - 0.16 * fh.y;
+	float eye_dx = 0.40 * fh.x;
+	float2 eye_l_c = float2(face_center.x - eye_dx, eye_y);
+	float2 eye_r_c = float2(face_center.x + eye_dx, eye_y);
+	float2 eye_r = float2(0.30 * fh.x, 0.22 * fh.y);
+	float eye_l = ellipse_zone(uv, eye_l_c, eye_r);
+	float eye_r_zone = ellipse_zone(uv, eye_r_c, eye_r);
+	float eye_zone = max(eye_l, eye_r_zone) * face_ok;
+
+	float2 mouth_c = float2(face_center.x, face_center.y + 0.44 * fh.y);
+	float mouth_zone = ellipse_zone(uv, mouth_c,
+	                                float2(0.55 * fh.x, 0.22 * fh.y)) * face_ok;
+
+	float3 display = linear_to_srgb(saturate(result));
+	float dmax = max(display.r, max(display.g, display.b));
+	float dmin = min(display.r, min(display.g, display.b));
+	float chroma = dmax - dmin;
+	float display_luma = luminance(display);
+
+	/* Teeth: bright, low-chroma, neutral pixels inside the mouth zone. */
+	float neutral = 1.0 - smoothstep(0.020, 0.075, display.r - display.g);
+	float teeth = mouth_zone *
+	              smoothstep(0.42, 0.66, display_luma) *
+	              (1.0 - smoothstep(0.12, 0.28, chroma)) * neutral;
+	teeth = saturate(teeth * teeth_whiten);
+	if (teeth > 0.0001) {
+		float3 white_target = lerp(result, float3(luminance(result)), 0.75) * 1.15;
+		result = lerp(result, white_target, teeth);
+	}
+
+	/* Eyes: lift sclera and add a modest lift to the iris/pupil. */
+	float sclera = smoothstep(0.35, 0.65, display_luma) *
+	               (1.0 - smoothstep(0.10, 0.26, chroma));
+	float dark = (1.0 - smoothstep(0.35, 0.60, display_luma)) * 0.35;
+	float eye_amount = saturate((sclera + dark) * eye_brighten * eye_zone);
+	if (eye_amount > 0.0001) {
+		float3 eye_target = lerp(result, float3(luminance(result)), 0.20) * 1.40 +
+		                    float3(0.015, 0.015, 0.015) * sclera;
+		result = lerp(result, eye_target, eye_amount);
+	}
+
+	/* Do not clip HDR highlights. */
+	if (is_hdr < 0.5)
+		result = saturate(result);
+
+	result = lerp(center, result, saturate(opacity));
+
+	if (split_view > 0.5 && uv.x < 0.5)
+		result = center;
+
+	if (zone_preview > 0.5) {
+		float3 preview = linear_to_srgb(saturate(result)) * 0.35;
+		float prior = face_prior(uv);
+		preview += float3(0.10, 0.55, 0.15) * prior * face_ok * 0.35;
+		preview += float3(0.15, 0.35, 1.00) * eye_zone * 0.65;
+		preview += float3(1.00, 0.80, 0.10) * mouth_zone * 0.65;
+		result = srgb_to_linear(saturate(preview));
+	}
+
+	if (mask_preview > 0.5)
+		result = float3(mask, mask, mask);
+
+	/* Convert back to the source's linear units.  For scRGB this restores
+	 * the 80-nit nominal scale; for SDR/709-extended it is a no-op. */
+	result /= max(hdr_scale, 0.0001);
+
+	return float4(result * alpha, alpha);
+}
+
+float4 PSBeautyFast(VertOut vert_in) : TARGET
+{
+	float4 src = image.Sample(def_sampler, vert_in.uv);
+	float3 center = sample_linear(vert_in.uv);
+	float2 step_px = texel_size * max(radius, 0.0);
+	float3 base = blur9(vert_in.uv, center, step_px,
+	                    lerp(0.020, 0.130, 1.0 - detail));
+	return beauty_finish(vert_in.uv, src, center, base);
+}
+
+float4 PSBeautyBalanced(VertOut vert_in) : TARGET
+{
+	float4 src = image.Sample(def_sampler, vert_in.uv);
+	float3 center = sample_linear(vert_in.uv);
+	float2 step_px = texel_size * max(radius, 0.0);
+	float3 base = blur13(vert_in.uv, center, step_px,
+	                     lerp(0.020, 0.130, 1.0 - detail));
+	return beauty_finish(vert_in.uv, src, center, base);
+}
+
+float4 PSBeautyHigh(VertOut vert_in) : TARGET
+{
+	float4 src = image.Sample(def_sampler, vert_in.uv);
+	float3 center = sample_linear(vert_in.uv);
+	float2 step_px = texel_size * max(radius, 0.0);
+	float3 base = blur25(vert_in.uv, center, step_px,
+	                     lerp(0.020, 0.130, 1.0 - detail));
+	return beauty_finish(vert_in.uv, src, center, base);
+}
+
+technique MaskPass
+{
+	pass
+	{
+		vertex_shader = VSDefault(vert_in);
+		pixel_shader  = PSMask(vert_in);
+	}
+}
+
+technique MaskAnalysis
+{
+	pass
+	{
+		vertex_shader = VSDefault(vert_in);
+		pixel_shader  = PSMaskAnalysis(vert_in);
+	}
+}
+
+technique DrawFast
+{
+	pass
+	{
+		vertex_shader = VSDefault(vert_in);
+		pixel_shader  = PSBeautyFast(vert_in);
+	}
+}
+
+technique DrawBalanced
+{
+	pass
+	{
+		vertex_shader = VSDefault(vert_in);
+		pixel_shader  = PSBeautyBalanced(vert_in);
+	}
+}
+
+technique DrawHigh
+{
+	pass
+	{
+		vertex_shader = VSDefault(vert_in);
+		pixel_shader  = PSBeautyHigh(vert_in);
+	}
+}
