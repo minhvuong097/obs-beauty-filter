@@ -74,7 +74,7 @@ if (-not ($ObsSdkConfigCandidates | Where-Object { Test-Path $_ })) {
     -DCMAKE_SYSTEM_VERSION=10.0.22621.0
   if ($LASTEXITCODE -ne 0) { throw "OBS configure failed" }
 
-  cmake --build $ObsBuildDir --config RelWithDebInfo --target libobs --parallel
+  cmake --build $ObsBuildDir --config RelWithDebInfo --target libobs obs-frontend-api --parallel
   if ($LASTEXITCODE -ne 0) { throw "OBS libobs build failed" }
 
   # Installing the Development component produces the SDK tree consumed by
