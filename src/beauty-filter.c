@@ -52,6 +52,7 @@
 #define S_QUALITY               "quality"
 #define S_SPLIT_VIEW            "split_view"
 #define S_OPACITY               "opacity"
+#define S_ANTI_BANDING          "anti_banding"
 
 #define T_HDR_INFO              obs_module_text("HdrInfo")
 
@@ -89,6 +90,7 @@
 #define T_QUALITY               obs_module_text("Advanced.Quality")
 #define T_SPLIT_VIEW            obs_module_text("Advanced.SplitView")
 #define T_OPACITY               obs_module_text("Advanced.Opacity")
+#define T_ANTI_BANDING          obs_module_text("Advanced.AntiBanding")
 
 #define T_QUALITY_FAST          obs_module_text("Quality.Fast")
 #define T_QUALITY_BALANCED      obs_module_text("Quality.Balanced")
@@ -116,6 +118,7 @@ struct beauty_filter {
 	gs_eparam_t *p_image;
 	gs_eparam_t *p_mask_tex;
 	gs_eparam_t *p_history_tex;
+	gs_eparam_t *p_base_tex;
 
 	gs_eparam_t *p_texel_size;
 	gs_eparam_t *p_analysis_texel;
@@ -146,6 +149,8 @@ struct beauty_filter {
 	gs_eparam_t *p_zone_preview;
 	gs_eparam_t *p_hdr_scale;
 	gs_eparam_t *p_is_hdr;
+	gs_eparam_t *p_base_valid;
+	gs_eparam_t *p_dither;
 
 	float amount;
 	float radius;
@@ -174,13 +179,16 @@ struct beauty_filter {
 	bool face_aware;
 	bool zone_preview;
 	bool face_manual;
+	bool anti_banding;
 
 	enum beauty_quality quality;
+	enum beauty_quality quality_at_alloc;
 
 	/* Graphics resources, created lazily on the render thread. */
 	gs_texrender_t *src_texrender;
 	gs_texrender_t *mask_texrender[2];
 	gs_texrender_t *analysis_texrender;
+	gs_texrender_t *base_texrender;
 	gs_stagesurf_t *analysis_stage;
 	gs_texture_t *white_tex;
 
@@ -192,6 +200,11 @@ struct beauty_filter {
 	uint32_t mask_height;
 	uint32_t analysis_width;
 	uint32_t analysis_height;
+	uint32_t base_width;
+	uint32_t base_height;
+	uint32_t base_divisor;
+
+	float dither_strength;
 
 	bool resources_ready;
 	bool history_valid;
@@ -251,6 +264,7 @@ static void beauty_update(void *data, obs_data_t *settings)
 	filter->face_aware = obs_data_get_bool(settings, S_FACE_AWARE);
 	filter->zone_preview = obs_data_get_bool(settings, S_ZONE_PREVIEW);
 	filter->face_manual = obs_data_get_bool(settings, S_FACE_MANUAL);
+	filter->anti_banding = obs_data_get_bool(settings, S_ANTI_BANDING);
 
 	quality = obs_data_get_string(settings, S_QUALITY);
 	if (quality && strcmp(quality, "fast") == 0)
@@ -267,6 +281,7 @@ static void beauty_release_resources(struct beauty_filter *filter)
 	gs_texrender_destroy(filter->mask_texrender[0]);
 	gs_texrender_destroy(filter->mask_texrender[1]);
 	gs_texrender_destroy(filter->analysis_texrender);
+	gs_texrender_destroy(filter->base_texrender);
 	gs_stagesurface_destroy(filter->analysis_stage);
 	gs_texture_destroy(filter->white_tex);
 
@@ -274,8 +289,13 @@ static void beauty_release_resources(struct beauty_filter *filter)
 	filter->mask_texrender[0] = NULL;
 	filter->mask_texrender[1] = NULL;
 	filter->analysis_texrender = NULL;
+	filter->base_texrender = NULL;
 	filter->analysis_stage = NULL;
 	filter->white_tex = NULL;
+	filter->base_width = 0;
+	filter->base_height = 0;
+	filter->base_divisor = 0;
+	filter->dither_strength = 0.0f;
 	filter->resources_ready = false;
 	filter->history_valid = false;
 	filter->mask_index = 0;
@@ -285,14 +305,24 @@ static void beauty_release_resources(struct beauty_filter *filter)
 	memset(&filter->auto_face, 0, sizeof(filter->auto_face));
 }
 
+static bool beauty_space_is_extended(enum gs_color_space space)
+{
+	return space == GS_CS_SRGB_16F || space == GS_CS_709_EXTENDED ||
+	       space == GS_CS_709_SCRGB;
+}
+
 static bool beauty_ensure_resources(struct beauty_filter *filter, uint32_t width, uint32_t height,
 				    enum gs_color_space space)
 {
 	static const uint8_t white_pixel[4] = {255, 255, 255, 255};
 	const uint8_t *white_ptr = white_pixel;
+	/* The base holds linear light.  Keep it in half float even for SDR:
+	 * quantising a blurred linear image to 8 bits creates visible steps in
+	 * skin shadows before the final sRGB encode. */
+	const enum gs_color_format base_format = GS_RGBA16F;
 
 	if (filter->resources_ready && filter->width == width && filter->height == height &&
-	    filter->space == space)
+	    filter->space == space && filter->quality_at_alloc == filter->quality)
 		return true;
 
 	beauty_release_resources(filter);
@@ -303,6 +333,45 @@ static bool beauty_ensure_resources(struct beauty_filter *filter, uint32_t width
 	filter->src_format = gs_get_format_from_space(space);
 	filter->mask_width = (width + 1) / 2;
 	filter->mask_height = (height + 1) / 2;
+	filter->quality_at_alloc = filter->quality;
+
+	/* The bilateral base is rendered at a fraction of the output
+	 * resolution.  Smaller bases are cheaper and allow a wider blur with a
+	 * fixed 25-tap kernel; the full-resolution detail is reconstructed in
+	 * the final pass. */
+	switch (filter->quality) {
+	case BEAUTY_QUALITY_FAST:
+		filter->base_divisor = 4;
+		break;
+	case BEAUTY_QUALITY_HIGH:
+		filter->base_divisor = 2;
+		break;
+	case BEAUTY_QUALITY_BALANCED:
+	default:
+		filter->base_divisor = 3;
+		break;
+	}
+
+	{
+		uint32_t max_divisor = width / 32;
+		if (height / 32 < max_divisor)
+			max_divisor = height / 32;
+		if (max_divisor < 1)
+			max_divisor = 1;
+		if (filter->base_divisor > max_divisor)
+			filter->base_divisor = max_divisor;
+		if (filter->base_divisor > 8)
+			filter->base_divisor = 8;
+		if (filter->base_divisor < 1)
+			filter->base_divisor = 1;
+	}
+
+	filter->base_width = (width + filter->base_divisor - 1) / filter->base_divisor;
+	filter->base_height = (height + filter->base_divisor - 1) / filter->base_divisor;
+	if (filter->base_width < 1)
+		filter->base_width = 1;
+	if (filter->base_height < 1)
+		filter->base_height = 1;
 
 	filter->analysis_width = FACE_GRID_WIDTH;
 	filter->analysis_height =
@@ -316,13 +385,14 @@ static bool beauty_ensure_resources(struct beauty_filter *filter, uint32_t width
 	filter->mask_texrender[0] = gs_texrender_create(GS_RGBA, GS_ZS_NONE);
 	filter->mask_texrender[1] = gs_texrender_create(GS_RGBA, GS_ZS_NONE);
 	filter->analysis_texrender = gs_texrender_create(GS_RGBA, GS_ZS_NONE);
+	filter->base_texrender = gs_texrender_create(base_format, GS_ZS_NONE);
 	filter->analysis_stage =
 		gs_stagesurface_create(filter->analysis_width, filter->analysis_height, GS_RGBA);
 	filter->white_tex = gs_texture_create(1, 1, GS_RGBA, 1, &white_ptr, 0);
 
 	if (!filter->src_texrender || !filter->mask_texrender[0] ||
 	    !filter->mask_texrender[1] || !filter->analysis_texrender ||
-	    !filter->analysis_stage || !filter->white_tex) {
+	    !filter->base_texrender || !filter->analysis_stage || !filter->white_tex) {
 		blog(LOG_ERROR, "[obs-beauty-filter] Failed to allocate GPU resources for %ux%u",
 		     width, height);
 		beauty_release_resources(filter);
@@ -550,15 +620,17 @@ static void beauty_render(void *data, gs_effect_t *unused)
 		radius_scale = 0.25f;
 	radius = filter->radius * radius_scale;
 
+	is_hdr = beauty_space_is_extended(output_space);
 	if (output_space == GS_CS_709_SCRGB) {
 		float sdr_white = obs_get_video_sdr_white_level();
 		if (sdr_white < 1.0f)
 			sdr_white = 300.0f;
 		hdr_scale = 80.0f / sdr_white;
-		is_hdr = true;
-	} else if (output_space == GS_CS_709_EXTENDED) {
-		is_hdr = true;
 	}
+
+	/* hdr_scale is needed by the base pass even when the mask is disabled. */
+	if (filter->p_hdr_scale)
+		gs_effect_set_float(filter->p_hdr_scale, hdr_scale);
 
 	need_mask = filter->skin_detect || filter->face_aware ||
 		    filter->teeth_whiten > 0.0001f || filter->eye_brighten > 0.0001f;
@@ -661,7 +733,73 @@ static void beauty_render(void *data, gs_effect_t *unused)
 		filter->history_valid = false;
 	}
 
-	/* 3. Main processing pass. */
+	/* 3. Low-resolution bilateral base for frequency separation.  This is
+	 * skipped when smoothing is off or when the GPU refused the extra
+	 * render target; the main shader then falls back to a full-resolution
+	 * bilateral kernel. */
+	bool base_rendered = false;
+	gs_texture_t *base_tex = NULL;
+	if (filter->base_texrender && filter->amount > 0.0001f && radius > 0.01f) {
+		struct vec2 base_texel;
+		const float base_radius = radius / (float)filter->base_divisor;
+		const bool previous_fb = gs_framebuffer_srgb_enabled();
+
+		vec2_set(&base_texel, 1.0f / (float)filter->base_width,
+			 1.0f / (float)filter->base_height);
+
+		if (filter->p_texel_size)
+			gs_effect_set_vec2(filter->p_texel_size, &base_texel);
+		if (filter->p_radius)
+			gs_effect_set_float(filter->p_radius, base_radius);
+		if (filter->p_detail)
+			gs_effect_set_float(filter->p_detail, filter->detail);
+		if (filter->p_hdr_scale)
+			gs_effect_set_float(filter->p_hdr_scale, hdr_scale);
+
+		if (filter->p_image) {
+			if (gs_is_srgb_format(filter->src_format))
+				gs_effect_set_texture_srgb(filter->p_image, src_tex);
+			else
+				gs_effect_set_texture(filter->p_image, src_tex);
+		}
+
+		gs_enable_framebuffer_srgb(false);
+		gs_blend_state_push();
+		gs_blend_function(GS_BLEND_ONE, GS_BLEND_ZERO);
+
+		gs_texrender_reset(filter->base_texrender);
+		if (gs_texrender_begin(filter->base_texrender, filter->base_width,
+				       filter->base_height)) {
+			gs_ortho(0.0f, (float)filter->base_width, 0.0f,
+				 (float)filter->base_height, -100.0f, 100.0f);
+			beauty_draw_technique(filter, "BlurBase", filter->base_width,
+					      filter->base_height, src_tex);
+			gs_texrender_end(filter->base_texrender);
+
+			base_tex = gs_texrender_get_texture(filter->base_texrender);
+			base_rendered = base_tex != NULL;
+		}
+
+		gs_blend_state_pop();
+		gs_enable_framebuffer_srgb(previous_fb);
+	}
+
+	/* 4. Main processing pass. */
+	if (filter->p_base_tex)
+		gs_effect_set_texture(filter->p_base_tex,
+				      base_rendered ? base_tex : filter->white_tex);
+	if (filter->p_base_valid)
+		gs_effect_set_float(filter->p_base_valid,
+				    base_rendered ? 1.0f : 0.0f);
+
+	const bool is_8bit = filter->src_format == GS_RGBA ||
+			     filter->src_format == GS_BGRA ||
+			     filter->src_format == GS_BGRX;
+	filter->dither_strength =
+		(filter->anti_banding && is_8bit) ? (1.0f / 255.0f) : 0.0f;
+	if (filter->p_dither)
+		gs_effect_set_float(filter->p_dither, filter->dither_strength);
+
 	if (filter->p_mask_tex)
 		gs_effect_set_texture(filter->p_mask_tex, mask_tex);
 	if (filter->p_texel_size)
@@ -746,6 +884,13 @@ static bool beauty_is_visible(obs_properties_t *props, const char *name, bool vi
 	return true;
 }
 
+static void beauty_set_description(obs_properties_t *props, const char *name, const char *text)
+{
+	obs_property_t *property = obs_properties_get(props, name);
+	if (property)
+		obs_property_set_description(property, text);
+}
+
 static void beauty_update_visibility(obs_properties_t *props, bool skin_detect, bool face_aware,
 				     bool face_manual)
 {
@@ -827,6 +972,14 @@ static obs_properties_t *beauty_properties(void *data)
 	obs_properties_add_float_slider(group, S_SKIN_SENSITIVITY, T_SKIN_SENSITIVITY, 0.0, 1.0,
 					0.01);
 	obs_properties_add_bool(group, S_MASK_PREVIEW, T_MASK_PREVIEW);
+	beauty_set_description(group, S_AMOUNT,
+			       obs_module_text("Smoothing.Amount.Description"));
+	beauty_set_description(group, S_RADIUS,
+			       obs_module_text("Smoothing.Radius.Description"));
+	beauty_set_description(group, S_DETAIL,
+			       obs_module_text("Smoothing.Detail.Description"));
+	beauty_set_description(group, S_SKIN_SENSITIVITY,
+			       obs_module_text("Smoothing.SkinSensitivity.Description"));
 	obs_properties_add_group(props, "smoothing_group", T_GROUP_SMOOTHING, OBS_GROUP_NORMAL,
 				 group);
 
@@ -836,6 +989,10 @@ static obs_properties_t *beauty_properties(void *data)
 	obs_properties_add_float_slider(group, S_WARMTH, T_WARMTH, -50.0, 50.0, 1.0);
 	obs_properties_add_float_slider(group, S_SATURATION, T_SATURATION, -50.0, 50.0, 1.0);
 	obs_properties_add_float_slider(group, S_ROSY, T_ROSY, 0.0, 1.0, 0.01);
+	beauty_set_description(group, S_BRIGHTNESS,
+			       obs_module_text("Complexion.Brightness.Description"));
+	beauty_set_description(group, S_WARMTH,
+			       obs_module_text("Complexion.Warmth.Description"));
 	obs_properties_add_group(props, "complexion_group", T_GROUP_COMPLEXION, OBS_GROUP_NORMAL,
 				 group);
 
@@ -843,6 +1000,8 @@ static obs_properties_t *beauty_properties(void *data)
 	group = obs_properties_create();
 	obs_properties_add_float_slider(group, S_CLARITY, T_CLARITY, 0.0, 1.0, 0.01);
 	obs_properties_add_float_slider(group, S_GLOW, T_GLOW, 0.0, 1.0, 0.01);
+	beauty_set_description(group, S_CLARITY, obs_module_text("Detail.Clarity.Description"));
+	beauty_set_description(group, S_GLOW, obs_module_text("Detail.Glow.Description"));
 	obs_properties_add_group(props, "detail_group", T_GROUP_DETAIL, OBS_GROUP_NORMAL, group);
 
 	/* --- Face & eyes ---------------------------------------------------- */
@@ -859,6 +1018,9 @@ static obs_properties_t *beauty_properties(void *data)
 	obs_properties_add_float_slider(group, S_FACE_CY, T_FACE_CY, 0.0, 1.0, 0.005);
 	obs_properties_add_float_slider(group, S_FACE_W, T_FACE_W, 0.05, 1.0, 0.005);
 	obs_properties_add_float_slider(group, S_FACE_H, T_FACE_H, 0.05, 1.0, 0.005);
+	beauty_set_description(group, S_FACE_AWARE, obs_module_text("Face.Enable.Description"));
+	beauty_set_description(group, S_TEETH, obs_module_text("Face.Teeth.Description"));
+	beauty_set_description(group, S_EYES, obs_module_text("Face.Eyes.Description"));
 	obs_properties_add_group(props, "face_group", T_GROUP_FACE, OBS_GROUP_NORMAL, group);
 
 	/* --- Performance & preview ----------------------------------------- */
@@ -870,6 +1032,11 @@ static obs_properties_t *beauty_properties(void *data)
 	obs_property_list_add_string(p, T_QUALITY_HIGH, "high");
 	obs_properties_add_bool(group, S_SPLIT_VIEW, T_SPLIT_VIEW);
 	obs_properties_add_float_slider(group, S_OPACITY, T_OPACITY, 0.0, 1.0, 0.01);
+	obs_properties_add_bool(group, S_ANTI_BANDING, T_ANTI_BANDING);
+	beauty_set_description(group, S_QUALITY,
+			       obs_module_text("Advanced.Quality.Description"));
+	beauty_set_description(group, S_ANTI_BANDING,
+			       obs_module_text("Advanced.AntiBanding.Description"));
 	obs_properties_add_group(props, "advanced_group", T_GROUP_ADVANCED, OBS_GROUP_NORMAL,
 				 group);
 
@@ -912,6 +1079,7 @@ static void beauty_defaults(obs_data_t *settings)
 	obs_data_set_default_string(settings, S_QUALITY, "balanced");
 	obs_data_set_default_bool(settings, S_SPLIT_VIEW, false);
 	obs_data_set_default_double(settings, S_OPACITY, 1.0);
+	obs_data_set_default_bool(settings, S_ANTI_BANDING, true);
 }
 
 static void *beauty_create(obs_data_t *settings, obs_source_t *context)
@@ -936,6 +1104,10 @@ static void *beauty_create(obs_data_t *settings, obs_source_t *context)
 		filter->p_mask_tex = gs_effect_get_param_by_name(filter->effect, "mask_tex");
 		filter->p_history_tex =
 			gs_effect_get_param_by_name(filter->effect, "history_tex");
+		filter->p_base_tex = gs_effect_get_param_by_name(filter->effect, "base_tex");
+		filter->p_base_valid =
+			gs_effect_get_param_by_name(filter->effect, "base_valid");
+		filter->p_dither = gs_effect_get_param_by_name(filter->effect, "dither_strength");
 		filter->p_texel_size = gs_effect_get_param_by_name(filter->effect, "texel_size");
 		filter->p_analysis_texel =
 			gs_effect_get_param_by_name(filter->effect, "analysis_texel");

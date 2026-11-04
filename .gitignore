@@ -3,6 +3,11 @@ build-*/
 cmake-build-*/
 out/
 dist/
+package/
+release/
+.ci/
+*.tar.gz
+*.zip
 *.dll
 *.so
 *.dylib

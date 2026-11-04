@@ -2,22 +2,24 @@
 
 **English | [Tiếng Việt](README.md)**
 
-A GPU beauty filter for **OBS Studio** on Windows and Linux (macOS can be built from source but is not tested). Version **1.1.0** runs entirely on the GPU, plugs into the standard OBS filter pipeline, uses no AI model, never reads a full-resolution frame back to the CPU, and has no third-party runtime dependency.
+A GPU beauty filter for **OBS Studio** on Windows and Linux (macOS can be built from source but is not tested). Version **1.2.0** runs entirely on the GPU, plugs into the standard OBS filter pipeline, uses no AI model, never reads a full-resolution frame back to the CPU, and has no third-party runtime dependency.
 
-Goal: natural-looking skin for livestreams/webcams while preserving eyes, eyebrows, hair and the face outline — with correct HDR handling.
+Goal: natural-looking skin for livestreams/webcams **and high-resolution cameras** while preserving eyes, eyebrows, hair, pores and the face outline — with correct HDR handling.
 
 ## Features
 
+- **Frequency separation for skin**: a low-resolution bilateral base (1/2–1/4 res, 25-tap Vogel disk) with full-resolution detail reconstruction — smooths broad skin blotches while keeping texture and reducing halos at 1440p/4K.
 - **Edge-preserving skin smoothing**: 9/13/25-tap bilateral filter that softens pores and minor blemishes without erasing edges.
 - **Layered skin mask**: YCbCr skin detection plus **neighbourhood coherence**, **gradient/texture rejection** (hair, wood grain) and **temporal stabilisation** to reduce flicker.
 - **Heuristic face region**: estimates a face box from the largest connected skin component on a tiny 64×N grid, with temporal smoothing and a **manual face box** fallback. No ONNX/MediaPipe required.
 - **Face prior**: an ellipse over the face and neck rejects most skin-coloured walls, furniture and clothing.
 - **Teeth whitening**: brightens neutral, low-chroma, bright pixels inside the mouth ellipse.
 - **Eye brightening**: lifts the sclera and gently raises the iris/pupil inside two eye ellipses.
-- **Detail reconstruction**: restores high-frequency skin texture and adds clarity outside skin.
-- **Complexion controls**: brightness, warmth, saturation and rosy tint, all skin-weighted.
-- **Soft glow** for skin, useful with ring lights.
-- **HDR-safe**: `GS_CS_709_EXTENDED` and `GS_CS_709_SCRGB` are processed in linear light; highlights above SDR white are preserved (no bypass, no clipping).
+- **Detail reconstruction**: retains luma texture (pores) more than chroma (blotches) and adds clarity outside skin.
+- **Complexion controls**: exposure-like brightness, luma-preserving warmth, saturation and rosy tint, all skin-weighted.
+- **Soft glow** only on highlights, useful with ring lights and clean shadows.
+- **Anti-banding**: triangular dithering for 8-bit output prevents banding in smooth skin gradients.
+- **HDR-safe**: `GS_CS_709_EXTENDED`, `GS_CS_709_SCRGB` and `GS_CS_SRGB_16F` are processed in linear light; highlights above SDR white are preserved (no bypass, no clipping).
 - **Previews**: skin mask, split view and face/eye/mouth zones.
 - **Three performance levels**: Fast / Balanced / High.
 - **Alpha support**, SDR 8-bit and SDR 16-bit.
@@ -35,7 +37,7 @@ obs-beauty-filter/
 │   ├── face-region.h
 │   └── plugin-main.c        # module entry point
 ├── data/
-│   ├── beauty_filter.effect # OBS effect: MaskPass / MaskAnalysis / Draw*
+│   ├── beauty_filter.effect # OBS effect: MaskPass / MaskAnalysis / BlurBase / Draw*
 │   └── locale/
 │       ├── en-US.ini
 │       └── vi-VN.ini
@@ -208,7 +210,8 @@ set `INSTALL_LIBDIR=...` for Debian/Ubuntu multiarch).
 | Manual face box | Off | On/Off | Use the manual box instead of auto detection |
 | Face center X / Y | 0.50 / 0.45 | 0–1 | Face centre in normalised coordinates |
 | Face width / height | 0.32 / 0.42 | 0.05–1 | **Full** face-box size, normalised |
-| Quality | Balanced | Fast/Balanced/High | 9/13/25-tap bilateral |
+| Quality | Balanced | Fast/Balanced/High | 1/4, 1/3 or 1/2 resolution base; High recommended for 1440p/4K |
+| Anti-banding | On | On/Off | Triangular dither for 8-bit output |
 | Split preview | Off | On/Off | Left = original, right = processed |
 | Overall opacity | 1.0 | 0–1 | Global mix with the original frame |
 
@@ -217,12 +220,13 @@ Note: `Face width/height` are full dimensions, not half-extents. For example a f
 ### Situation-based suggestions
 
 - **1080p webcam, indoor lighting**: Amount `0.35–0.5`, Radius `5–8`, Detail `0.3–0.5`, Clarity `0.05–0.15`.
+- **High-end 1440p/4K camera**: Quality `High`, Amount `0.20–0.35`, Radius `6–12`, Detail `0.45–0.65`, Clarity `0.05–0.10`, Skin sensitivity `0.45–0.55`. The base pass keeps full-resolution detail, so skin looks smooth rather than flat.
 - **Close-up / blemished skin**: Amount `0.55–0.7`, Radius `8–12`, Detail `0.25`, Quality `High`, Teeth `0.3–0.5`, Eyes `0.2–0.4`.
 - **Men / beards**: Amount `0.2–0.3`, Detail `0.5–0.7`, Radius `4–6`, Clarity `0.1`; lower Teeth/Eyes.
 - **Deep skin tones**: Sensitivity `0.6–0.75`, Amount `0.25–0.4`; always verify with **Show skin mask**.
 - **Low light / noise**: Beauty Filter does not denoise. Add **Denoise** before it, then Amount `0.2–0.35`, Glow `0.1`.
-- **4K**: choose `Fast` or `Balanced`; Radius scales automatically with resolution.
-- **HDR source (Rec.709 extended / scRGB)**: use the same controls; the filter processes linear light and preserves highlights. Re-check Amount/Glow because HDR has a wider brightness range.
+- **4K / many stacked filters**: Quality `High` on a discrete GPU with headroom; if frame rate drops, move to `Balanced` (1/3 base) before `Fast`. Radius scales automatically with resolution.
+- **HDR source (Rec.709 extended / scRGB / 16F)**: use the same controls; the filter processes linear light and preserves highlights. Re-check Amount/Glow because HDR has a wider brightness range.
 
 See also [docs/TUNING.en.md](docs/TUNING.en.md).
 
@@ -249,11 +253,15 @@ Source texture
    │                              └─► face-region.c: connected component
    │                                  + upper band → face box
    │
+   ├─► BlurBase (1/2–1/4 res, RGBA16F)
+   │      └─ 25-tap Vogel disk bilateral → low-frequency base
+   │
    └─► DrawFast / DrawBalanced / DrawHigh
-          ├─ 9/13/25-tap bilateral blur
+          ├─ frequency separation: base + reconstructed detail
           ├─ detail reconstruction + clarity
           ├─ complexion + glow (HDR-safe)
           ├─ teeth/eye zones (only with a valid face box)
+          ├─ anti-banding dither
           ├─ opacity / split / previews
           └─ HDR scale restore
    │
@@ -261,25 +269,28 @@ Source texture
 Output (alpha preserved, values > SDR white preserved on HDR)
 ```
 
-- **No longer a single pass**: the mask pass runs at half resolution, the analysis pass at 64×N, and the main pass at full resolution.
+- **No longer a single pass**: the mask pass runs at half resolution, the analysis pass at 64×N, the base pass at 1/2–1/4 resolution, and the main pass at full resolution.
+- **Frequency separation**: the base pass blurs broad skin areas at reduced resolution with a 25-tap Vogel disk; the final pass restores full-resolution detail, weighting luma more than chroma. This preserves pores, reduces halos and avoids sparse kernels at 1440p/4K.
 - **No full-frame readback**: only the 64×N grid (at most 64×64 RGBA = 16 KB) is read back, and only when `Face-aware zones` is on, automatic detection is used, once every 6 frames.
 - **Ping-pong mask textures** provide history for temporal stabilisation without per-frame allocation.
+- **The base is RGBA16F** even for SDR, avoiding linear 8-bit quantisation in shadows before the sRGB encode.
 - Radius is normalised to frame height (1080p reference), so one preset behaves similarly at 720p/1080p/4K.
-- **HDR**: `GS_CS_709_EXTENDED` uses `hdr_scale = 1.0`; `GS_CS_709_SCRGB` uses `80 / obs_get_video_sdr_white_level()`. The frame is captured directly in the **output space** so OBS performs any source conversion/tonemapping; the shader brings samples into SDR-relative linear exactly once, does not `saturate` HDR output, and divides by the scale before writing.
+- **HDR**: `GS_CS_709_EXTENDED` and `GS_CS_SRGB_16F` use `hdr_scale = 1.0`; `GS_CS_709_SCRGB` uses `80 / obs_get_video_sdr_white_level()`. The frame is captured directly in the **output space** so OBS performs any source conversion/tonemapping; the shader brings samples into SDR-relative linear exactly once, does not `saturate` HDR output, and divides by the scale before writing.
 - Maths and design rationale: [docs/ARCHITECTURE.en.md](docs/ARCHITECTURE.en.md).
 
 ## Performance
 
-The dominant cost is still the full-resolution fragment shader, plus a half-resolution mask pass and a tiny readback:
+The dominant cost is the full-resolution fragment shader, plus a half-resolution mask pass, a 1/2–1/4-resolution base pass (25 taps) and a tiny readback:
 
-| Quality | Taps | Notes |
-|---|---:|---|
-| Fast | 9 | iGPU, 4K, or several stacked filters |
-| Balanced | 13 | Default for 1080p60 |
-| High | 25 | Close-ups, discrete GPU, 1080p |
+| Quality | Base | Notes |
+|---|---|---|
+| Fast | 1/4 res | iGPU, 4K, or several stacked filters |
+| Balanced | 1/3 res | Default for 1080p60 |
+| High | 1/2 res | Close-ups, discrete GPU, 1440p/4K — recommended for high-end cameras |
 
 - `MaskPass` runs at half resolution with 8 coherence + 4 gradient samples; much cheaper than full resolution.
 - `MaskAnalysis` runs only every 6 frames when automatic face-aware detection is on.
+- `BlurBase` is always cheaper than a full-resolution bilateral at the same radius because it touches 1/4–1/16 of the pixels.
 - Disable **Face-aware zones** when you do not use teeth/eye controls to skip the mask pass when `Skin detection` is also off.
 - If frame rate drops: lower Quality first, then Radius, then disable Glow.
 
@@ -321,10 +332,10 @@ xvfb-run -a ./build/beauty-load-test \
 Expected final line:
 
 ```text
-OK: module loaded, filter created, effect compiled, filter rendered, mask/opacity/face zones/HDR verified
+OK: module loaded, filter created, effect compiled, filter rendered, mask/opacity/face zones/texture/HDR verified
 ```
 
-The integration test covers: default filter output, skin mask, opacity 0, teeth/eye zones (with a manual face box), zone preview colours, Rec.709 extended HDR and scRGB HDR (values above 1.0 are preserved, actually processed, and not double-scaled). No shader errors are allowed. See [docs/TESTING.en.md](docs/TESTING.en.md) for the full test matrix.
+The integration test covers: default filter output, skin mask, opacity 0, teeth/eye zones (with a manual face box), zone preview colours, frequency separation on a textured skin pattern (contrast drops at low Detail and returns at high Detail), Rec.709 extended HDR and scRGB HDR (values above 1.0 are preserved, actually processed, and not double-scaled). No shader errors are allowed. See [docs/TESTING.en.md](docs/TESTING.en.md) for the full test matrix.
 
 > **Test status:** the project builds and runs automated tests with OBS 30.2.3 on Linux/OpenGL (Mesa llvmpipe). The source/API has been reviewed against the OBS 33.0.1 headers, and the CMake build plus Windows script support the new OBS 33 plugin layout. The shader uses standard OBS effect syntax and compiles on OpenGL. The D3D11 path and the `%ProgramData%\obs-studio\plugins` layout still need to be built and tested on Windows with OBS 33.0.1 before a production release.
 

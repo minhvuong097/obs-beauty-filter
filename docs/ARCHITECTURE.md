@@ -2,7 +2,7 @@
 
 **[English](ARCHITECTURE.en.md) | Tiếng Việt**
 
-Tài liệu này mô tả luồng xử lý, công thức shader và các quyết định thiết kế của plugin **1.1.0** để ổn định trong pipeline filter của OBS.
+Tài liệu này mô tả luồng xử lý, công thức shader và các quyết định thiết kế của plugin **1.2.0** để ổn định trong pipeline filter của OBS.
 
 ## 1. Vòng đời filter và pipeline render
 
@@ -24,13 +24,14 @@ Mỗi frame, `beauty_render()` thực hiện:
    ```
 
    Color space khác (ví dụ HLG/PQ không được map) sẽ được `obs_source_skip_video_filter()`.
-3. Cấp phát (lazy) `src_texrender`, hai `mask_texrender`, `analysis_texrender`, `analysis_stage` và `white_tex` nếu kích thước/color space thay đổi.
+3. Cấp phát (lazy) `src_texrender`, hai `mask_texrender`, `analysis_texrender`, `base_texrender`, `analysis_stage` và `white_tex` nếu kích thước, color space hoặc quality thay đổi.
 4. **Capture**: render target vào `src_texrender` bằng
    `gs_texrender_begin_with_color_space(..., gs_get_color_space())`. Dùng **output space** để OBS tự chuyển đổi/tonemap nguồn (kể cả scRGB) và tránh scale hai lần; dùng `obs_source_default_render()` cho input thông thường, hoặc `obs_source_video_render()` cho custom/async source.
 5. **MaskPass** (nếu cần mask): render mask nửa resolution vào `mask_texrender[mask_index]`, lấy history từ texture còn lại.
 6. **MaskAnalysis** (định kỳ): downsample mask xuống grid 64×N và readback nhỏ để cập nhật face box.
-7. **Main pass**: chọn `DrawFast` / `DrawBalanced` / `DrawHigh`, set toàn bộ uniform rồi vẽ fullscreen quad.
-8. Khôi phục blend state, framebuffer sRGB và linear sRGB.
+7. **BlurBase**: render base bilateral độ phân giải thấp vào `base_texrender` (1/2–1/4 độ phân giải, RGBA16F).
+8. **Main pass**: chọn `DrawFast` / `DrawBalanced` / `DrawHigh`, set toàn bộ uniform rồi vẽ fullscreen quad, tái tạo chi tiết full-resolution trên base.
+9. Khôi phục blend state, framebuffer sRGB và linear sRGB.
 
 Không dùng `obs_source_process_filter_begin_with_color_space()` vì plugin cần kiểm soát texture capture, mask pass và color space riêng. Việc capture thủ công vẫn tương thích với filter chain vì target/parent được lấy đúng từ OBS.
 
@@ -270,80 +271,100 @@ result = lerp(result, eye_target, eye_amount);
 
 Cả hai hiệu ứng đều **tắt hoàn toàn** khi `face_valid = 0`.
 
-## 5. Bilateral blur
+## 5. Base pass và frequency separation
 
-Với mỗi mẫu lân cận:
+Hai kernel phối hợp với nhau:
 
-```hlsl
-d = luminance(sample - center);
-w = spatial_weight * exp(-(d*d) / (2*sigma^2));
-```
+1. **`BlurBase`** render base tần số thấp ở **1/2–1/4 độ phân giải output** vào target RGBA16F. Ở độ phân giải thấp, một blur bán kính lớn chỉ cần 25 mẫu:
 
-- `sigma = lerp(0.020, 0.130, 1 - detail)`.
-  - `detail` cao → sigma nhỏ → giữ cạnh/texture.
-  - `detail` thấp → sigma lớn → làm mịn mạnh hơn.
-- Trọng số không gian theo ring:
-  - Fast: 1 vòng, 8 hướng (9 tap gồm center).
-  - Balanced: vòng trong 0.65r + vòng ngoài 1.35r (trục), 13 tap.
-  - High: 3 vòng 0.5r / 1.0r / 1.6r, 25 tap.
+   ```hlsl
+   fi    = i + 0.5;
+   r     = sqrt(fi / 25.0);
+   theta = fi * 2.39996323;             // golden angle
+   offset = float2(cos(theta), sin(theta)) * r;
+   w      = (1.0 - r * 0.55) * exp(-(d*d) / (2*sigma^2));
+   ```
 
-Các mẫu đặt theo pixel-space:
+   - Bán kính dùng ở base = `radius / divisor`, nên bán kính full-resolution yêu cầu vẫn được giữ đúng.
+   - 25 mẫu trải trên Vogel disk, phân bố đều theo góc, tránh alias do các vòng mẫu thưa ở 1440p/4K.
+   - `sigma = lerp(0.020, 0.130, 1 - detail)` vẫn áp dụng trọng số bilateral theo chênh lệch màu.
 
-```c
-step_px = (1/width, 1/height) * radius;
-```
+2. **`Draw*`** tái tạo chi tiết ở full resolution: `high_freq = center - base`, tách luma và chroma (mục 6).
 
-`radius` trong UI được tính ở mốc 1080p và nhân với `height/1080` trong C, nên cùng một preset cho tỉ lệ tương đương khi đổi resolution.
+Quality chọn divisor: Fast `1/4`, Balanced `1/3`, High `1/2`. Base luôn là **RGBA16F kể cả với SDR** để ảnh linear bị blur không bị lượng tử hoá 8-bit ở vùng tối trước khi encode sRGB. Nếu không tạo được base target, main pass tự fallback về kernel full-resolution [`blur9/13/25`](#fallback-kernel), nên filter vẫn hoạt động trên GPU yếu.
 
-### Vì sao không dùng Gaussian blur thường?
+### Vì sao không blur ở full resolution?
 
-Gaussian làm mờ cả cạnh mắt/mũi/môi, tạo cảm giác "nhựa". Bilateral giữ cạnh theo chênh lệch màu, phù hợp da nhưng vẫn bảo toàn đường nét.
+Bilateral bán kính lớn ở full resolution cần hàng chục mẫu mỗi pixel, hoặc các vòng mẫu thưa gây alias trên footage độ phân giải cao. Base pass chỉ chạm 1/4–1/16 số pixel, trong khi bước tái tạo vẫn giữ texture full-resolution.
 
-### Vì sao vẫn một main pass?
+### Vì sao dùng bilateral base thay vì Gaussian?
 
-- Tránh nhiều fullscreen draw full-resolution.
-- Mask pass đã tách riêng ở nửa resolution.
-- Separable bilateral hoặc guided filter là hướng tối ưu tiếp theo nếu cần radius lớn/4K.
+Gaussian base sẽ chảy qua mắt, môi và viền mặt. Trọng số bilateral giữ các cạnh đó rõ trong khi vẫn làm phẳng các mảng da.
+
+### Fallback kernel
+
+Nếu không có base target, `DrawFast` / `DrawBalanced` / `DrawHigh` dùng kernel full-resolution gốc:
+
+- Fast: 1 vòng, 8 hướng (9 tap gồm center).
+- Balanced: vòng trong 0.65r + vòng ngoài 1.35r (trục), 13 tap.
+- High: 3 vòng 0.5r / 1.0r / 1.6r, 25 tap.
+
+`step_px = (1/width, 1/height) * radius`; `radius` trong UI được tính ở mốc 1080p và nhân với `height/1080` trong C.
 
 ## 6. Tái tạo chi tiết, clarity và complexion
 
 ```hlsl
-high_freq = center - base;
-smoothed  = base + high_freq * (detail * 0.45);
-mask      = lerp(1.0, skin, skin_detect);
-mask     *= lerp(1.0, edge_guard, skin_detect);
-result    = lerp(center, smoothed, amount * mask);
-result   += high_freq * (clarity * 1.35 * (1.0 - mask * 0.85));
+high_freq     = center - base;
+luma_detail   = float3(luminance(high_freq));
+chroma_detail = high_freq - luma_detail;
+detail_gate   = smoothstep(0.0025, 0.0180, abs(luminance(high_freq)));
+keep_luma     = lerp(0.12, 0.85, detail);
+keep_chroma   = lerp(0.06, 0.50, detail);
+
+smoothed = base + (luma_detail * keep_luma +
+                   chroma_detail * keep_chroma) * detail_gate;
+
+mask    = lerp(1.0, skin, skin_detect);
+mask   *= lerp(1.0, edge_guard, skin_detect);
+result  = lerp(center, smoothed, amount * mask);
 ```
 
-- `base` là kết quả bilateral.
-- `high_freq` chứa texture/chi tiết bị blur.
-- `detail * 0.45` trả lại một phần texture, tránh da bệt.
-- `edge_guard = 1 - smoothstep(0.03, 0.12, abs(luminance(high_freq)))` giảm mask ở vùng nhiều chi tiết (tóc, râu, vân gỗ).
+- **Giữ luma nhiều hơn chroma**: lỗ chân lông, nếp nhăn nhỏ và râu lún phún được giữ, còn mảng đỏ và sắc tố không đều bị làm mịn.
+- `detail = 0` giữ 12% chi tiết luma (làm mịn tối đa); `detail = 1` giữ 85%.
+- `detail_gate` loại chi tiết dưới mức noise để không khuếch đại noise cảm biến.
+- `edge_guard = 1 - smoothstep(0.03, 0.12, abs(luminance(high_freq)))` giảm mask ở vùng nhiều chi tiết.
+
+Clarity dùng **microcontrast 4 láng giềng ở full resolution**, nên không thừa hưởng bán kính blur da lớn và ít halo hơn:
+
+```hlsl
+local   = (center + left + right + up + down) * 0.25;
+result += (center - local) * clarity * 1.35 *
+          (1.0 - mask * 0.85) * local_gate;
+```
 
 Complexion, tất cả cân theo `mask`:
 
 ```hlsl
-luma   = luminance(result);
-result = lerp(float3(luma), result, 1 + saturation);
-result += brightness * 0.12 * mask;
-result.r += warmth * 0.10 * mask;
-result.b -= warmth * 0.10 * mask;
-result += float3(0.10, 0.02, 0.045) * rosy * mask;
+result = lerp(result, lerp(float3(luma), result, 1.0 + saturation), mask);
+result = lerp(result, result * exp2(brightness * 0.8), mask);
+
+wb = float3(1.0 + warmth * 0.20, 1.0 + warmth * 0.02, 1.0 - warmth * 0.18);
+wb /= max(luminance(wb), 0.0001);
+result = lerp(result, result * wb, mask);
+
+result += float3(0.080, 0.020, 0.035) * rosy * mask *
+          (0.25 + 0.75 * smoothstep(0.05, 0.60, luma));
 ```
 
-- `brightness`, `warmth`, `saturation` từ slider -50..50 được map về -0.5..0.5 trong C.
-- `rosy` 0..1 thêm sắc hồng nhẹ, không làm đỏ môi vì đã nhân mask.
+- `brightness` là **hệ số kiểu phơi sáng** thay vì cộng offset, giữ được đặc tính highlight của nguồn.
+- `warmth` chuẩn hoá vector white-balance theo luma, nên làm ấm da không kéo theo tăng sáng.
+- `rosy` thêm sắc hồng nhẹ, không làm đỏ môi vì đã nhân mask.
 
-Soft glow:
+Soft glow chỉ lấy vùng sáng, nên vùng tối vẫn sạch:
 
 ```hlsl
-// SDR
-bloom  = 1 - (1 - saturate(result)) * (1 - saturate(base) * 0.5);
-result = lerp(result, bloom, glow * 0.35 * mask);
-
-// HDR: additive, không clip > 1
-result += max(base, 0) * (glow * 0.22 * mask);
+glow_src = max(base - 0.50, 0.0);
+result  += glow_src * (glow * (is_hdr ? 0.65 : 0.45) * mask);
 ```
 
 ## 7. Alpha, color space và HDR
@@ -360,8 +381,15 @@ result += max(base, 0) * (glow * 0.22 * mask);
 - Blend state main pass: `ONE / INVSRCALPHA` để giữ đúng alpha.
 - `OBS_SOURCE_SRGB` bật để OBS quản lý linear/sRGB nhất quán với các filter core.
 - `MaskPass` và `MaskAnalysis` tắt framebuffer sRGB; main pass bật lại.
+- **Anti-banding**: với định dạng 8-bit, shader thêm nhiễu tam giác 1 LSB trong display space sau khi xử lý:
+  ```hlsl
+  d  = linear_to_srgb(saturate(result));
+  d += (n1 + n2 - 1.0) * (1.0 / 255.0);
+  result = srgb_to_linear(saturate(d));
+  ```
+  Bước này bỏ qua cho mask/zone preview và nửa gốc của split view. Target HDR/16F không bị dither.
 - **HDR**:
-  - `GS_CS_709_EXTENDED`: `hdr_scale = 1.0`.
+  - `GS_CS_709_EXTENDED` và `GS_CS_SRGB_16F`: `hdr_scale = 1.0`.
   - `GS_CS_709_SCRGB`: `hdr_scale = 80 / obs_get_video_sdr_white_level()` (fallback 300 nếu giá trị không hợp lệ).
   - `sample_linear()` nhân `hdr_scale` đúng **một lần**; mọi phép tính mask/tone dùng linear tương đối SDR. **Không `saturate`** khi `is_hdr`, rồi chia lại `hdr_scale` một lần trước khi ghi.
   - Nhờ vậy highlight > 1.0 vẫn được giữ và vẫn đi qua filter, thay vì bị bypass như phiên bản 1.0.

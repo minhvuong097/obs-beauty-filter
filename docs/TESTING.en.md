@@ -63,18 +63,21 @@ Expected (values may vary by ±1–2 due to rounding):
 
 ```text
 center pixel RGBA (original):   200 150 120 255
-center pixel RGBA (processed):  202 151 123 255
+center pixel RGBA (processed):  201 151 121 255
 center pixel RGBA (skin mask):  255 255 255 255
 center pixel RGBA (opacity 0):  200 150 120 255
 pattern eye/mouth luma before:  215 / 198
-pattern eye/mouth luma after:   251 / 210
-zone preview eye RGBA:          109 182 254 255
-zone preview mouth RGBA:        245 251 98 255
+pattern eye/mouth luma after:   243 / 204
+zone preview eye RGBA:          109 183 255 255
+zone preview mouth RGBA:        244 251 98 255
 HDR pixel before filter:        4.000 0.400 0.400 1.000
-HDR pixel after filter:         4.098 0.420 0.445 1.000
+HDR pixel after filter:         4.078 0.420 0.435 1.000
 scRGB pixel before filter:      4.000 0.400 0.400 1.000
-scRGB pixel after filter:       4.375 0.475 0.568 1.000
-OK: module loaded, filter created, effect compiled, filter rendered, mask/opacity/face zones/HDR verified
+scRGB pixel after filter:       4.227 0.457 0.500 1.000
+texture stripe contrast before: 10 (161 vs 151)
+texture stripe contrast after:  1 (157 vs 156)
+texture stripe contrast detail: 8 (160 vs 152)
+OK: module loaded, filter created, effect compiled, filter rendered, mask/opacity/face zones/texture/HDR verified
 ```
 
 The test checks:
@@ -84,13 +87,16 @@ The test checks:
 3. **Opacity = 0** restores the original frame (±1 rounding).
 4. Output alpha remains 255.
 5. **Teeth/eye zones**: a synthetic pattern with a face, grey eyes and a grey mouth; `face_manual` is enabled with a box covering the face.
-   - Mouth luma increases by at least 6 (actual 198 → 210).
-   - Eye luma increases by at least 15 (actual 215 → 251).
+   - Mouth luma increases by at least 6 (actual 198 → 204).
+   - Eye luma increases by at least 15 (actual 215 → 243).
 6. **Zone preview**: eyes must be blue-ish (`B > R + 40`), mouth must be yellow (`R > 180` and `R > B + 30`).
-7. **HDR Rec.709 extended**: the pattern draws a full frame of `(4.0, 0.4, 0.4)`; after filtering:
+7. **Frequency separation**: a synthetic skin pattern with 10 px alternating stripes (two close skin tones) is rendered twice.
+   - With `Amount=1`, `Radius=24`, `Detail=0`, `skin_detect=on`, the stripe contrast must fall to at most 55% of its original value (actual 10 → 1–2).
+   - With `Detail=0.9`, the same filter must keep at least 3 more contrast levels than `Detail=0` (actual 8), proving the detail control and not a plain blur.
+8. **HDR Rec.709 extended**: the pattern draws a full frame of `(4.0, 0.4, 0.4)`; after filtering:
    - `R > 1.5` → the highlight was not clipped to SDR white.
    - `R > before + 0.05` → the source was actually processed, not bypassed.
-8. **HDR scRGB**: the pattern reports `GS_CS_709_SCRGB` and draws the same `(4.0, 0.4, 0.4)`:
+9. **HDR scRGB**: the pattern reports `GS_CS_709_SCRGB` and draws the same `(4.0, 0.4, 0.4)`:
    - `R > 1.5` and `R > before + 0.05` as above.
    - `R < before * 1.5` → catches an incorrect HDR scale (missing/extra `hdr_scale`; the old bug produced ~15 instead of ~4.4).
 
@@ -140,7 +146,7 @@ Open **Help → Log Files → View Current Log** and look for:
 - `Source ID 'beauty_filter' not found` — must **not** appear after adding the filter.
 - `[obs-beauty-filter] Failed to allocate GPU resources` — must **not** appear.
 
-On first use, OBS compiles all five techniques (`MaskPass`, `MaskAnalysis`, `DrawFast`, `DrawBalanced`, `DrawHigh`); a failure in any technique makes the effect fail to load.
+On first use, OBS compiles all six techniques (`MaskPass`, `MaskAnalysis`, `BlurBase`, `DrawFast`, `DrawBalanced`, `DrawHigh`); a failure in any technique makes the effect fail to load.
 
 ## 6. Manual test matrix
 
@@ -166,6 +172,9 @@ On first use, OBS compiles all five techniques (`MaskPass`, `MaskAnalysis`, `Dra
 | 18 | Remove filter while rendering | No crash |
 | 19 | Change settings continuously | No leak, no abnormal flicker |
 | 20 | Stream/record for 10 minutes | No RAM/VRAM growth, no dropped frames |
+| 21 | Textured skin, Detail 0 → 1 | Detail 0 smooths; Detail 1 brings pores/fine lines back |
+| 22 | Smooth gradient, 8-bit output | Anti-banding on: no visible bands; off: bands return |
+| 23 | High-end 1440p/4K camera, Quality High | Skin smooth but detailed, no halo or plastic look |
 
 ## 7. Performance checks
 

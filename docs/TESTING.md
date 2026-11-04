@@ -62,18 +62,21 @@ Kỳ vọng (giá trị có thể xê dịch ±1–2 do làm tròn):
 
 ```text
 center pixel RGBA (original):   200 150 120 255
-center pixel RGBA (processed):  202 151 123 255
+center pixel RGBA (processed):  201 151 121 255
 center pixel RGBA (skin mask):  255 255 255 255
 center pixel RGBA (opacity 0):  200 150 120 255
 pattern eye/mouth luma before:  215 / 198
-pattern eye/mouth luma after:   251 / 210
-zone preview eye RGBA:          109 182 254 255
-zone preview mouth RGBA:        245 251 98 255
+pattern eye/mouth luma after:   243 / 204
+zone preview eye RGBA:          109 183 255 255
+zone preview mouth RGBA:        244 251 98 255
 HDR pixel before filter:        4.000 0.400 0.400 1.000
-HDR pixel after filter:         4.098 0.420 0.445 1.000
+HDR pixel after filter:         4.078 0.420 0.435 1.000
 scRGB pixel before filter:      4.000 0.400 0.400 1.000
-scRGB pixel after filter:       4.375 0.475 0.568 1.000
-OK: module loaded, filter created, effect compiled, filter rendered, mask/opacity/face zones/HDR verified
+scRGB pixel after filter:       4.227 0.457 0.500 1.000
+texture stripe contrast before: 10 (161 vs 151)
+texture stripe contrast after:  1 (157 vs 156)
+texture stripe contrast detail: 8 (160 vs 152)
+OK: module loaded, filter created, effect compiled, filter rendered, mask/opacity/face zones/texture/HDR verified
 ```
 
 Test kiểm tra:
@@ -83,13 +86,16 @@ Test kiểm tra:
 3. **Opacity = 0** trả lại chính xác frame gốc (sai số ±1 do làm tròn).
 4. Alpha của output vẫn là 255.
 5. **Teeth/eye zones**: dùng pattern tổng hợp có mặt, mắt xám và miệng xám; bật `face_manual` với box phủ đúng mặt.
-   - Mouth luma tăng ít nhất 6 (thực tế 198 → 210).
-   - Eye luma tăng ít nhất 15 (thực tế 215 → 251).
+   - Mouth luma tăng ít nhất 6 (thực tế 198 → 204).
+   - Eye luma tăng ít nhất 15 (thực tế 215 → 243).
 6. **Zone preview**: mắt phải ngả xanh dương (`B > R + 40`), miệng phải vàng (`R > 180` và `R > B + 30`).
-7. **HDR Rec.709 extended**: pattern vẽ full frame `(4.0, 0.4, 0.4)`; sau filter:
+7. **Frequency separation**: pattern da tổng hợp có stripe 10 px xen kẽ hai tông da gần nhau, render hai lần.
+   - Với `Amount=1`, `Radius=24`, `Detail=0`, `skin_detect=on`, contrast stripe phải giảm còn tối đa 55% giá trị gốc (thực tế 10 → 1–2).
+   - Với `Detail=0.9`, cùng filter phải giữ thêm ít nhất 3 mức contrast so với `Detail=0` (thực tế 8), chứng minh detail control hoạt động chứ không phải blur thuần.
+8. **HDR Rec.709 extended**: pattern vẽ full frame `(4.0, 0.4, 0.4)`; sau filter:
    - `R > 1.5` → highlight không bị clip về SDR white.
    - `R > before + 0.05` → nguồn thực sự được xử lý, không bị bypass.
-8. **HDR scRGB**: pattern báo `GS_CS_709_SCRGB` và vẽ cùng giá trị `(4.0, 0.4, 0.4)`:
+9. **HDR scRGB**: pattern báo `GS_CS_709_SCRGB` và vẽ cùng giá trị `(4.0, 0.4, 0.4)`:
    - `R > 1.5` và `R > before + 0.05` như trên.
    - `R < before * 1.5` → phát hiện lỗi scale (hdr_scale thiếu/thừa; lỗi cũ cho ra ~15 thay vì ~4.4).
 
@@ -139,7 +145,7 @@ Mở **Help → Log Files → View Current Log** và tìm:
 - `Source ID 'beauty_filter' not found` — **không** được xuất hiện sau khi thêm filter.
 - `[obs-beauty-filter] Failed to allocate GPU resources` — **không** được xuất hiện.
 
-Khi thêm filter lần đầu, OBS sẽ compile cả 5 technique (`MaskPass`, `MaskAnalysis`, `DrawFast`, `DrawBalanced`, `DrawHigh`); lỗi ở bất kỳ technique nào cũng làm effect load fail.
+Khi thêm filter lần đầu, OBS sẽ compile cả 6 technique (`MaskPass`, `MaskAnalysis`, `BlurBase`, `DrawFast`, `DrawBalanced`, `DrawHigh`); lỗi ở bất kỳ technique nào cũng làm effect load fail.
 
 ## 6. Test matrix thủ công
 
@@ -165,6 +171,9 @@ Khi thêm filter lần đầu, OBS sẽ compile cả 5 technique (`MaskPass`, `M
 | 18 | Xóa filter khi đang render | Không crash |
 | 19 | Đổi settings liên tục | Không leak, không nhấp nháy bất thường |
 | 20 | Stream/record 10 phút | Không tăng RAM/VRAM, không drop frame |
+| 21 | Da có texture, Detail 0 → 1 | Detail 0 làm mịn; Detail 1 trả lại lỗ chân lông/nếp nhăn nhỏ |
+| 22 | Gradient mượt, ngõ ra 8-bit | Anti-banding on: không thấy dải; off: dải quay lại |
+| 23 | Camera cao cấp 1440p/4K, Quality High | Da mịn nhưng còn chi tiết, không halo, không bệt |
 
 ## 7. Kiểm tra hiệu năng
 

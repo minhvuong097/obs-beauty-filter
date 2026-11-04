@@ -2,22 +2,24 @@
 
 **[English](README.en.md) | Tiếng Việt**
 
-Plugin bộ lọc làm đẹp cho **OBS Studio** trên Windows và Linux (macOS có thể build từ source nhưng chưa được kiểm thử). Phiên bản **1.1.0** chạy hoàn toàn trên GPU, hòa vào pipeline filter tiêu chuẩn của OBS, không cần model AI, không đọc ngược frame full-resolution về CPU và không phụ thuộc runtime bên thứ ba.
+Plugin bộ lọc làm đẹp cho **OBS Studio** trên Windows và Linux (macOS có thể build từ source nhưng chưa được kiểm thử). Phiên bản **1.2.0** chạy hoàn toàn trên GPU, hòa vào pipeline filter tiêu chuẩn của OBS, không cần model AI, không đọc ngược frame full-resolution về CPU và không phụ thuộc runtime bên thứ ba.
 
-Mục tiêu: làn da mịn tự nhiên cho livestream/webcam mà vẫn giữ chi tiết mắt, lông mày, tóc và viền khuôn mặt; đồng thời xử lý đúng nguồn HDR.
+Mục tiêu: làn da mịn tự nhiên cho livestream/webcam **và camera độ phân giải cao** mà vẫn giữ chi tiết mắt, lông mày, tóc, lỗ chân lông và viền khuôn mặt; đồng thời xử lý đúng nguồn HDR.
 
 ## Tính năng
 
-- **Làm mịn da edge-preserving**: bilateral filter 9/13/25 mẫu, giảm mụn nhẹ và se khít lỗ chân lông nhưng không làm mất cạnh.
+- **Frequency separation cho da**: pass base bilateral ở 1/2–1/4 độ phân giải (25 mẫu Vogel disk), tái tạo chi tiết full-resolution — làm mịn mảng da lớn mà vẫn giữ texture và giảm halo ở 1440p/4K.
+- **Làm mịn edge-preserving**: bilateral filter 9/13/25 mẫu, giảm mụn nhẹ và se khít lỗ chân lông nhưng không làm mất cạnh.
 - **Skin mask nhiều tầng**: nhận diện tông da trong YCbCr, thêm **neighbourhood coherence**, **loại gradient/texture** (tóc, vân gỗ) và **temporal stabilisation** để giảm nhấp nháy.
 - **Face region heuristic**: ước lượng khung mặt từ connected component của skin mask trên grid nhỏ 64×N, có temporal smoothing và **khung mặt thủ công** khi tự nhận diện sai. Không cần ONNX/MediaPipe.
 - **Face prior**: giảm nhận nhầm tường/gỗ/quần áo màu da bằng ellipse mặt + cổ.
 - **Teeth whitening**: làm trắng vùng răng trong ellipse miệng, chỉ trên pixel sáng, ít bão hòa và trung tính.
 - **Eye brightening**: làm sáng lòng trắng và nâng nhẹ iris/pupil trong hai ellipse mắt.
-- **Giữ chi tiết**: tách high-frequency, trả lại texture da và làm nét vùng không phải da.
-- **Tinh chỉnh sắc tố da**: sáng, ấm, bão hòa, sắc hồng — cân theo skin mask.
-- **Soft glow**: ánh sáng mềm cho da, phù hợp đèn ring light.
-- **HDR-safe**: xử lý `GS_CS_709_EXTENDED` và `GS_CS_709_SCRGB` trong linear light, giữ highlight > mức trắng SDR (không bypass, không clip).
+- **Giữ chi tiết**: tách high-frequency, ưu tiên giữ luma (lỗ chân lông) hơn chroma (mảng đỏ), làm nét vùng không phải da.
+- **Tinh chỉnh sắc tố da**: sáng kiểu phơi sáng, ấm giữ luma, bão hòa, sắc hồng — cân theo skin mask.
+- **Soft glow**: ánh sáng mềm chỉ trên highlight, vùng tối vẫn sạch.
+- **Chống dải màu**: triangular dithering cho ngõ ra 8-bit, tránh banding khi da mịn trên nền gradient.
+- **HDR-safe**: xử lý `GS_CS_709_EXTENDED`, `GS_CS_709_SCRGB` và `GS_CS_SRGB_16F` trong linear light, giữ highlight > mức trắng SDR (không bypass, không clip).
 - **Preview**: skin mask, split view và face/eye/mouth zones.
 - **3 mức hiệu năng**: Fast / Balanced / High.
 - **Hỗ trợ alpha**, SDR 8-bit và SDR 16-bit.
@@ -35,7 +37,7 @@ obs-beauty-filter/
 │   ├── face-region.h
 │   └── plugin-main.c        # module entry point
 ├── data/
-│   ├── beauty_filter.effect # OBS effect: MaskPass / MaskAnalysis / Draw*
+│   ├── beauty_filter.effect # OBS effect: MaskPass / MaskAnalysis / BlurBase / Draw*
 │   └── locale/
 │       ├── en-US.ini
 │       └── vi-VN.ini
@@ -205,7 +207,8 @@ Hoặc `./scripts/build-linux.sh` rồi `sudo cmake --install build` (mặc đ�
 | Manual face box | Off | On/Off | Dùng khung mặt thủ công thay vì auto |
 | Face center X / Y | 0.50 / 0.45 | 0–1 | Tâm mặt, tọa độ chuẩn hóa |
 | Face width / height | 0.32 / 0.42 | 0.05–1 | Kích thước **đầy đủ** của khung mặt, chuẩn hóa |
-| Quality | Balanced | Fast/Balanced/High | 9/13/25 mẫu bilateral |
+| Quality | Balanced | Fast/Balanced/High | Base 1/4, 1/3 hoặc 1/2 độ phân giải; High khuyến nghị cho 1440p/4K |
+| Anti-banding | On | On/Off | Triangular dithering cho ngõ ra 8-bit |
 | Split preview | Off | On/Off | Nửa trái gốc, nửa phải đã xử lý |
 | Overall opacity | 1.0 | 0–1 | Trộn tổng với ảnh gốc |
 
@@ -214,12 +217,13 @@ Ghi chú: `Face width/height` là kích thước đầy đủ (full width/height
 ### Gợi ý theo tình huống
 
 - **Webcam 1080p, đèn trong nhà**: Amount `0.35–0.5`, Radius `5–8`, Detail `0.3–0.5`, Clarity `0.05–0.15`.
+- **Camera cao cấp 1440p/4K**: Quality `High`, Amount `0.20–0.35`, Radius `6–12`, Detail `0.45–0.65`, Clarity `0.05–0.10`, Skin sensitivity `0.45–0.55`. Base pass giữ chi tiết full-resolution nên da mịn nhưng không bệt.
 - **Close-up / da có khuyết điểm**: Amount `0.55–0.7`, Radius `8–12`, Detail `0.25`, Quality `High`, Teeth `0.3–0.5`, Eyes `0.2–0.4`.
 - **Nam giới / có râu**: Amount `0.2–0.3`, Detail `0.5–0.7`, Radius `4–6`, Clarity `0.1`; giảm Teeth/Eyes.
 - **Da sẫm màu**: Sensitivity `0.6–0.75`, Amount `0.25–0.4`; luôn kiểm tra bằng **Show skin mask**.
 - **Thiếu sáng / noise**: Beauty Filter không khử noise. Hãy thêm **Denoise** trước, rồi Amount `0.2–0.35`, Glow `0.1`.
-- **4K**: chọn `Fast` hoặc `Balanced`; Radius tự động scale theo độ phân giải.
-- **Nguồn HDR (Rec.709 extended / scRGB)**: dùng cùng thông số; filter xử lý trong linear và giữ highlight. Kiểm tra lại Amount/Glow vì HDR có dải sáng rộng hơn.
+- **4K / nhiều filter xếp chồng**: Quality `High` nếu GPU rời còn dư; nếu tụt frame chuyển `Balanced` (base 1/3) trước khi hạ `Fast`. Radius tự động scale theo độ phân giải.
+- **Nguồn HDR (Rec.709 extended / scRGB / 16F)**: dùng cùng thông số; filter xử lý trong linear và giữ highlight. Kiểm tra lại Amount/Glow vì HDR có dải sáng rộng hơn.
 
 Xem thêm [docs/TUNING.md](docs/TUNING.md).
 
@@ -246,11 +250,15 @@ Source texture
    │                              └─► face-region.c: connected component
    │                                  + upper-band → face box
    │
+   ├─► BlurBase (1/2–1/4 res, RGBA16F)
+   │      └─ 25-tap Vogel disk bilateral → base tần số thấp
+   │
    └─► DrawFast / DrawBalanced / DrawHigh
-          ├─ bilateral blur 9/13/25
+          ├─ frequency separation: base + detail tái tạo
           ├─ detail reconstruction + clarity
           ├─ complexion + glow (HDR-safe)
           ├─ teeth/eye zones (chỉ khi có face box)
+          ├─ anti-banding dither
           ├─ opacity / split / previews
           └─ HDR scale restore
    │
@@ -258,25 +266,28 @@ Source texture
 Output (giữ alpha, giữ giá trị > SDR white trên HDR)
 ```
 
-- **Không còn một pass duy nhất**: mask pass chạy ở nửa resolution, analysis pass ở 64×N, main pass ở full resolution.
+- **Không còn một pass duy nhất**: mask pass chạy ở nửa resolution, analysis pass ở 64×N, base pass ở 1/2–1/4 resolution, main pass ở full resolution.
+- **Frequency separation**: base pass làm mờ mảng da lớn ở độ phân giải thấp với 25 mẫu Vogel disk; pass cuối lấy lại chi tiết full-resolution, ưu tiên luma hơn chroma. Cách này giữ lỗ chân lông, giảm halo và tránh kernel quá thưa ở 1440p/4K.
 - **Không readback full frame**: chỉ đọc grid 64×N (tối đa 64×64 RGBA = 16 KB) và chỉ khi `Face-aware zones` bật, không dùng manual box, mỗi 6 frame.
 - **Ping-pong mask texture** cung cấp history cho temporal stabilisation mà không cấp phát mỗi frame.
+- **Base texture RGBA16F** ngay cả với SDR để tránh lượng tử hoá linear 8-bit trong vùng tối trước khi encode sRGB.
 - Bán kính được chuẩn hóa theo chiều cao frame (1080p là mốc), giúp cùng một bộ thông số cho kết quả tương đương ở 720p/1080p/4K.
-- **HDR**: `GS_CS_709_EXTENDED` dùng `hdr_scale = 1.0`; `GS_CS_709_SCRGB` dùng `80 / obs_get_video_sdr_white_level()`. Frame được capture trực tiếp vào **output space** để OBS tự chuyển đổi/tonemap nguồn; shader quy đổi sample về linear tương đối SDR đúng một lần, không `saturate` output HDR và chia lại scale trước khi ghi ra.
+- **HDR**: `GS_CS_709_EXTENDED` và `GS_CS_SRGB_16F` dùng `hdr_scale = 1.0`; `GS_CS_709_SCRGB` dùng `80 / obs_get_video_sdr_white_level()`. Frame được capture trực tiếp vào **output space** để OBS tự chuyển đổi/tonemap nguồn; shader quy đổi sample về linear tương đối SDR đúng một lần, không `saturate` output HDR và chia lại scale trước khi ghi ra.
 - Chi tiết toán học và quyết định thiết kế: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Hiệu năng
 
-Chi phí chính vẫn là fragment shader full-resolution, cộng thêm mask pass nửa resolution và readback nhỏ:
+Chi phí chính là fragment shader full-resolution, cộng thêm mask pass nửa resolution, base pass 1/2–1/4 resolution (25 mẫu) và readback nhỏ:
 
-| Quality | Tap | Ghi chú |
-|---|---:|---|
-| Fast | 9 | iGPU, 4K, hoặc nhiều filter xếp chồng |
-| Balanced | 13 | Mặc định cho 1080p60 |
-| High | 25 | Close-up, GPU rời, 1080p |
+| Quality | Base | Ghi chú |
+|---|---|---|
+| Fast | 1/4 res | iGPU, 4K, hoặc nhiều filter xếp chồng |
+| Balanced | 1/3 res | Mặc định cho 1080p60 |
+| High | 1/2 res | Close-up, GPU rời, 1440p/4K — khuyến nghị cho camera cao cấp |
 
 - `MaskPass` chạy ở nửa resolution với 8 mẫu coherence + 4 mẫu gradient; rẻ hơn nhiều so với full-res.
 - `MaskAnalysis` chỉ chạy mỗi 6 frame khi face-aware auto bật.
+- `BlurBase` luôn rẻ hơn một bilateral full-res cùng bán kính vì chỉ chạy trên 1/4–1/16 số pixel.
 - Tắt **Face-aware zones** nếu không dùng teeth/eye để bỏ mask pass khi `Skin detection` cũng tắt.
 - Nếu tụt frame: hạ Quality trước, sau đó giảm Radius, tắt Glow.
 
@@ -318,10 +329,10 @@ xvfb-run -a ./build/beauty-load-test \
 Kỳ vọng cuối log:
 
 ```text
-OK: module loaded, filter created, effect compiled, filter rendered, mask/opacity/face zones/HDR verified
+OK: module loaded, filter created, effect compiled, filter rendered, mask/opacity/face zones/texture/HDR verified
 ```
 
-Test integration kiểm tra: filter mặc định, skin mask, opacity 0, teeth/eye zones (có mặt thủ công), zone preview, HDR Rec.709 extended và scRGB (giữ giá trị > 1, thực sự được xử lý và không bị scale hai lần). Không được có lỗi shader trong log. Xem [docs/TESTING.md](docs/TESTING.md) cho test matrix đầy đủ.
+Test integration kiểm tra: filter mặc định, skin mask, opacity 0, teeth/eye zones (có mặt thủ công), zone preview, **frequency separation trên pattern da có texture** (contrast giảm khi Detail thấp và quay lại khi Detail cao), HDR Rec.709 extended và scRGB (giữ giá trị > 1, thực sự được xử lý và không bị scale hai lần). Không được có lỗi shader trong log. Xem [docs/TESTING.md](docs/TESTING.md) cho test matrix đầy đủ.
 
 > **Trạng thái kiểm thử:** project đã build và chạy test tự động với OBS 30.2.3 trên Linux/OpenGL (Mesa llvmpipe). Source/API đã được rà soát với header OBS 33.0.1, và CMake/script đã hỗ trợ layout plugin mới của OBS 33 trên Windows. Shader dùng cú pháp OBS effect chuẩn và đã compile qua OpenGL. Đường D3D11 và layout `%ProgramData%\obs-studio\plugins` vẫn cần được build/test trực tiếp trên Windows + OBS 33.0.1 trước khi phát hành production.
 

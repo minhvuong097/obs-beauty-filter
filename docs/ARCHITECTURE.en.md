@@ -2,7 +2,7 @@
 
 **English | [Tiếng Việt](ARCHITECTURE.md)**
 
-This document describes the processing flow, shader maths and design decisions of plugin **1.1.0** that keep it stable inside OBS' filter pipeline.
+This document describes the processing flow, shader maths and design decisions of plugin **1.2.0** that keep it stable inside OBS' filter pipeline.
 
 ## 1. Filter lifecycle and render pipeline
 
@@ -24,13 +24,14 @@ Each frame, `beauty_render()`:
    ```
 
    Any other colour space (for example an unmapped HLG/PQ source) is passed through with `obs_source_skip_video_filter()`.
-3. Lazily allocates `src_texrender`, two `mask_texrender`s, `analysis_texrender`, `analysis_stage` and `white_tex` when size or colour space changes.
+3. Lazily allocates `src_texrender`, two `mask_texrender`s, `analysis_texrender`, `base_texrender`, `analysis_stage` and `white_tex` when size, colour space or quality changes.
 4. **Capture**: renders the target into `src_texrender` with
    `gs_texrender_begin_with_color_space(..., gs_get_color_space())`. Using the **output space** lets OBS perform source conversion/tonemapping (including scRGB) and avoids double scaling; it uses `obs_source_default_render()` for ordinary inputs and `obs_source_video_render()` for custom/async sources.
 5. **MaskPass** (when a mask is needed): renders a half-resolution mask into `mask_texrender[mask_index]`, sampling history from the other texture.
 6. **MaskAnalysis** (periodic): downsamples the mask to a 64×N grid and performs a small readback to update the face box.
-7. **Main pass**: selects `DrawFast` / `DrawBalanced` / `DrawHigh`, sets all uniforms and draws a fullscreen quad.
-8. Restores blend state, framebuffer sRGB and linear sRGB.
+7. **BlurBase**: renders the low-resolution bilateral base into `base_texrender` (1/2–1/4 resolution, RGBA16F).
+8. **Main pass**: selects `DrawFast` / `DrawBalanced` / `DrawHigh`, sets all uniforms and draws a fullscreen quad, reconstructing full-resolution detail on top of the base.
+9. Restores blend state, framebuffer sRGB and linear sRGB.
 
 `obs_source_process_filter_begin_with_color_space()` is not used because the plugin needs control over capture, the mask pass and colour-space handling. Manual capture remains compatible with the filter chain because target/parent come from OBS.
 
@@ -270,80 +271,100 @@ result = lerp(result, eye_target, eye_amount);
 
 Both effects are **completely disabled** when `face_valid = 0`.
 
-## 5. Bilateral blur
+## 5. Base pass and frequency separation
 
-For each neighbour sample:
+Two kernels work together:
 
-```hlsl
-d = luminance(sample - center);
-w = spatial_weight * exp(-(d*d) / (2*sigma^2));
-```
+1. **`BlurBase`** renders the low-frequency base at **1/2–1/4 of the output resolution** into an RGBA16F target. At reduced resolution a wide blur needs only 25 samples:
 
-- `sigma = lerp(0.020, 0.130, 1 - detail)`.
-  - High `detail` → small sigma → preserve edges/texture.
-  - Low `detail` → large sigma → stronger smoothing.
-- Spatial weights by ring:
-  - Fast: one ring, 8 directions (9 taps including centre).
-  - Balanced: inner 0.65r + outer 1.35r (axis), 13 taps.
-  - High: three rings 0.5r / 1.0r / 1.6r, 25 taps.
+   ```hlsl
+   fi    = i + 0.5;
+   r     = sqrt(fi / 25.0);
+   theta = fi * 2.39996323;             // golden angle
+   offset = float2(cos(theta), sin(theta)) * r;
+   w      = (1.0 - r * 0.55) * exp(-(d*d) / (2*sigma^2));
+   ```
 
-Samples are placed in pixel space:
+   - The radius used at base resolution is `radius / divisor`, so the requested full-resolution radius is preserved.
+   - The 25 taps are spread over a Vogel disk, which is rotationally even and avoids the sparse-ring aliasing of a full-resolution kernel at 1440p/4K.
+   - `sigma = lerp(0.020, 0.130, 1 - detail)` still applies the bilateral edge weight.
 
-```c
-step_px = (1/width, 1/height) * radius;
-```
+2. **`Draw*`** reconstructs detail at full resolution: `high_freq = center - base`, split into luma and chroma (section 6).
 
-The UI `radius` is defined at 1080p and multiplied by `height/1080` in C, so one preset behaves similarly across resolutions.
+Quality selects the divisor: Fast `1/4`, Balanced `1/3`, High `1/2`. The base is **RGBA16F even for SDR** so a blurred linear image is not quantised to 8 bits in the shadows before the sRGB encode. If the base target cannot be created, the main pass falls back to the full-resolution [`blur9/13/25`](#fallback-kernels) kernel, so the filter still works on constrained GPUs.
 
-### Why not an ordinary Gaussian blur?
+### Why not blur at full resolution?
 
-A Gaussian blurs eye/nose/lip edges and looks plastic. A bilateral filter preserves edges based on colour difference, which suits skin while keeping definition.
+A wide-radius bilateral at full resolution needs dozens of taps per pixel or sparse rings that alias on high-resolution footage. The base pass touches only 1/4–1/16 of the pixels, while detail reconstruction keeps the full-resolution texture.
 
-### Why still one main pass?
+### Why a bilateral base and not a Gaussian?
 
-- Avoids multiple full-resolution fullscreen draws.
-- The mask pass is already split off at half resolution.
-- Separable bilateral or a guided filter is the next optimisation for large radii/4K.
+A Gaussian base bleeds across eyes, lips and the face outline. The bilateral range weight keeps those edges defined while still flattening skin blotches.
+
+### Fallback kernels
+
+If the base target is unavailable, `DrawFast` / `DrawBalanced` / `DrawHigh` use the original full-resolution kernels:
+
+- Fast: one ring, 8 directions (9 taps including centre).
+- Balanced: inner 0.65r + outer 1.35r (axis), 13 taps.
+- High: three rings 0.5r / 1.0r / 1.6r, 25 taps.
+
+`step_px = (1/width, 1/height) * radius`, and the UI `radius` is defined at 1080p and scaled by `height/1080` in C.
 
 ## 6. Detail reconstruction, clarity and complexion
 
 ```hlsl
-high_freq = center - base;
-smoothed  = base + high_freq * (detail * 0.45);
-mask      = lerp(1.0, skin, skin_detect);
-mask     *= lerp(1.0, edge_guard, skin_detect);
-result    = lerp(center, smoothed, amount * mask);
-result   += high_freq * (clarity * 1.35 * (1.0 - mask * 0.85));
+high_freq     = center - base;
+luma_detail   = float3(luminance(high_freq));
+chroma_detail = high_freq - luma_detail;
+detail_gate   = smoothstep(0.0025, 0.0180, abs(luminance(high_freq)));
+keep_luma     = lerp(0.12, 0.85, detail);
+keep_chroma   = lerp(0.06, 0.50, detail);
+
+smoothed = base + (luma_detail * keep_luma +
+                   chroma_detail * keep_chroma) * detail_gate;
+
+mask    = lerp(1.0, skin, skin_detect);
+mask   *= lerp(1.0, edge_guard, skin_detect);
+result  = lerp(center, smoothed, amount * mask);
 ```
 
-- `base` is the bilateral result.
-- `high_freq` holds blurred texture/detail.
-- `detail * 0.45` restores part of the texture, avoiding flat-looking skin.
-- `edge_guard = 1 - smoothstep(0.03, 0.12, abs(luminance(high_freq)))` lowers the mask on highly detailed areas (hair, beard, wood grain).
+- **Luma is retained more than chroma**: pores, fine lines and beard stubble survive while red blotches and uneven skin tone are smoothed.
+- `detail = 0` keeps 12% of luma detail (maximum smoothing); `detail = 1` keeps 85%.
+- `detail_gate` removes sub-noise-level detail so sensor noise is not amplified.
+- `edge_guard = 1 - smoothstep(0.03, 0.12, abs(luminance(high_freq)))` lowers the mask on highly detailed areas.
+
+Clarity uses a **full-resolution 4-neighbour microcontrast**, so it does not inherit the large skin-blur radius and produces fewer halos:
+
+```hlsl
+local   = (center + left + right + up + down) * 0.25;
+result += (center - local) * clarity * 1.35 *
+          (1.0 - mask * 0.85) * local_gate;
+```
 
 Complexion, all weighted by `mask`:
 
 ```hlsl
-luma   = luminance(result);
-result = lerp(float3(luma), result, 1 + saturation);
-result += brightness * 0.12 * mask;
-result.r += warmth * 0.10 * mask;
-result.b -= warmth * 0.10 * mask;
-result += float3(0.10, 0.02, 0.045) * rosy * mask;
+result = lerp(result, lerp(float3(luma), result, 1.0 + saturation), mask);
+result = lerp(result, result * exp2(brightness * 0.8), mask);
+
+wb = float3(1.0 + warmth * 0.20, 1.0 + warmth * 0.02, 1.0 - warmth * 0.18);
+wb /= max(luminance(wb), 0.0001);
+result = lerp(result, result * wb, mask);
+
+result += float3(0.080, 0.020, 0.035) * rosy * mask *
+          (0.25 + 0.75 * smoothstep(0.05, 0.60, luma));
 ```
 
-- `brightness`, `warmth` and `saturation` map from the -50..50 slider to -0.5..0.5 in C.
-- `rosy` 0..1 adds a light pink tint without reddening lips because it is mask-weighted.
+- `brightness` is an **exposure-like multiplier** rather than an additive offset, preserving the source's highlight rolloff.
+- `warmth` normalises the white-balance vector by its luma, so warming the skin does not simply brighten it.
+- `rosy` adds a light pink tint without reddening the lips because it is mask-weighted.
 
-Soft glow:
+Soft glow only picks up highlights, so shadows stay clean:
 
 ```hlsl
-// SDR
-bloom  = 1 - (1 - saturate(result)) * (1 - saturate(base) * 0.5);
-result = lerp(result, bloom, glow * 0.35 * mask);
-
-// HDR: additive, does not clip above 1
-result += max(base, 0) * (glow * 0.22 * mask);
+glow_src = max(base - 0.50, 0.0);
+result  += glow_src * (glow * (is_hdr ? 0.65 : 0.45) * mask);
 ```
 
 ## 7. Alpha, colour space and HDR
@@ -360,8 +381,15 @@ result += max(base, 0) * (glow * 0.22 * mask);
 - Main-pass blend state: `ONE / INVSRCALPHA` to preserve alpha.
 - `OBS_SOURCE_SRGB` keeps OBS' linear/sRGB management consistent with core filters.
 - `MaskPass` and `MaskAnalysis` disable framebuffer sRGB; the main pass re-enables it.
+- **Anti-banding**: for 8-bit formats the shader adds triangular noise of one LSB in display space after processing:
+  ```hlsl
+  d  = linear_to_srgb(saturate(result));
+  d += (n1 + n2 - 1.0) * (1.0 / 255.0);
+  result = srgb_to_linear(saturate(d));
+  ```
+  It is skipped for mask/zone previews and for the original half of split view. HDR/16F targets are not dithered.
 - **HDR**:
-  - `GS_CS_709_EXTENDED`: `hdr_scale = 1.0`.
+  - `GS_CS_709_EXTENDED` and `GS_CS_SRGB_16F`: `hdr_scale = 1.0`.
   - `GS_CS_709_SCRGB`: `hdr_scale = 80 / obs_get_video_sdr_white_level()` (fallback 300 if the value is invalid).
   - `sample_linear()` applies `hdr_scale` exactly **once**; all mask/tone maths work in SDR-relative linear. It does **not `saturate`** when `is_hdr`, and divides by `hdr_scale` once before writing.
   - Highlights above 1.0 are preserved and still filtered instead of being bypassed as in 1.0.

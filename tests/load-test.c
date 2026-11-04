@@ -189,6 +189,7 @@ static bool render_pixel_hdr(obs_source_t *source, uint32_t width, uint32_t heig
 
 struct pattern_data {
 	enum gs_color_space space;
+	bool textured;
 };
 
 static const char *pattern_get_name(void *unused)
@@ -202,6 +203,7 @@ static void *pattern_create(obs_data_t *settings, obs_source_t *source)
 	struct pattern_data *pattern = bzalloc(sizeof(*pattern));
 	UNUSED_PARAMETER(source);
 	pattern->space = (enum gs_color_space)obs_data_get_int(settings, "space");
+	pattern->textured = obs_data_get_bool(settings, "textured");
 	if (pattern->space == GS_CS_SRGB && obs_data_get_bool(settings, "hdr"))
 		pattern->space = GS_CS_709_EXTENDED;
 	return pattern;
@@ -249,6 +251,7 @@ static void pattern_solid_rect(gs_eparam_t *color_param, float x, float y, float
 static void pattern_render(void *data, gs_effect_t *effect)
 {
 	struct pattern_data *pattern = data;
+	int x;
 	UNUSED_PARAMETER(effect);
 
 	gs_effect_t *solid = obs_get_base_effect(OBS_EFFECT_SOLID);
@@ -274,6 +277,23 @@ static void pattern_render(void *data, gs_effect_t *effect)
 				   0.16f, 0.32f);
 		pattern_solid_rect(color, 400.0f, 100.0f, 480.0f, 520.0f, 200.0f / 255.0f,
 				   150.0f / 255.0f, 120.0f / 255.0f);
+		if (pattern->textured) {
+			/* 10 px alternation of two close skin tones, similar
+			 * in scale to pores and fine lines at 720p.  A blur
+			 * that ignores detail should flatten it to the mean. */
+			for (x = 0; x < 48; ++x) {
+				if (x & 1)
+					pattern_solid_rect(color, 400.0f + (float)x * 10.0f,
+							   100.0f, 10.0f, 520.0f,
+							   188.0f / 255.0f, 140.0f / 255.0f,
+							   112.0f / 255.0f);
+				else
+					pattern_solid_rect(color, 400.0f + (float)x * 10.0f,
+							   100.0f, 10.0f, 520.0f,
+							   200.0f / 255.0f, 150.0f / 255.0f,
+							   120.0f / 255.0f);
+			}
+		}
 		pattern_solid_rect(color, 520.0f, 280.0f, 60.0f, 40.0f, 215.0f / 255.0f,
 				   215.0f / 255.0f, 215.0f / 255.0f);
 		pattern_solid_rect(color, 700.0f, 280.0f, 60.0f, 40.0f, 215.0f / 255.0f,
@@ -654,6 +674,143 @@ int main(int argc, char **argv)
 		obs_source_release(preview_filter);
 
 		/* ------------------------------------------------------------- */
+		/* Detail preservation: frequency separation must remove the     */
+		/* stripe texture while leaving the overall tone intact          */
+		/* ------------------------------------------------------------- */
+		obs_data_t *texture_settings = obs_data_create();
+		obs_data_set_bool(texture_settings, "hdr", false);
+		obs_data_set_bool(texture_settings, "textured", true);
+		obs_source_t *texture = obs_source_create(
+			"beauty_test_pattern", "beauty-texture", texture_settings, NULL);
+		obs_data_release(texture_settings);
+		if (!source_valid(texture)) {
+			obs_source_release(pattern);
+			obs_source_release(color);
+			return fail("textured pattern source creation");
+		}
+
+		uint8_t stripe_a[4];
+		uint8_t stripe_b[4];
+		if (!render_pixel(texture, 1280, 720, 405, 200, stripe_a) ||
+		    !render_pixel(texture, 1280, 720, 415, 200, stripe_b)) {
+			obs_source_release(texture);
+			obs_source_release(pattern);
+			obs_source_release(color);
+			return fail("render textured reference pixels");
+		}
+		const int contrast_before =
+			abs_int(luma8(stripe_a) - luma8(stripe_b));
+		printf("texture stripe contrast before: %d (%d vs %d)\n",
+		       contrast_before, luma8(stripe_a), luma8(stripe_b));
+
+		if (contrast_before < 6) {
+			obs_source_release(texture);
+			obs_source_release(pattern);
+			obs_source_release(color);
+			return fail("textured pattern did not produce stripe contrast");
+		}
+
+		obs_data_t *smooth_settings = obs_data_create();
+		set_test_defaults(smooth_settings);
+		obs_data_set_double(smooth_settings, "amount", 1.0);
+		obs_data_set_double(smooth_settings, "radius", 24.0);
+		obs_data_set_double(smooth_settings, "detail", 0.0);
+		obs_data_set_bool(smooth_settings, "skin_detect", true);
+		obs_data_set_bool(smooth_settings, "face_aware", false);
+		obs_data_set_bool(smooth_settings, "anti_banding", false);
+		obs_data_set_double(smooth_settings, "temporal_strength", 0.0);
+		obs_data_set_double(smooth_settings, "rosy", 0.0);
+		obs_data_set_double(smooth_settings, "clarity", 0.0);
+		obs_data_set_double(smooth_settings, "glow", 0.0);
+		obs_source_t *smooth_filter =
+			make_filter("beauty-texture-smooth", smooth_settings);
+		if (!smooth_filter) {
+			obs_source_release(texture);
+			obs_source_release(pattern);
+			obs_source_release(color);
+			return fail("texture smoothing filter creation");
+		}
+
+		obs_source_filter_add(texture, smooth_filter);
+
+		uint8_t smooth_a[4];
+		uint8_t smooth_b[4];
+		if (!render_pixel(texture, 1280, 720, 405, 200, smooth_a) ||
+		    !render_pixel(texture, 1280, 720, 415, 200, smooth_b)) {
+			obs_source_release(texture);
+			obs_source_release(pattern);
+			obs_source_release(color);
+			obs_source_release(smooth_filter);
+			return fail("render smoothed texture pixels");
+		}
+		const int contrast_after = abs_int(luma8(smooth_a) - luma8(smooth_b));
+		printf("texture stripe contrast after:  %d (%d vs %d)\n",
+		       contrast_after, luma8(smooth_a), luma8(smooth_b));
+
+		if (contrast_after * 100 > contrast_before * 55) {
+			obs_source_release(texture);
+			obs_source_release(pattern);
+			obs_source_release(color);
+			obs_source_release(smooth_filter);
+			return fail("frequency separation did not smooth textured skin");
+		}
+
+		obs_source_filter_remove(texture, smooth_filter);
+		obs_source_release(smooth_filter);
+
+		/* The detail control must bring the stripe texture back, which
+		 * proves the smoothing is detail-aware rather than a plain blur
+		 * applied to every pixel. */
+		obs_data_t *detail_settings = obs_data_create();
+		set_test_defaults(detail_settings);
+		obs_data_set_double(detail_settings, "amount", 1.0);
+		obs_data_set_double(detail_settings, "radius", 24.0);
+		obs_data_set_double(detail_settings, "detail", 0.90);
+		obs_data_set_bool(detail_settings, "skin_detect", true);
+		obs_data_set_bool(detail_settings, "face_aware", false);
+		obs_data_set_bool(detail_settings, "anti_banding", false);
+		obs_data_set_double(detail_settings, "temporal_strength", 0.0);
+		obs_data_set_double(detail_settings, "rosy", 0.0);
+		obs_data_set_double(detail_settings, "clarity", 0.0);
+		obs_data_set_double(detail_settings, "glow", 0.0);
+		obs_source_t *detail_filter =
+			make_filter("beauty-texture-detail", detail_settings);
+		if (!detail_filter) {
+			obs_source_release(texture);
+			obs_source_release(pattern);
+			obs_source_release(color);
+			return fail("texture detail filter creation");
+		}
+
+		obs_source_filter_add(texture, detail_filter);
+
+		uint8_t detail_a[4];
+		uint8_t detail_b[4];
+		if (!render_pixel(texture, 1280, 720, 405, 200, detail_a) ||
+		    !render_pixel(texture, 1280, 720, 415, 200, detail_b)) {
+			obs_source_release(texture);
+			obs_source_release(pattern);
+			obs_source_release(color);
+			obs_source_release(detail_filter);
+			return fail("render detailed texture pixels");
+		}
+		const int contrast_detail = abs_int(luma8(detail_a) - luma8(detail_b));
+		printf("texture stripe contrast detail: %d (%d vs %d)\n",
+		       contrast_detail, luma8(detail_a), luma8(detail_b));
+
+		if (contrast_detail < contrast_after + 3) {
+			obs_source_release(texture);
+			obs_source_release(pattern);
+			obs_source_release(color);
+			obs_source_release(detail_filter);
+			return fail("detail control did not preserve skin texture");
+		}
+
+		obs_source_filter_remove(texture, detail_filter);
+		obs_source_release(detail_filter);
+		obs_source_release(texture);
+
+		/* ------------------------------------------------------------- */
 		/* HDR: Rec.709 extended must be processed, not bypassed          */
 		/* ------------------------------------------------------------- */
 		obs_data_t *pattern_hdr_settings = obs_data_create();
@@ -816,7 +973,7 @@ int main(int argc, char **argv)
 
 	printf("OK: module loaded, filter created, effect compiled");
 	if (argc >= 5)
-		printf(", filter rendered, mask/opacity/face zones/HDR verified");
+		printf(", filter rendered, mask/opacity/face zones/texture/HDR verified");
 	printf("\n");
 
 	obs_shutdown();

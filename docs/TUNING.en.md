@@ -37,6 +37,28 @@
 | Teeth / Eyes | 0 / 0 |
 | Quality | Balanced |
 
+### Cinema — 1440p/4K high-end camera
+
+| Parameter | Value |
+|---|---:|
+| Amount | 0.28 |
+| Radius | 8 |
+| Detail | 0.55 |
+| Sensitivity | 0.50 |
+| Brightness | 0 |
+| Warmth | 2 |
+| Saturation | 0 |
+| Rosy | 0.10 |
+| Clarity | 0.08 |
+| Glow | 0.04 |
+| Face-aware zones | On |
+| Temporal stability | 0.65 |
+| Teeth / Eyes | 0.20 / 0.12 |
+| Quality | High |
+| Anti-banding | On |
+
+High-end sensors already resolve a lot of texture, so use a higher Detail and a lower Amount than a 1080p webcam preset. The 1/2-resolution base keeps pores and fine lines while evening out broad blotches. If the GPU has no headroom, move Quality to `Balanced` rather than lowering Detail.
+
 ### Studio — close-up, discrete GPU
 
 | Parameter | Value |
@@ -125,9 +147,9 @@ Always check **Show skin mask**: if dark skin is not white, raise Sensitivity; i
 | Glow | 0–0.05 |
 | Face-aware zones | On |
 | Temporal stability | 0.50–0.65 |
-| Quality | Fast / Balanced |
+| Quality | High (or Balanced on a slower GPU) |
 
-HDR has a wider brightness range, so Glow and Rosy can easily look excessive. Start lower than the SDR presets and check highlights (lights, windows) for clipping.
+HDR has a wider brightness range, so Glow and Rosy can easily look excessive. Start lower than the SDR presets and check highlights (lights, windows) for clipping. `GS_CS_SRGB_16F` uses the same path as Rec.709 extended; scRGB is handled with the 80-nit scale.
 
 ## 3. Tuning the face zones
 

@@ -37,6 +37,28 @@
 | Teeth / Eyes | 0 / 0 |
 | Quality | Balanced |
 
+### Cinema — camera cao cấp 1440p/4K
+
+| Thông số | Giá trị |
+|---|---:|
+| Amount | 0.28 |
+| Radius | 8 |
+| Detail | 0.55 |
+| Sensitivity | 0.50 |
+| Brightness | 0 |
+| Warmth | 2 |
+| Saturation | 0 |
+| Rosy | 0.10 |
+| Clarity | 0.08 |
+| Glow | 0.04 |
+| Face-aware zones | On |
+| Temporal stability | 0.65 |
+| Teeth / Eyes | 0.20 / 0.12 |
+| Quality | High |
+| Anti-banding | On |
+
+Cảm biến cao cấp đã có nhiều texture, nên dùng Detail cao hơn và Amount thấp hơn preset webcam 1080p. Base 1/2 độ phân giải giữ lỗ chân lông, nếp nhăn nhỏ trong khi làm đều các mảng da lớn. Nếu GPU không đủ headroom, hạ Quality xuống `Balanced` thay vì giảm Detail.
+
 ### Studio — close-up, GPU rời
 
 | Thông số | Giá trị |
@@ -125,9 +147,9 @@ Luôn kiểm tra **Show skin mask**: nếu vùng da tối không trắng, tăng 
 | Glow | 0–0.05 |
 | Face-aware zones | On |
 | Temporal stability | 0.50–0.65 |
-| Quality | Fast / Balanced |
+| Quality | High (hoặc Balanced nếu GPU yếu) |
 
-HDR có dải sáng rộng hơn, nên Glow và Rosy dễ trông quá tay. Bắt đầu thấp hơn preset SDR, kiểm tra highlight (đèn, cửa sổ) để chắc không bị cháy.
+HDR có dải sáng rộng hơn, nên Glow và Rosy dễ trông quá tay. Bắt đầu thấp hơn preset SDR, kiểm tra highlight (đèn, cửa sổ) để chắc không bị cháy. `GS_CS_SRGB_16F` dùng cùng đường xử lý với Rec.709 extended; scRGB được xử lý theo thang 80 nit.
 
 ## 3. Tinh chỉnh face zones
 
