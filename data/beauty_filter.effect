@@ -437,7 +437,8 @@ float4 beauty_finish(float2 uv, float4 src, float3 center, float3 base)
 
 	/* Frequency separation.  Keep more luma texture (pores) than chroma
 	 * texture (blotches), and gate sensor-noise-level detail. */
-	float3 luma_detail = float3(luminance(high_freq));
+	float luma_hf = luminance(high_freq);
+	float3 luma_detail = float3(luma_hf, luma_hf, luma_hf);
 	float3 chroma_detail = high_freq - luma_detail;
 	float detail_gate = smoothstep(0.0025, 0.0180, high_mag);
 	float keep_luma = lerp(0.12, 0.85, saturate(detail));
@@ -462,7 +463,7 @@ float4 beauty_finish(float2 uv, float4 src, float3 center, float3 base)
 	 * exposure-like instead of an additive offset, and warmth preserves
 	 * overall luma so skin does not simply get brighter. */
 	float luma = luminance(result);
-	float3 saturated = lerp(float3(luma), result, 1.0 + saturation);
+	float3 saturated = lerp(float3(luma, luma, luma), result, 1.0 + saturation);
 	result = lerp(result, saturated, mask);
 
 	float exposure = exp2(brightness * 0.8);
@@ -510,7 +511,9 @@ float4 beauty_finish(float2 uv, float4 src, float3 center, float3 base)
 	              (1.0 - smoothstep(0.06, 0.16, chroma)) * neutral;
 	teeth = saturate(teeth * teeth_whiten);
 	if (teeth > 0.0001) {
-		float3 white_target = lerp(result, float3(luminance(result)), 0.85) * 1.10;
+		float white_luma = luminance(result);
+		float3 white_target =
+			lerp(result, float3(white_luma, white_luma, white_luma), 0.85) * 1.10;
 		result = lerp(result, white_target, teeth * 0.85);
 	}
 
@@ -520,8 +523,10 @@ float4 beauty_finish(float2 uv, float4 src, float3 center, float3 base)
 	float dark = (1.0 - smoothstep(0.22, 0.52, display_luma)) * 0.30;
 	float eye_amount = saturate((sclera + dark) * eye_brighten * eye_zone) * 0.85;
 	if (eye_amount > 0.0001) {
-		float3 eye_target = lerp(result, float3(luminance(result)), 0.25) * 1.35 +
-		                    float3(0.012, 0.012, 0.012) * sclera;
+		float eye_luma = luminance(result);
+		float3 eye_target =
+			lerp(result, float3(eye_luma, eye_luma, eye_luma), 0.25) * 1.35 +
+			float3(0.012, 0.012, 0.012) * sclera;
 		result = lerp(result, eye_target, eye_amount);
 	}
 
