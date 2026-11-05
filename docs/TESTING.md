@@ -215,6 +215,7 @@ Không có CPU readback full-frame trong plugin. Chi phí CPU chỉ là grid 64�
   Safe Mode trước khi kiểm tra.
 - Chạy cả `beauty-face-region-test.exe` và `beauty-load-test.exe`; kiểm tra cả HDR Rec.709 extended và scRGB trên GPU thật.
 - Test headless đã bao phủ scRGB; readback 16F vẫn có thể khác giữa D3D11 và OpenGL nên cần xác nhận lại bằng nguồn/canvas HDR thực tế.
+- Khi sửa effect, tránh constructor vector một tham số như `float3(x)`: FXC của libobs-d3d11 báo lỗi `X3014: incorrect number of arguments to numeric-type constructor`. Hãy viết `float3(x, x, x)`. Compiler Linux/OpenGL chấp nhận cả hai nên chỉ CI Windows mới phát hiện được lỗi này.
 
 ## 10. CI gợi ý
 
@@ -227,4 +228,8 @@ Có thể chạy job Linux:
 - xvfb-run -a ./build/beauty-load-test ...
 ```
 
-Windows CI cần OBS deps + libobs package; dùng cùng quy trình với `obs-plugintemplate`. Nên có ít nhất một job Windows/D3D11 chạy `beauty-load-test` trước khi phát hành.
+Windows CI cần OBS deps + libobs package; dùng cùng quy trình với
+`obs-plugintemplate`. CI của repo này build OBS 33.0.1 từ source với
+`obs-deps` và chạy `beauty-load-test` trên D3D11 (load module + compile effect)
+trước khi đóng gói. Matrix render/mask/HDR đầy đủ vẫn chạy trên Linux/OpenGL;
+giữ matrix thủ công ở mục 7 để xác nhận theo từng GPU.

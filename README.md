@@ -343,7 +343,7 @@ OK: module loaded, filter created, effect compiled, filter rendered, mask/opacit
 
 Test integration kiểm tra: filter mặc định, skin mask, opacity 0, teeth/eye zones (có mặt thủ công), zone preview, **frequency separation trên pattern da có texture** (contrast giảm khi Detail thấp và quay lại khi Detail cao), HDR Rec.709 extended và scRGB (giữ giá trị > 1, thực sự được xử lý và không bị scale hai lần). Không được có lỗi shader trong log. Xem [docs/TESTING.md](docs/TESTING.md) cho test matrix đầy đủ.
 
-> **Trạng thái kiểm thử:** GitHub Actions build và chạy test tự động trên hai nền tảng. Linux (Alpine 3.21, OBS 30.2.3, OpenGL/Mesa llvmpipe) chạy đầy đủ `beauty-face-region-test` và `beauty-load-test` (render, mask, texture, HDR). Windows x64 build trực tiếp với source OBS 33.0.1 + `obs-deps`, chạy `beauty-face-region-test` và đóng gói theo layout plugin mới. Test render D3D11 đầy đủ và xác nhận thủ công trên OBS 33.0.1 vẫn nên được thực hiện trước khi phát hành production; xem [docs/TESTING.md](docs/TESTING.md).
+> **Trạng thái kiểm thử:** GitHub Actions build và chạy test tự động trên hai nền tảng. Linux (Alpine 3.21, OBS 30.2.3, OpenGL/Mesa llvmpipe) chạy đầy đủ `beauty-face-region-test` và `beauty-load-test` (render, mask, texture, HDR). Windows x64 build trực tiếp với source OBS 33.0.1 + `obs-deps`, chạy `beauty-face-region-test` và `beauty-load-test` trên đường D3D11 thật (load module + compile effect), rồi đóng gói theo layout plugin mới. Vẫn nên xác nhận render/HDR thủ công trong OBS trên phần cứng thật; xem [docs/TESTING.md](docs/TESTING.md).
 
 ## Giấy phép
 

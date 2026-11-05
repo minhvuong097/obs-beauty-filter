@@ -216,6 +216,7 @@ The plugin never reads back a full frame. CPU cost is only the 64×N grid (at mo
   Safe Mode before testing.
 - Run both `beauty-face-region-test.exe` and `beauty-load-test.exe`; verify both HDR Rec.709 extended and scRGB on real hardware.
 - The headless test now covers scRGB; 16F readback can still differ between D3D11 and OpenGL, so confirm with a real HDR source/canvas.
+- When editing the effect, avoid single-scalar vector constructors such as `float3(x)`: libobs-d3d11's FXC rejects them with `X3014: incorrect number of arguments to numeric-type constructor`. Write `float3(x, x, x)` instead. The Linux/OpenGL compiler accepts both, so only the Windows CI catches this.
 
 ## 10. Suggested CI
 
@@ -228,4 +229,8 @@ A Linux job can run:
 - xvfb-run -a ./build/beauty-load-test ...
 ```
 
-Windows CI needs OBS deps + the libobs package; follow the same approach as `obs-plugintemplate`. At least one Windows/D3D11 job should run `beauty-load-test` before release.
+Windows CI needs OBS deps + the libobs package; follow the same approach as
+`obs-plugintemplate`. This repository's CI builds OBS 33.0.1 from source with
+`obs-deps` and runs `beauty-load-test` on D3D11 (module load + effect
+compilation) before packaging. The full render/mask/HDR matrix still runs on
+Linux/OpenGL; keep the manual matrix in section 7 for GPU-specific validation.

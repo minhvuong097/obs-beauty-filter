@@ -346,7 +346,7 @@ OK: module loaded, filter created, effect compiled, filter rendered, mask/opacit
 
 The integration test covers: default filter output, skin mask, opacity 0, teeth/eye zones (with a manual face box), zone preview colours, frequency separation on a textured skin pattern (contrast drops at low Detail and returns at high Detail), Rec.709 extended HDR and scRGB HDR (values above 1.0 are preserved, actually processed, and not double-scaled). No shader errors are allowed. See [docs/TESTING.en.md](docs/TESTING.en.md) for the full test matrix.
 
-> **Test status:** GitHub Actions builds and tests on both platforms. Linux (Alpine 3.21, OBS 30.2.3, OpenGL/Mesa llvmpipe) runs the full `beauty-face-region-test` and `beauty-load-test` suite (render, mask, texture, HDR). Windows x64 builds directly against OBS 33.0.1 source plus `obs-deps`, runs `beauty-face-region-test`, and packages the new plugin layout. A full D3D11 render test and a manual check in OBS 33.0.1 are still recommended before a production release; see [docs/TESTING.en.md](docs/TESTING.en.md).
+> **Test status:** GitHub Actions builds and tests on both platforms. Linux (Alpine 3.21, OBS 30.2.3, OpenGL/Mesa llvmpipe) runs the full `beauty-face-region-test` and `beauty-load-test` suite (render, mask, texture, HDR). Windows x64 builds directly against OBS 33.0.1 source plus `obs-deps`, runs `beauty-face-region-test` and `beauty-load-test` on the real D3D11 path (module load + effect compilation), and packages the new plugin layout. A manual in-OBS render/HDR check on real hardware is still recommended; see [docs/TESTING.en.md](docs/TESTING.en.md).
 
 ## License
 
