@@ -115,11 +115,18 @@ if ($LASTEXITCODE -ne 0) { throw "Face-region test failed" }
 # Exercise libobs-d3d11 and compile the effect on the real Windows graphics
 # path.  The full render matrix runs on Linux/OpenGL; this basic invocation
 # catches D3D11 shader compilation and module-loading regressions.  OBS keeps
-# its runtime DLLs in the build's rundir, and its effect files in the source
-# tree, so put both on the process search/data paths.
+# its runtime DLLs in the build's rundir and its effect files in the source
+# tree, so put both on the process search/data paths.  os_dlopen() uses
+# LOAD_LIBRARY_SEARCH_DEFAULT_DIRS, which ignores PATH, so the graphics module
+# must sit next to the test executable.
 $ObsBinDir = Join-Path $ObsBuildDir "rundir\RelWithDebInfo\bin\64bit"
 $env:PATH = "$ObsBinDir;$(Join-Path $DepsDir 'bin');$env:PATH"
 $env:OBS_BEAUTY_DATA_PATH = (Join-Path $ObsSrcDir "data\libobs") + "\"
+
+$LibobsD3d11 = Get-ChildItem -Path $ObsBuildDir -Recurse -Filter "libobs-d3d11.dll" |
+  Select-Object -First 1
+if (-not $LibobsD3d11) { throw "libobs-d3d11.dll was not built" }
+Copy-Item $LibobsD3d11.FullName (Join-Path $BuildDir "RelWithDebInfo")
 
 & (Join-Path $BuildDir "RelWithDebInfo\beauty-load-test.exe") `
   (Join-Path $BuildDir "RelWithDebInfo\obs-beauty-filter.dll") `
