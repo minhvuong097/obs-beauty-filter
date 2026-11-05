@@ -8,8 +8,9 @@
  * render path, mask output, face zones, teeth/eye enhancement, opacity
  * blending and HDR preservation can be checked.  Without it, the test only
  * verifies that the module loads, registers the filter and compiles the
- * effect.  Set OBS_BEAUTY_DATA_PATH to the OBS data/libobs directory when
+ * effect.  Set OBS_BEAUTY_DATA_PATH to the OBS libobs data directory when
  * libobs cannot locate its own effect files (for example on Windows CI).
+ * Use forward slashes: OBS locates #include files relative to the last '/'.
  */
 
 #include <obs.h>

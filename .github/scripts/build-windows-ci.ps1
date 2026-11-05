@@ -121,7 +121,10 @@ if ($LASTEXITCODE -ne 0) { throw "Face-region test failed" }
 # must sit next to the test executable.
 $ObsBinDir = Join-Path $ObsBuildDir "rundir\RelWithDebInfo\bin\64bit"
 $env:PATH = "$ObsBinDir;$(Join-Path $DepsDir 'bin');$env:PATH"
-$env:OBS_BEAUTY_DATA_PATH = (Join-Path $ObsSrcDir "libobs\data") + "\"
+# OBS' effect preprocessor inserts include paths by looking for the last '/'.
+# Use forward slashes so #include "color.effect" also resolves on Windows.
+$ObsDataDir = (Join-Path $ObsSrcDir "libobs\data") -replace '\\', '/'
+$env:OBS_BEAUTY_DATA_PATH = $ObsDataDir + "/"
 
 $LibobsD3d11 = Get-ChildItem -Path $ObsBuildDir -Recurse -Filter "libobs-d3d11.dll" |
   Select-Object -First 1

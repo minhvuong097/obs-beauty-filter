@@ -375,7 +375,7 @@ static bool beauty_ensure_resources(struct beauty_filter *filter, uint32_t width
 
 	filter->analysis_width = FACE_GRID_WIDTH;
 	filter->analysis_height =
-		(uint32_t)lroundf((double)FACE_GRID_WIDTH * (double)height / (double)width);
+		(uint32_t)lround((double)FACE_GRID_WIDTH * (double)height / (double)width);
 	if (filter->analysis_height < 16)
 		filter->analysis_height = 16;
 	if (filter->analysis_height > FACE_GRID_MAX_HEIGHT)
