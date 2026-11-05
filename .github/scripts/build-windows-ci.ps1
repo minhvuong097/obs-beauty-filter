@@ -121,7 +121,7 @@ if ($LASTEXITCODE -ne 0) { throw "Face-region test failed" }
 # must sit next to the test executable.
 $ObsBinDir = Join-Path $ObsBuildDir "rundir\RelWithDebInfo\bin\64bit"
 $env:PATH = "$ObsBinDir;$(Join-Path $DepsDir 'bin');$env:PATH"
-$env:OBS_BEAUTY_DATA_PATH = (Join-Path $ObsSrcDir "data\libobs") + "\"
+$env:OBS_BEAUTY_DATA_PATH = (Join-Path $ObsSrcDir "libobs\data") + "\"
 
 $LibobsD3d11 = Get-ChildItem -Path $ObsBuildDir -Recurse -Filter "libobs-d3d11.dll" |
   Select-Object -First 1
