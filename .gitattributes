@@ -1,0 +1,12 @@
+# Keep text files byte-identical on every platform.  OBS effect and locale
+# files are parsed as UTF-8 text; LF avoids CRLF-only differences between the
+# Linux and Windows release archives.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.zip binary
+*.gz binary
+*.7z binary

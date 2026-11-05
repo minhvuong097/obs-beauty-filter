@@ -8,7 +8,8 @@
  * render path, mask output, face zones, teeth/eye enhancement, opacity
  * blending and HDR preservation can be checked.  Without it, the test only
  * verifies that the module loads, registers the filter and compiles the
- * effect.
+ * effect.  Set OBS_BEAUTY_DATA_PATH to the OBS data/libobs directory when
+ * libobs cannot locate its own effect files (for example on Windows CI).
  */
 
 #include <obs.h>
@@ -17,6 +18,7 @@
 #include <graphics/vec4.h>
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static int fail(const char *message)
@@ -408,6 +410,13 @@ int main(int argc, char **argv)
 
 	if (!obs_startup("en-US", NULL, NULL))
 		return fail("obs_startup");
+
+	/* libobs looks for its own effect files relative to the executable on
+	 * Windows.  CI runs the test from the CMake build tree, so allow an
+	 * explicit data directory instead of copying the OBS data tree. */
+	const char *extra_data_path = getenv("OBS_BEAUTY_DATA_PATH");
+	if (extra_data_path && *extra_data_path)
+		obs_add_data_path(extra_data_path);
 
 	struct obs_video_info ovi = {0};
 #ifdef _WIN32

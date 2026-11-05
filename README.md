@@ -2,6 +2,9 @@
 
 **[English](README.en.md) | Tiếng Việt**
 
+[![Build](https://github.com/minhvuong097/obs-beauty-filter/actions/workflows/build.yml/badge.svg)](https://github.com/minhvuong097/obs-beauty-filter/actions/workflows/build.yml)
+[![Latest release](https://img.shields.io/github/v/release/minhvuong097/obs-beauty-filter?display_name=tag)](https://github.com/minhvuong097/obs-beauty-filter/releases/latest)
+
 Plugin bộ lọc làm đẹp cho **OBS Studio** trên Windows và Linux (macOS có thể build từ source nhưng chưa được kiểm thử). Phiên bản **1.2.0** chạy hoàn toàn trên GPU, hòa vào pipeline filter tiêu chuẩn của OBS, không cần model AI, không đọc ngược frame full-resolution về CPU và không phụ thuộc runtime bên thứ ba.
 
 Mục tiêu: làn da mịn tự nhiên cho livestream/webcam **và camera độ phân giải cao** mà vẫn giữ chi tiết mắt, lông mày, tóc, lỗ chân lông và viền khuôn mặt; đồng thời xử lý đúng nguồn HDR.
@@ -55,7 +58,13 @@ obs-beauty-filter/
 
 ## Cài đặt trên Windows
 
-### Cách A — dùng bản build sẵn (nếu có)
+### Cách A — dùng bản build sẵn
+
+Tải bản mới nhất tại **[GitHub Releases](https://github.com/minhvuong097/obs-beauty-filter/releases/latest)**:
+
+- Windows x64: `obs-beauty-filter-1.2.0-windows-x64.zip`
+- Linux x86_64: `obs-beauty-filter-linux-x86_64.tar.gz`
+- Mỗi release có kèm `SHA256SUMS.txt` để kiểm tra tệp tải về.
 
 **OBS Studio 33+ — layout mới (khuyến nghị):**
 
@@ -334,7 +343,7 @@ OK: module loaded, filter created, effect compiled, filter rendered, mask/opacit
 
 Test integration kiểm tra: filter mặc định, skin mask, opacity 0, teeth/eye zones (có mặt thủ công), zone preview, **frequency separation trên pattern da có texture** (contrast giảm khi Detail thấp và quay lại khi Detail cao), HDR Rec.709 extended và scRGB (giữ giá trị > 1, thực sự được xử lý và không bị scale hai lần). Không được có lỗi shader trong log. Xem [docs/TESTING.md](docs/TESTING.md) cho test matrix đầy đủ.
 
-> **Trạng thái kiểm thử:** project đã build và chạy test tự động với OBS 30.2.3 trên Linux/OpenGL (Mesa llvmpipe). Source/API đã được rà soát với header OBS 33.0.1, và CMake/script đã hỗ trợ layout plugin mới của OBS 33 trên Windows. Shader dùng cú pháp OBS effect chuẩn và đã compile qua OpenGL. Đường D3D11 và layout `%ProgramData%\obs-studio\plugins` vẫn cần được build/test trực tiếp trên Windows + OBS 33.0.1 trước khi phát hành production.
+> **Trạng thái kiểm thử:** GitHub Actions build và chạy test tự động trên hai nền tảng. Linux (Alpine 3.21, OBS 30.2.3, OpenGL/Mesa llvmpipe) chạy đầy đủ `beauty-face-region-test` và `beauty-load-test` (render, mask, texture, HDR). Windows x64 build trực tiếp với source OBS 33.0.1 + `obs-deps`, chạy `beauty-face-region-test` và đóng gói theo layout plugin mới. Test render D3D11 đầy đủ và xác nhận thủ công trên OBS 33.0.1 vẫn nên được thực hiện trước khi phát hành production; xem [docs/TESTING.md](docs/TESTING.md).
 
 ## Giấy phép
 

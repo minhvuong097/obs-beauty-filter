@@ -112,6 +112,22 @@ if ($LASTEXITCODE -ne 0) { throw "Plugin build failed" }
 & (Join-Path $BuildDir "RelWithDebInfo\beauty-face-region-test.exe")
 if ($LASTEXITCODE -ne 0) { throw "Face-region test failed" }
 
+# Exercise libobs-d3d11 and compile the effect on the real Windows graphics
+# path.  The full render matrix runs on Linux/OpenGL; this basic invocation
+# catches D3D11 shader compilation and module-loading regressions.  OBS keeps
+# its runtime DLLs in the build's rundir, and its effect files in the source
+# tree, so put both on the process search/data paths.
+$ObsBinDir = Join-Path $ObsBuildDir "rundir\RelWithDebInfo\bin\64bit"
+$env:PATH = "$ObsBinDir;$(Join-Path $DepsDir 'bin');$env:PATH"
+$env:OBS_BEAUTY_DATA_PATH = (Join-Path $ObsSrcDir "data\libobs") + "\"
+
+& (Join-Path $BuildDir "RelWithDebInfo\beauty-load-test.exe") `
+  (Join-Path $BuildDir "RelWithDebInfo\obs-beauty-filter.dll") `
+  (Join-Path $BuildDir "rundir\plugins\obs-beauty-filter\data")
+if ($LASTEXITCODE -ne 0) { throw "Windows module load / effect compilation test failed" }
+
+Remove-Item Env:\OBS_BEAUTY_DATA_PATH
+
 if (Test-Path $PackageDir) {
   Remove-Item -Recurse -Force $PackageDir
 }

@@ -2,6 +2,9 @@
 
 **English | [Tiếng Việt](README.md)**
 
+[![Build](https://github.com/minhvuong097/obs-beauty-filter/actions/workflows/build.yml/badge.svg)](https://github.com/minhvuong097/obs-beauty-filter/actions/workflows/build.yml)
+[![Latest release](https://img.shields.io/github/v/release/minhvuong097/obs-beauty-filter?display_name=tag)](https://github.com/minhvuong097/obs-beauty-filter/releases/latest)
+
 A GPU beauty filter for **OBS Studio** on Windows and Linux (macOS can be built from source but is not tested). Version **1.2.0** runs entirely on the GPU, plugs into the standard OBS filter pipeline, uses no AI model, never reads a full-resolution frame back to the CPU, and has no third-party runtime dependency.
 
 Goal: natural-looking skin for livestreams/webcams **and high-resolution cameras** while preserving eyes, eyebrows, hair, pores and the face outline — with correct HDR handling.
@@ -55,7 +58,13 @@ obs-beauty-filter/
 
 ## Windows installation
 
-### Option A — prebuilt binary (if available)
+### Option A — prebuilt binary
+
+Download the latest build from **[GitHub Releases](https://github.com/minhvuong097/obs-beauty-filter/releases/latest)**:
+
+- Windows x64: `obs-beauty-filter-1.2.0-windows-x64.zip`
+- Linux x86_64: `obs-beauty-filter-linux-x86_64.tar.gz`
+- Each release includes `SHA256SUMS.txt` so you can verify the download.
 
 **OBS Studio 33+ — new layout (recommended):**
 
@@ -337,7 +346,7 @@ OK: module loaded, filter created, effect compiled, filter rendered, mask/opacit
 
 The integration test covers: default filter output, skin mask, opacity 0, teeth/eye zones (with a manual face box), zone preview colours, frequency separation on a textured skin pattern (contrast drops at low Detail and returns at high Detail), Rec.709 extended HDR and scRGB HDR (values above 1.0 are preserved, actually processed, and not double-scaled). No shader errors are allowed. See [docs/TESTING.en.md](docs/TESTING.en.md) for the full test matrix.
 
-> **Test status:** the project builds and runs automated tests with OBS 30.2.3 on Linux/OpenGL (Mesa llvmpipe). The source/API has been reviewed against the OBS 33.0.1 headers, and the CMake build plus Windows script support the new OBS 33 plugin layout. The shader uses standard OBS effect syntax and compiles on OpenGL. The D3D11 path and the `%ProgramData%\obs-studio\plugins` layout still need to be built and tested on Windows with OBS 33.0.1 before a production release.
+> **Test status:** GitHub Actions builds and tests on both platforms. Linux (Alpine 3.21, OBS 30.2.3, OpenGL/Mesa llvmpipe) runs the full `beauty-face-region-test` and `beauty-load-test` suite (render, mask, texture, HDR). Windows x64 builds directly against OBS 33.0.1 source plus `obs-deps`, runs `beauty-face-region-test`, and packages the new plugin layout. A full D3D11 render test and a manual check in OBS 33.0.1 are still recommended before a production release; see [docs/TESTING.en.md](docs/TESTING.en.md).
 
 ## License
 
