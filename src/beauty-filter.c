@@ -10,6 +10,8 @@
  */
 
 #include "beauty-filter.h"
+#include "beauty-presets.h"
+#include "beauty-settings.h"
 #include "face-region.h"
 
 #include <graphics/graphics.h>
@@ -17,44 +19,16 @@
 #include <graphics/vec4.h>
 
 #include <math.h>
+#include <stdio.h>
 #include <string.h>
 
 /* clang-format off */
 
-#define S_HDR_INFO              "hdr_info"
-
-#define S_AMOUNT                "amount"
-#define S_RADIUS                "radius"
-#define S_DETAIL                "detail"
-#define S_SKIN_DETECT           "skin_detect"
-#define S_SKIN_SENSITIVITY      "skin_sensitivity"
-#define S_MASK_PREVIEW          "mask_preview"
-
-#define S_BRIGHTNESS            "brightness"
-#define S_WARMTH                "warmth"
-#define S_SATURATION            "saturation"
-#define S_ROSY                  "rosy"
-
-#define S_CLARITY               "clarity"
-#define S_GLOW                  "glow"
-
-#define S_FACE_AWARE            "face_aware"
-#define S_TEMPORAL              "temporal_strength"
-#define S_TEETH                 "teeth_whiten"
-#define S_EYES                  "eye_brighten"
-#define S_ZONE_PREVIEW          "zone_preview"
-#define S_FACE_MANUAL           "face_manual"
-#define S_FACE_CX               "face_cx"
-#define S_FACE_CY               "face_cy"
-#define S_FACE_W                "face_w"
-#define S_FACE_H                "face_h"
-
-#define S_QUALITY               "quality"
-#define S_SPLIT_VIEW            "split_view"
-#define S_OPACITY               "opacity"
-#define S_ANTI_BANDING          "anti_banding"
-
 #define T_HDR_INFO              obs_module_text("HdrInfo")
+
+#define T_PRESET                obs_module_text("Preset")
+#define T_PRESET_DESCRIPTION    obs_module_text("Preset.Description")
+#define T_PRESET_CUSTOM         obs_module_text("Preset.custom")
 
 #define T_GROUP_SMOOTHING       obs_module_text("Group.Smoothing")
 #define T_AMOUNT                obs_module_text("Smoothing.Amount")
@@ -892,6 +866,70 @@ static void beauty_set_description(obs_properties_t *props, const char *name, co
 }
 
 static void beauty_update_visibility(obs_properties_t *props, bool skin_detect, bool face_aware,
+				     bool face_manual);
+
+static bool beauty_mark_custom(obs_data_t *settings)
+{
+	const char *preset = obs_data_get_string(settings, S_PRESET);
+
+	if (preset && *preset && strcmp(preset, "custom") != 0) {
+		obs_data_set_string(settings, S_PRESET, "custom");
+		/* Only the first manual edit needs a property refresh.  Returning
+		 * true on every slider tick would rebuild the UI mid-drag. */
+		return true;
+	}
+
+	return false;
+}
+
+static bool setting_modified(obs_properties_t *props, obs_property_t *property,
+			     obs_data_t *settings)
+{
+	UNUSED_PARAMETER(props);
+	UNUSED_PARAMETER(property);
+
+	return beauty_mark_custom(settings);
+}
+
+static obs_property_t *add_float_setting(obs_properties_t *group, const char *name,
+					 const char *text, double min, double max,
+					 double step)
+{
+	obs_property_t *property =
+		obs_properties_add_float_slider(group, name, text, min, max, step);
+	obs_property_set_modified_callback(property, setting_modified);
+	return property;
+}
+
+static obs_property_t *add_bool_setting(obs_properties_t *group, const char *name,
+					const char *text)
+{
+	obs_property_t *property = obs_properties_add_bool(group, name, text);
+	obs_property_set_modified_callback(property, setting_modified);
+	return property;
+}
+
+static bool preset_modified(obs_properties_t *props, obs_property_t *property,
+			    obs_data_t *settings)
+{
+	const struct beauty_preset *preset;
+	UNUSED_PARAMETER(property);
+
+	preset = beauty_preset_find(obs_data_get_string(settings, S_PRESET));
+	if (preset) {
+		beauty_preset_apply(settings, preset);
+		obs_data_set_string(settings, S_PRESET, preset->id);
+	}
+
+	beauty_update_visibility(props, obs_data_get_bool(settings, S_SKIN_DETECT),
+				 obs_data_get_bool(settings, S_FACE_AWARE),
+				 obs_data_get_bool(settings, S_FACE_MANUAL));
+
+	/* Refresh every control so the applied preset is visible immediately. */
+	return true;
+}
+
+static void beauty_update_visibility(obs_properties_t *props, bool skin_detect, bool face_aware,
 				     bool face_manual)
 {
 	const bool skin_or_face = skin_detect || face_aware;
@@ -920,6 +958,7 @@ static bool skin_detect_modified(obs_properties_t *props, obs_property_t *proper
 
 	UNUSED_PARAMETER(property);
 
+	beauty_mark_custom(settings);
 	beauty_update_visibility(props, skin, face, manual);
 	return true;
 }
@@ -933,6 +972,7 @@ static bool face_aware_modified(obs_properties_t *props, obs_property_t *propert
 
 	UNUSED_PARAMETER(property);
 
+	beauty_mark_custom(settings);
 	beauty_update_visibility(props, skin, face, manual);
 	return true;
 }
@@ -962,15 +1002,28 @@ static obs_properties_t *beauty_properties(void *data)
 	obs_property_text_set_info_type(info, OBS_TEXT_INFO_NORMAL);
 	obs_property_text_set_info_word_wrap(info, true);
 
+	/* --- Starting preset ------------------------------------------------- */
+	p = obs_properties_add_list(props, S_PRESET, T_PRESET, OBS_COMBO_TYPE_LIST,
+				    OBS_COMBO_FORMAT_STRING);
+	obs_property_list_add_string(p, T_PRESET_CUSTOM, "custom");
+	for (size_t i = 0; i < beauty_preset_count(); i++) {
+		const struct beauty_preset *preset = beauty_preset_at(i);
+		char locale_key[64];
+
+		snprintf(locale_key, sizeof(locale_key), "Preset.%s", preset->id);
+		obs_property_list_add_string(p, obs_module_text(locale_key), preset->id);
+	}
+	obs_property_set_modified_callback(p, preset_modified);
+	beauty_set_description(props, S_PRESET, T_PRESET_DESCRIPTION);
+
 	/* --- Skin smoothing ------------------------------------------------- */
 	group = obs_properties_create();
-	obs_properties_add_float_slider(group, S_AMOUNT, T_AMOUNT, 0.0, 1.0, 0.001);
-	obs_properties_add_float_slider(group, S_RADIUS, T_RADIUS, 0.0, 24.0, 0.5);
-	obs_properties_add_float_slider(group, S_DETAIL, T_DETAIL, 0.0, 1.0, 0.01);
+	add_float_setting(group, S_AMOUNT, T_AMOUNT, 0.0, 1.0, 0.001);
+	add_float_setting(group, S_RADIUS, T_RADIUS, 0.0, 24.0, 0.5);
+	add_float_setting(group, S_DETAIL, T_DETAIL, 0.0, 1.0, 0.01);
 	p = obs_properties_add_bool(group, S_SKIN_DETECT, T_SKIN_DETECT);
 	obs_property_set_modified_callback(p, skin_detect_modified);
-	obs_properties_add_float_slider(group, S_SKIN_SENSITIVITY, T_SKIN_SENSITIVITY, 0.0, 1.0,
-					0.01);
+	add_float_setting(group, S_SKIN_SENSITIVITY, T_SKIN_SENSITIVITY, 0.0, 1.0, 0.01);
 	obs_properties_add_bool(group, S_MASK_PREVIEW, T_MASK_PREVIEW);
 	beauty_set_description(group, S_AMOUNT,
 			       obs_module_text("Smoothing.Amount.Description"));
@@ -985,10 +1038,10 @@ static obs_properties_t *beauty_properties(void *data)
 
 	/* --- Complexion ----------------------------------------------------- */
 	group = obs_properties_create();
-	obs_properties_add_float_slider(group, S_BRIGHTNESS, T_BRIGHTNESS, -50.0, 50.0, 1.0);
-	obs_properties_add_float_slider(group, S_WARMTH, T_WARMTH, -50.0, 50.0, 1.0);
-	obs_properties_add_float_slider(group, S_SATURATION, T_SATURATION, -50.0, 50.0, 1.0);
-	obs_properties_add_float_slider(group, S_ROSY, T_ROSY, 0.0, 1.0, 0.01);
+	add_float_setting(group, S_BRIGHTNESS, T_BRIGHTNESS, -50.0, 50.0, 1.0);
+	add_float_setting(group, S_WARMTH, T_WARMTH, -50.0, 50.0, 1.0);
+	add_float_setting(group, S_SATURATION, T_SATURATION, -50.0, 50.0, 1.0);
+	add_float_setting(group, S_ROSY, T_ROSY, 0.0, 1.0, 0.01);
 	beauty_set_description(group, S_BRIGHTNESS,
 			       obs_module_text("Complexion.Brightness.Description"));
 	beauty_set_description(group, S_WARMTH,
@@ -998,8 +1051,8 @@ static obs_properties_t *beauty_properties(void *data)
 
 	/* --- Detail & glow -------------------------------------------------- */
 	group = obs_properties_create();
-	obs_properties_add_float_slider(group, S_CLARITY, T_CLARITY, 0.0, 1.0, 0.01);
-	obs_properties_add_float_slider(group, S_GLOW, T_GLOW, 0.0, 1.0, 0.01);
+	add_float_setting(group, S_CLARITY, T_CLARITY, 0.0, 1.0, 0.01);
+	add_float_setting(group, S_GLOW, T_GLOW, 0.0, 1.0, 0.01);
 	beauty_set_description(group, S_CLARITY, obs_module_text("Detail.Clarity.Description"));
 	beauty_set_description(group, S_GLOW, obs_module_text("Detail.Glow.Description"));
 	obs_properties_add_group(props, "detail_group", T_GROUP_DETAIL, OBS_GROUP_NORMAL, group);
@@ -1008,9 +1061,9 @@ static obs_properties_t *beauty_properties(void *data)
 	group = obs_properties_create();
 	p = obs_properties_add_bool(group, S_FACE_AWARE, T_FACE_AWARE);
 	obs_property_set_modified_callback(p, face_aware_modified);
-	obs_properties_add_float_slider(group, S_TEMPORAL, T_TEMPORAL, 0.0, 1.0, 0.01);
-	obs_properties_add_float_slider(group, S_TEETH, T_TEETH, 0.0, 1.0, 0.01);
-	obs_properties_add_float_slider(group, S_EYES, T_EYES, 0.0, 1.0, 0.01);
+	add_float_setting(group, S_TEMPORAL, T_TEMPORAL, 0.0, 1.0, 0.01);
+	add_float_setting(group, S_TEETH, T_TEETH, 0.0, 1.0, 0.01);
+	add_float_setting(group, S_EYES, T_EYES, 0.0, 1.0, 0.01);
 	obs_properties_add_bool(group, S_ZONE_PREVIEW, T_ZONE_PREVIEW);
 	p = obs_properties_add_bool(group, S_FACE_MANUAL, T_FACE_MANUAL);
 	obs_property_set_modified_callback(p, face_manual_modified);
@@ -1030,9 +1083,10 @@ static obs_properties_t *beauty_properties(void *data)
 	obs_property_list_add_string(p, T_QUALITY_FAST, "fast");
 	obs_property_list_add_string(p, T_QUALITY_BALANCED, "balanced");
 	obs_property_list_add_string(p, T_QUALITY_HIGH, "high");
+	obs_property_set_modified_callback(p, setting_modified);
 	obs_properties_add_bool(group, S_SPLIT_VIEW, T_SPLIT_VIEW);
 	obs_properties_add_float_slider(group, S_OPACITY, T_OPACITY, 0.0, 1.0, 0.01);
-	obs_properties_add_bool(group, S_ANTI_BANDING, T_ANTI_BANDING);
+	add_bool_setting(group, S_ANTI_BANDING, T_ANTI_BANDING);
 	beauty_set_description(group, S_QUALITY,
 			       obs_module_text("Advanced.Quality.Description"));
 	beauty_set_description(group, S_ANTI_BANDING,
@@ -1050,6 +1104,7 @@ static obs_properties_t *beauty_properties(void *data)
 
 static void beauty_defaults(obs_data_t *settings)
 {
+	obs_data_set_default_string(settings, S_PRESET, "custom");
 	obs_data_set_default_double(settings, S_AMOUNT, 0.35);
 	obs_data_set_default_double(settings, S_RADIUS, 6.0);
 	obs_data_set_default_double(settings, S_DETAIL, 0.35);

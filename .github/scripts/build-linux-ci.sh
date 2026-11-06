@@ -19,6 +19,7 @@ cmake -S . -B build \
 cmake --build build -j"$(nproc)"
 
 ./build/beauty-face-region-test
+./build/beauty-preset-test
 xvfb-run -a ./build/beauty-load-test \
   ./build/obs-beauty-filter.so \
   ./build/rundir/share/obs/obs-plugins/obs-beauty-filter \

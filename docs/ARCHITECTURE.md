@@ -2,7 +2,7 @@
 
 **[English](ARCHITECTURE.en.md) | Tiếng Việt**
 
-Tài liệu này mô tả luồng xử lý, công thức shader và các quyết định thiết kế của plugin **1.2.0** để ổn định trong pipeline filter của OBS.
+Tài liệu này mô tả luồng xử lý, công thức shader và các quyết định thiết kế của plugin **1.3.0** để ổn định trong pipeline filter của OBS.
 
 ## 1. Vòng đời filter và pipeline render
 
@@ -429,6 +429,7 @@ Hướng phát triển: preset, compute shader cho radius lớn, đo GPU time, v
 
 | Khóa | Kiểu | Ghi chú |
 |---|---|---|
+| `preset` | string | `custom` hoặc id preset có sẵn; chỉ là lựa chọn trên UI |
 | `amount` | double | 0..1 |
 | `radius` | double | px @1080p |
 | `detail` | double | 0..1 |
@@ -454,3 +455,6 @@ Hướng phát triển: preset, compute shader cho radius lớn, đo GPU time, v
 | `quality` | string | `fast`/`balanced`/`high` |
 | `split_view` | bool | |
 | `opacity` | double | 0..1 |
+| `anti_banding` | bool | dithering cho ngõ ra 8-bit |
+
+`src/beauty-presets.c` quản lý bảng preset có sẵn. Khi áp preset, plugin ghi các khóa tinh chỉnh ở trên nhưng không ghi `preset`; callback của property lưu lựa chọn và chuyển sang `custom` sau lần chỉnh tay đầu tiên.

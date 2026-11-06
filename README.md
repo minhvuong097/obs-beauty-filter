@@ -5,7 +5,7 @@
 [![Build](https://github.com/minhvuong097/obs-beauty-filter/actions/workflows/build.yml/badge.svg)](https://github.com/minhvuong097/obs-beauty-filter/actions/workflows/build.yml)
 [![Latest release](https://img.shields.io/github/v/release/minhvuong097/obs-beauty-filter?display_name=tag)](https://github.com/minhvuong097/obs-beauty-filter/releases/latest)
 
-Plugin bộ lọc làm đẹp cho **OBS Studio** trên Windows và Linux (macOS có thể build từ source nhưng chưa được kiểm thử). Phiên bản **1.2.0** chạy hoàn toàn trên GPU, hòa vào pipeline filter tiêu chuẩn của OBS, không cần model AI, không đọc ngược frame full-resolution về CPU và không phụ thuộc runtime bên thứ ba.
+Plugin bộ lọc làm đẹp cho **OBS Studio** trên Windows và Linux (macOS có thể build từ source nhưng chưa được kiểm thử). Phiên bản **1.3.0** chạy hoàn toàn trên GPU, hòa vào pipeline filter tiêu chuẩn của OBS, không cần model AI, không đọc ngược frame full-resolution về CPU và không phụ thuộc runtime bên thứ ba.
 
 Mục tiêu: làn da mịn tự nhiên cho livestream/webcam **và camera độ phân giải cao** mà vẫn giữ chi tiết mắt, lông mày, tóc, lỗ chân lông và viền khuôn mặt; đồng thời xử lý đúng nguồn HDR.
 
@@ -24,6 +24,7 @@ Mục tiêu: làn da mịn tự nhiên cho livestream/webcam **và camera độ 
 - **Chống dải màu**: triangular dithering cho ngõ ra 8-bit, tránh banding khi da mịn trên nền gradient.
 - **HDR-safe**: xử lý `GS_CS_709_EXTENDED`, `GS_CS_709_SCRGB` và `GS_CS_SRGB_16F` trong linear light, giữ highlight > mức trắng SDR (không bypass, không clip).
 - **Preview**: skin mask, split view và face/eye/mouth zones.
+- **Preset khởi đầu**: Natural, Cinema, Studio, Soft, Beard, Dark skin, HDR và Default. Chọn preset rồi tinh chỉnh; mọi thay đổi tay sẽ tự chuyển về **Tùy chỉnh**.
 - **3 mức hiệu năng**: Fast / Balanced / High.
 - **Hỗ trợ alpha**, SDR 8-bit và SDR 16-bit.
 - **Song ngữ**: English và Tiếng Việt.
@@ -36,6 +37,9 @@ obs-beauty-filter/
 ├── src/
 │   ├── beauty-filter.c      # OBS filter + properties + multi-pass render
 │   ├── beauty-filter.h
+│   ├── beauty-presets.c     # preset khởi đầu có sẵn
+│   ├── beauty-presets.h
+│   ├── beauty-settings.h    # tên setting obs_data dùng chung
 │   ├── face-region.c        # heuristic face-box estimation (CPU, tiny grid)
 │   ├── face-region.h
 │   └── plugin-main.c        # module entry point
@@ -46,6 +50,7 @@ obs-beauty-filter/
 │       └── vi-VN.ini
 ├── tests/
 │   ├── load-test.c          # load + render + mask/face/HDR integration test
+│   ├── preset-test.c        # unit test cho bảng preset
 │   └── face-region-test.c   # unit test cho face detector
 ├── docs/
 │   ├── ARCHITECTURE.md      # + ARCHITECTURE.en.md
@@ -62,7 +67,7 @@ obs-beauty-filter/
 
 Tải bản mới nhất tại **[GitHub Releases](https://github.com/minhvuong097/obs-beauty-filter/releases/latest)**:
 
-- Windows x64: `obs-beauty-filter-1.2.0-windows-x64.zip`
+- Windows x64: `obs-beauty-filter-1.3.0-windows-x64.zip`
 - Linux x86_64: `obs-beauty-filter-linux-x86_64.tar.gz`
 - Mỗi release có kèm `SHA256SUMS.txt` để kiểm tra tệp tải về.
 
@@ -312,11 +317,10 @@ Chi phí chính là fragment shader full-resolution, cộng thêm mask pass nử
 
 ## Roadmap
 
-1. Preset có sẵn (Natural, Studio, Soft, Strong, HDR) và reset nhanh.
-2. Compute shader (D3D11/OpenGL) cho radius lớn ở 4K.
-3. Đo và hiển thị thời gian GPU của filter.
-4. Tuỳ chọn ML landmark/segmentation nhẹ (ONNX/MediaPipe) cho multi-face và occlusion.
-5. Tự động chọn face box bằng landmark thay vì upper-band heuristic.
+1. Compute shader (D3D11/OpenGL) cho radius lớn ở 4K.
+2. Tuỳ chọn ML landmark/segmentation nhẹ (ONNX/MediaPipe) cho multi-face và occlusion.
+3. Tự động chọn face box bằng landmark thay vì upper-band heuristic.
+4. Chẩn đoán thời gian GPU tuỳ chọn, tránh kiểu đọc timer đồng bộ của `gs_timer`.
 
 ## Kiểm thử
 
@@ -324,8 +328,9 @@ Chi phí chính là fragment shader full-resolution, cộng thêm mask pass nử
 cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBEAUTY_BUILD_TESTS=ON
 cmake --build build -j"$(nproc)"
 
-# Unit test cho face detector
+# Unit test cho face detector và preset
 ./build/beauty-face-region-test
+./build/beauty-preset-test
 
 # Load + render + mask/face/HDR integration test
 xvfb-run -a ./build/beauty-load-test \
@@ -343,7 +348,7 @@ OK: module loaded, filter created, effect compiled, filter rendered, mask/opacit
 
 Test integration kiểm tra: filter mặc định, skin mask, opacity 0, teeth/eye zones (có mặt thủ công), zone preview, **frequency separation trên pattern da có texture** (contrast giảm khi Detail thấp và quay lại khi Detail cao), HDR Rec.709 extended và scRGB (giữ giá trị > 1, thực sự được xử lý và không bị scale hai lần). Không được có lỗi shader trong log. Xem [docs/TESTING.md](docs/TESTING.md) cho test matrix đầy đủ.
 
-> **Trạng thái kiểm thử:** GitHub Actions build và chạy test tự động trên hai nền tảng. Linux (Alpine 3.21, OBS 30.2.3, OpenGL/Mesa llvmpipe) chạy đầy đủ `beauty-face-region-test` và `beauty-load-test` (render, mask, texture, HDR). Windows x64 build trực tiếp với source OBS 33.0.1 + `obs-deps`, chạy `beauty-face-region-test` và `beauty-load-test` trên đường D3D11 thật (load module + compile effect), rồi đóng gói theo layout plugin mới. Vẫn nên xác nhận render/HDR thủ công trong OBS trên phần cứng thật; xem [docs/TESTING.md](docs/TESTING.md).
+> **Trạng thái kiểm thử:** GitHub Actions build và chạy test tự động trên hai nền tảng. Linux (Alpine 3.21, OBS 30.2.3, OpenGL/Mesa llvmpipe) chạy đầy đủ `beauty-face-region-test`, `beauty-preset-test` và `beauty-load-test` (render, mask, texture, HDR). Windows x64 build trực tiếp với source OBS 33.0.1 + `obs-deps`, chạy `beauty-face-region-test`, `beauty-preset-test` và `beauty-load-test` trên đường D3D11 thật (load module + compile effect), rồi đóng gói theo layout plugin mới. Vẫn nên xác nhận render/HDR thủ công trong OBS trên phần cứng thật; xem [docs/TESTING.md](docs/TESTING.md).
 
 ## Giấy phép
 

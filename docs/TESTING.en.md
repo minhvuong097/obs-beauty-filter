@@ -45,7 +45,23 @@ The test builds a synthetic skin-mask grid (a face taller than it is wide, with 
 3. The box is not pulled off-centre by the wall/skin patch at the edge.
 4. An empty or too-small grid returns `valid = false`.
 
-## 3. Load + render integration test
+## 3. Preset unit test
+
+Pure CPU test, no graphics required:
+
+```bash
+./build/beauty-preset-test
+```
+
+Expected:
+
+```text
+OK: preset table, lookup, apply, defaults and NULL handling verified
+```
+
+It checks the preset count and unique IDs, value ranges, quality strings, `find()` behaviour for `custom`/unknown ids, that `apply()` writes every tuning key without overwriting the preset selection, that the `default` preset stays in sync with `beauty_defaults()`, and that `NULL` arguments are ignored.
+
+## 4. Load + render integration test
 
 The test creates a `beauty_filter`, attaches it to a source and renders through `gs_texrender`. If the effect has a syntax error or data files are missing, OBS may still return a source object with `obs_obj_invalid()` set to true; the test checks this and fails immediately. OBS 30.2 intentionally keeps an invalid source object so user settings are not lost, so a `NULL` pointer check alone is not enough.
 
@@ -106,6 +122,7 @@ If you get `0,0,0,0`, filter creation fails, or colours are far off, check the s
 
 ```powershell
 .\build\RelWithDebInfo\beauty-face-region-test.exe
+.\build\RelWithDebInfo\beauty-preset-test.exe
 
 # OBS 33+ layout (default on Windows)
 .\build\RelWithDebInfo\beauty-load-test.exe `
@@ -130,13 +147,13 @@ If you get `0,0,0,0`, filter creation fails, or colours are far off, check the s
 > tree; locate `image-source.dll` and its matching data directory. Without these
 > arguments, the test only checks load + effect compilation.
 
-## 4. Pixel-readback orientation note
+## 5. Pixel-readback orientation note
 
 The integration test reads pixels with `gs_stage_texture()` + `gs_stagesurface_map()`. On OpenGL/llvmpipe in the current CI environment, the first mapped row is the **top** row of the image (top-down), so `render_pixel()` uses `row = y` and the pattern draws with a top-based origin (`translate(x, y)`).
 
 If a backend returns bottom-up rows (some drivers/backends may), the `pattern eye/mouth luma` values will be swapped and the zone checks will fail. In that case, verify the backend convention instead of loosening the test thresholds.
 
-## 5. Checking the OBS log
+## 6. Checking the OBS log
 
 Open **Help → Log Files → View Current Log** and look for:
 
@@ -148,7 +165,7 @@ Open **Help → Log Files → View Current Log** and look for:
 
 On first use, OBS compiles all six techniques (`MaskPass`, `MaskAnalysis`, `BlurBase`, `DrawFast`, `DrawBalanced`, `DrawHigh`); a failure in any technique makes the effect fail to load.
 
-## 6. Manual test matrix
+## 7. Manual test matrix
 
 | # | Case | Expectation |
 |---|---|---|
@@ -176,7 +193,7 @@ On first use, OBS compiles all six techniques (`MaskPass`, `MaskAnalysis`, `Blur
 | 22 | Smooth gradient, 8-bit output | Anti-banding on: no visible bands; off: bands return |
 | 23 | High-end 1440p/4K camera, Quality High | Skin smooth but detailed, no halo or plastic look |
 
-## 7. Performance checks
+## 8. Performance checks
 
 1. Use OBS **Stats** (View → Stats) for FPS and dropped frames.
 2. Compare the three Quality levels on the same scene.
@@ -190,7 +207,7 @@ On first use, OBS compiles all six techniques (`MaskPass`, `MaskAnalysis`, `Blur
 
 The plugin never reads back a full frame. CPU cost is only the 64×N grid (at most 16 KB) every 6 frames when automatic face-aware detection is on.
 
-## 8. Image-quality checks
+## 9. Image-quality checks
 
 - Capture before/after screenshots with the same lighting and frame.
 - At 100% zoom, inspect eyes, eyebrows, lip line, sideburns and jawline.
@@ -199,7 +216,7 @@ The plugin never reads back a full frame. CPU cost is only the 64×N grid (at mo
 - For multiple skin tones, capture at least three light/dark levels and confirm both mask and face box.
 - For HDR, compare highlights (lights, windows) before/after to confirm they are not clipped.
 
-## 9. Windows-specific testing
+## 10. Windows-specific testing
 
 - Windows 10/11, OBS 30.2+ (64-bit); confirm on OBS 33.0.1 or newer first.
 - Intel iGPU, NVIDIA and AMD GPUs.
@@ -214,11 +231,11 @@ The plugin never reads back a full frame. CPU cost is only the 64×N grid (at mo
   Legacy, and OBS 34 will stop loading it.
 - If OBS 33 starts in **Safe Mode**, third-party plugins are not loaded; leave
   Safe Mode before testing.
-- Run both `beauty-face-region-test.exe` and `beauty-load-test.exe`; verify both HDR Rec.709 extended and scRGB on real hardware.
+- Run `beauty-face-region-test.exe`, `beauty-preset-test.exe` and `beauty-load-test.exe`; verify both HDR Rec.709 extended and scRGB on real hardware.
 - The headless test now covers scRGB; 16F readback can still differ between D3D11 and OpenGL, so confirm with a real HDR source/canvas.
 - When editing the effect, avoid single-scalar vector constructors such as `float3(x)`: libobs-d3d11's FXC rejects them with `X3014: incorrect number of arguments to numeric-type constructor`. Write `float3(x, x, x)` instead. The Linux/OpenGL compiler accepts both, so only the Windows CI catches this.
 
-## 10. Suggested CI
+## 11. Suggested CI
 
 A Linux job can run:
 
@@ -226,6 +243,7 @@ A Linux job can run:
 - cmake -S . -B build -DBEAUTY_BUILD_TESTS=ON
 - cmake --build build -j
 - ./build/beauty-face-region-test
+- ./build/beauty-preset-test
 - xvfb-run -a ./build/beauty-load-test ...
 ```
 

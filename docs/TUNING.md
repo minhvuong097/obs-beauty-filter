@@ -18,6 +18,10 @@
 
 ## 2. Preset gợi ý
 
+Bảng điều khiển bắt đầu bằng menu **Preset khởi đầu**. Chọn mục gần với camera và ánh sáng của bạn, sau đó tinh chỉnh các nút bên dưới. Chỉnh bất kỳ thông số sáng tạo nào sẽ tự chuyển menu về **Tùy chỉnh (giữ thông số hiện tại)**; các con số trong mục này là giá trị chính xác mà mỗi preset áp dụng.
+
+**Mặc định** khôi phục thiết lập gốc của plugin (Amount 0.35, Radius 6, Detail 0.35, sensitivity 0.50, Rosy 0.15, Clarity 0.10, Glow 0.05, temporal 0.60, chất lượng Balanced, bật chống dải màu). Dùng preset này làm mốc sạch trước khi chọn preset theo camera.
+
 ### Natural — webcam 1080p, đèn trong nhà
 
 | Thông số | Giá trị |

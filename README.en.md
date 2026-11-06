@@ -5,7 +5,7 @@
 [![Build](https://github.com/minhvuong097/obs-beauty-filter/actions/workflows/build.yml/badge.svg)](https://github.com/minhvuong097/obs-beauty-filter/actions/workflows/build.yml)
 [![Latest release](https://img.shields.io/github/v/release/minhvuong097/obs-beauty-filter?display_name=tag)](https://github.com/minhvuong097/obs-beauty-filter/releases/latest)
 
-A GPU beauty filter for **OBS Studio** on Windows and Linux (macOS can be built from source but is not tested). Version **1.2.0** runs entirely on the GPU, plugs into the standard OBS filter pipeline, uses no AI model, never reads a full-resolution frame back to the CPU, and has no third-party runtime dependency.
+A GPU beauty filter for **OBS Studio** on Windows and Linux (macOS can be built from source but is not tested). Version **1.3.0** runs entirely on the GPU, plugs into the standard OBS filter pipeline, uses no AI model, never reads a full-resolution frame back to the CPU, and has no third-party runtime dependency.
 
 Goal: natural-looking skin for livestreams/webcams **and high-resolution cameras** while preserving eyes, eyebrows, hair, pores and the face outline — with correct HDR handling.
 
@@ -24,6 +24,7 @@ Goal: natural-looking skin for livestreams/webcams **and high-resolution cameras
 - **Anti-banding**: triangular dithering for 8-bit output prevents banding in smooth skin gradients.
 - **HDR-safe**: `GS_CS_709_EXTENDED`, `GS_CS_709_SCRGB` and `GS_CS_SRGB_16F` are processed in linear light; highlights above SDR white are preserved (no bypass, no clipping).
 - **Previews**: skin mask, split view and face/eye/mouth zones.
+- **Built-in starting presets**: Natural, Cinema, Studio, Soft, Beard, Dark skin, HDR and Default. Pick one, then fine-tune; any manual change switches the selection to **Custom**.
 - **Three performance levels**: Fast / Balanced / High.
 - **Alpha support**, SDR 8-bit and SDR 16-bit.
 - **Bilingual UI**: English and Vietnamese.
@@ -36,6 +37,9 @@ obs-beauty-filter/
 ├── src/
 │   ├── beauty-filter.c      # OBS filter + properties + multi-pass renderer
 │   ├── beauty-filter.h
+│   ├── beauty-presets.c     # built-in starting presets
+│   ├── beauty-presets.h
+│   ├── beauty-settings.h    # shared obs_data setting names
 │   ├── face-region.c        # heuristic face-box estimation (CPU, tiny grid)
 │   ├── face-region.h
 │   └── plugin-main.c        # module entry point
@@ -46,6 +50,7 @@ obs-beauty-filter/
 │       └── vi-VN.ini
 ├── tests/
 │   ├── load-test.c          # load + render + mask/face/HDR integration test
+│   ├── preset-test.c        # preset table/lookup/apply unit test
 │   └── face-region-test.c   # face-detector unit test
 ├── docs/
 │   ├── ARCHITECTURE.md      # + ARCHITECTURE.en.md
@@ -62,7 +67,7 @@ obs-beauty-filter/
 
 Download the latest build from **[GitHub Releases](https://github.com/minhvuong097/obs-beauty-filter/releases/latest)**:
 
-- Windows x64: `obs-beauty-filter-1.2.0-windows-x64.zip`
+- Windows x64: `obs-beauty-filter-1.3.0-windows-x64.zip`
 - Linux x86_64: `obs-beauty-filter-linux-x86_64.tar.gz`
 - Each release includes `SHA256SUMS.txt` so you can verify the download.
 
@@ -315,11 +320,10 @@ The dominant cost is the full-resolution fragment shader, plus a half-resolution
 
 ## Roadmap
 
-1. Built-in presets (Natural, Studio, Soft, Strong, HDR) and quick reset.
-2. Compute shader (D3D11/OpenGL) for large radii at 4K.
-3. Measure and display filter GPU time.
-4. Optional lightweight ML landmarks/segmentation (ONNX/MediaPipe) for multi-face and occlusion.
-5. Landmark-driven automatic face boxes instead of the upper-band heuristic.
+1. Compute shader (D3D11/OpenGL) for large radii at 4K.
+2. Optional lightweight ML landmarks/segmentation (ONNX/MediaPipe) for multi-face and occlusion.
+3. Landmark-driven automatic face boxes instead of the upper-band heuristic.
+4. Optional GPU timing diagnostics that avoid the synchronous timer reads used by `gs_timer`.
 
 ## Testing
 
@@ -327,8 +331,9 @@ The dominant cost is the full-resolution fragment shader, plus a half-resolution
 cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBEAUTY_BUILD_TESTS=ON
 cmake --build build -j"$(nproc)"
 
-# Face-detector unit test
+# Face-detector and preset unit tests
 ./build/beauty-face-region-test
+./build/beauty-preset-test
 
 # Load + render + mask/face/HDR integration test
 xvfb-run -a ./build/beauty-load-test \
@@ -346,7 +351,7 @@ OK: module loaded, filter created, effect compiled, filter rendered, mask/opacit
 
 The integration test covers: default filter output, skin mask, opacity 0, teeth/eye zones (with a manual face box), zone preview colours, frequency separation on a textured skin pattern (contrast drops at low Detail and returns at high Detail), Rec.709 extended HDR and scRGB HDR (values above 1.0 are preserved, actually processed, and not double-scaled). No shader errors are allowed. See [docs/TESTING.en.md](docs/TESTING.en.md) for the full test matrix.
 
-> **Test status:** GitHub Actions builds and tests on both platforms. Linux (Alpine 3.21, OBS 30.2.3, OpenGL/Mesa llvmpipe) runs the full `beauty-face-region-test` and `beauty-load-test` suite (render, mask, texture, HDR). Windows x64 builds directly against OBS 33.0.1 source plus `obs-deps`, runs `beauty-face-region-test` and `beauty-load-test` on the real D3D11 path (module load + effect compilation), and packages the new plugin layout. A manual in-OBS render/HDR check on real hardware is still recommended; see [docs/TESTING.en.md](docs/TESTING.en.md).
+> **Test status:** GitHub Actions builds and tests on both platforms. Linux (Alpine 3.21, OBS 30.2.3, OpenGL/Mesa llvmpipe) runs the full `beauty-face-region-test`, `beauty-preset-test` and `beauty-load-test` suite (render, mask, texture, HDR). Windows x64 builds directly against OBS 33.0.1 source plus `obs-deps`, runs `beauty-face-region-test`, `beauty-preset-test` and `beauty-load-test` on the real D3D11 path (module load + effect compilation), and packages the new plugin layout. A manual in-OBS render/HDR check on real hardware is still recommended; see [docs/TESTING.en.md](docs/TESTING.en.md).
 
 ## License
 

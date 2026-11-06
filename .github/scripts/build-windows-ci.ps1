@@ -126,6 +126,9 @@ $env:PATH = "$ObsBinDir;$(Join-Path $DepsDir 'bin');$env:PATH"
 $ObsDataDir = (Join-Path $ObsSrcDir "libobs\data") -replace '\\', '/'
 $env:OBS_BEAUTY_DATA_PATH = $ObsDataDir + "/"
 
+& (Join-Path $BuildDir "RelWithDebInfo\beauty-preset-test.exe")
+if ($LASTEXITCODE -ne 0) { throw "Preset test failed" }
+
 $LibobsD3d11 = Get-ChildItem -Path $ObsBuildDir -Recurse -Filter "libobs-d3d11.dll" |
   Select-Object -First 1
 if (-not $LibobsD3d11) { throw "libobs-d3d11.dll was not built" }

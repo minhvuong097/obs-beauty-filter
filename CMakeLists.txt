@@ -6,7 +6,7 @@ cmake_minimum_required(VERSION 3.28...3.30)
 #   2. Standalone: point CMAKE_PREFIX_PATH at an OBS build/install tree that
 #      provides libobsConfig.cmake.
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
-  project(obs-beauty-filter VERSION 1.2.0 LANGUAGES C)
+  project(obs-beauty-filter VERSION 1.3.0 LANGUAGES C)
   set(BEAUTY_FILTER_STANDALONE ON)
   find_package(libobs REQUIRED)
 else()
@@ -57,6 +57,9 @@ target_sources(
   PRIVATE
     src/beauty-filter.c
     src/beauty-filter.h
+    src/beauty-presets.c
+    src/beauty-presets.h
+    src/beauty-settings.h
     src/face-region.c
     src/face-region.h
     src/plugin-main.c
@@ -100,6 +103,16 @@ if(BEAUTY_BUILD_TESTS)
     target_compile_options(beauty-face-region-test PRIVATE /W3 /utf-8)
   else()
     target_compile_options(beauty-face-region-test PRIVATE -Wall -Wextra)
+  endif()
+
+  add_executable(beauty-preset-test tests/preset-test.c src/beauty-presets.c)
+  target_include_directories(beauty-preset-test PRIVATE src)
+  target_link_libraries(beauty-preset-test PRIVATE OBS::libobs)
+  target_compile_features(beauty-preset-test PRIVATE c_std_99)
+  if(MSVC)
+    target_compile_options(beauty-preset-test PRIVATE /W3 /utf-8)
+  else()
+    target_compile_options(beauty-preset-test PRIVATE -Wall -Wextra)
   endif()
 endif()
 

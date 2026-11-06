@@ -44,7 +44,23 @@ Test tạo grid skin mask tổng hợp (mặt cao hơn rộng, có lỗ mắt/mi
 3. Box không bị mảng tường/da nhỏ ngoài rìa kéo lệch.
 4. Grid rỗng hoặc quá nhỏ trả về `valid = false`.
 
-## 3. Load + render integration test
+## 3. Preset unit test
+
+Test thuần CPU, không cần graphics:
+
+```bash
+./build/beauty-preset-test
+```
+
+Kỳ vọng:
+
+```text
+OK: preset table, lookup, apply, defaults and NULL handling verified
+```
+
+Test kiểm tra số lượng preset và ID duy nhất, khoảng giá trị hợp lệ, chuỗi quality, hành vi `find()` với `custom`/ID lạ, việc `apply()` ghi đủ mọi khóa mà không đè lên lựa chọn preset, preset `default` khớp với `beauty_defaults()`, và tham số `NULL` được bỏ qua.
+
+## 4. Load + render integration test
 
 Test tạo filter `beauty_filter`, gắn vào source và render qua `gs_texrender`. Nếu effect sai cú pháp hoặc thiếu file data, OBS có thể vẫn trả về một source object nhưng `obs_obj_invalid()` là true; test kiểm tra điều này và fail ngay. OBS 30.2 cố ý giữ source object không hợp lệ để không làm mất settings của người dùng, nên không thể chỉ kiểm tra con trỏ `NULL`.
 
@@ -105,6 +121,7 @@ Nếu ra `0,0,0,0`, filter creation fail, hoặc sai lệch màu lớn, xem log 
 
 ```powershell
 .\build\RelWithDebInfo\beauty-face-region-test.exe
+.\build\RelWithDebInfo\beauty-preset-test.exe
 
 # Layout OBS 33+ (mặc định trên Windows)
 .\build\RelWithDebInfo\beauty-load-test.exe `
@@ -129,13 +146,13 @@ Nếu ra `0,0,0,0`, filter creation fail, hoặc sai lệch màu lớn, xem log 
 > `image-source.dll` và thư mục data tương ứng. Nếu không truyền, test chỉ kiểm
 > tra load + compile effect.
 
-## 4. Ghi chú orientation khi đọc pixel
+## 5. Ghi chú orientation khi đọc pixel
 
 Test integration dùng `gs_stage_texture()` + `gs_stagesurface_map()` để đọc pixel. Trên OpenGL/llvmpipe trong môi trường CI hiện tại, hàng đầu tiên map ra là **hàng trên** của ảnh (top-down), nên `render_pixel()` dùng `row = y` và pattern vẽ với gốc toạ độ top-based (`translate(x, y)`).
 
 Nếu chạy trên backend trả về bottom-up (một số driver/backend có thể khác), các giá trị `pattern eye/mouth luma` sẽ lệch và test sẽ fail ở bước zone. Khi đó cần kiểm tra lại quy ước của backend thay vì sửa ngưỡng test.
 
-## 5. Kiểm tra log OBS
+## 6. Kiểm tra log OBS
 
 Mở **Help → Log Files → View Current Log** và tìm:
 
@@ -147,7 +164,7 @@ Mở **Help → Log Files → View Current Log** và tìm:
 
 Khi thêm filter lần đầu, OBS sẽ compile cả 6 technique (`MaskPass`, `MaskAnalysis`, `BlurBase`, `DrawFast`, `DrawBalanced`, `DrawHigh`); lỗi ở bất kỳ technique nào cũng làm effect load fail.
 
-## 6. Test matrix thủ công
+## 7. Test matrix thủ công
 
 | # | Trường hợp | Kỳ vọng |
 |---|---|---|
@@ -175,7 +192,7 @@ Khi thêm filter lần đầu, OBS sẽ compile cả 6 technique (`MaskPass`, `M
 | 22 | Gradient mượt, ngõ ra 8-bit | Anti-banding on: không thấy dải; off: dải quay lại |
 | 23 | Camera cao cấp 1440p/4K, Quality High | Da mịn nhưng còn chi tiết, không halo, không bệt |
 
-## 7. Kiểm tra hiệu năng
+## 8. Kiểm tra hiệu năng
 
 1. Dùng **Stats** của OBS (View → Stats) để xem FPS và dropped frames.
 2. So sánh 3 mức Quality với cùng scene.
@@ -189,7 +206,7 @@ Khi thêm filter lần đầu, OBS sẽ compile cả 6 technique (`MaskPass`, `M
 
 Không có CPU readback full-frame trong plugin. Chi phí CPU chỉ là grid 64×N (tối đa 16 KB) mỗi 6 frame khi auto face-aware bật.
 
-## 8. Kiểm tra chất lượng hình ảnh
+## 9. Kiểm tra chất lượng hình ảnh
 
 - Chụp screenshot trước/sau với cùng ánh sáng, cùng frame.
 - Kiểm tra ở 100% zoom các vùng: mắt, lông mày, viền môi, tóc mai, đường viền hàm.
@@ -198,7 +215,7 @@ Không có CPU readback full-frame trong plugin. Chi phí CPU chỉ là grid 64�
 - Với nhiều tông da, chụp ít nhất 3 mức sáng/tối khác nhau và xác nhận mask + face box.
 - Với HDR, kiểm tra highlight (đèn, cửa sổ) trước/sau để chắc không bị clip.
 
-## 9. Test trên Windows cụ thể
+## 10. Test trên Windows cụ thể
 
 - Windows 10/11, OBS 30.2+ (64-bit); ưu tiên xác nhận trên OBS 33.0.1 trở lên.
 - GPU Intel iGPU, NVIDIA, AMD.
@@ -213,11 +230,11 @@ Không có CPU readback full-frame trong plugin. Chi phí CPU chỉ là grid 64�
   OBS 34 sẽ ngừng load layout này.
 - Nếu OBS 33 bật **Safe Mode**, plugin bên thứ ba sẽ không được load; hãy thoát
   Safe Mode trước khi kiểm tra.
-- Chạy cả `beauty-face-region-test.exe` và `beauty-load-test.exe`; kiểm tra cả HDR Rec.709 extended và scRGB trên GPU thật.
+- Chạy `beauty-face-region-test.exe`, `beauty-preset-test.exe` và `beauty-load-test.exe`; kiểm tra cả HDR Rec.709 extended và scRGB trên GPU thật.
 - Test headless đã bao phủ scRGB; readback 16F vẫn có thể khác giữa D3D11 và OpenGL nên cần xác nhận lại bằng nguồn/canvas HDR thực tế.
 - Khi sửa effect, tránh constructor vector một tham số như `float3(x)`: FXC của libobs-d3d11 báo lỗi `X3014: incorrect number of arguments to numeric-type constructor`. Hãy viết `float3(x, x, x)`. Compiler Linux/OpenGL chấp nhận cả hai nên chỉ CI Windows mới phát hiện được lỗi này.
 
-## 10. CI gợi ý
+## 11. CI gợi ý
 
 Có thể chạy job Linux:
 
@@ -225,6 +242,7 @@ Có thể chạy job Linux:
 - cmake -S . -B build -DBEAUTY_BUILD_TESTS=ON
 - cmake --build build -j
 - ./build/beauty-face-region-test
+- ./build/beauty-preset-test
 - xvfb-run -a ./build/beauty-load-test ...
 ```
 

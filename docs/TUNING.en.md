@@ -18,6 +18,10 @@
 
 ## 2. Suggested presets
 
+The filter panel starts with a **Starting preset** dropdown. Pick the entry closest to your camera and lighting, then fine-tune the controls below. Changing any creative control automatically switches the dropdown to **Custom (use current settings)**; the numbers in this section are the exact values each preset applies.
+
+**Default** restores the plugin defaults (Amount 0.35, Radius 6, Detail 0.35, sensitivity 0.50, Rosy 0.15, Clarity 0.10, Glow 0.05, temporal 0.60, Balanced quality, anti-banding on). Use it as a clean baseline before choosing a camera-specific preset.
+
 ### Natural — 1080p webcam, indoor lighting
 
 | Parameter | Value |
