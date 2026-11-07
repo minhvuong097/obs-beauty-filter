@@ -2,7 +2,7 @@
 
 **English | [Tiếng Việt](ARCHITECTURE.md)**
 
-This document describes the processing flow, shader maths and design decisions of plugin **1.3.0** that keep it stable inside OBS' filter pipeline.
+This document describes the processing flow, shader maths and design decisions of plugin **1.4.0** that keep it stable inside OBS' filter pipeline.
 
 ## 1. Filter lifecycle and render pipeline
 
@@ -429,7 +429,8 @@ Future direction: presets, compute shaders for large radii, GPU timing, and opti
 
 | Key | Type | Notes |
 |---|---|---|
-| `preset` | string | `custom` or a built-in preset id; UI selection only |
+| `preset` | string | `custom`, a built-in preset id, or `custom:<name>`; UI selection only |
+| `preset_name` | string | last custom preset name typed in the UI; not saved into the preset file |
 | `amount` | double | 0..1 |
 | `radius` | double | px @1080p |
 | `detail` | double | 0..1 |
@@ -458,3 +459,43 @@ Future direction: presets, compute shaders for large radii, GPU timing, and opti
 | `anti_banding` | bool | 8-bit output dithering |
 
 `src/beauty-presets.c` owns the built-in preset table. Applying a preset writes the tuning keys above but never writes `preset` itself; the property callback stores the selection and switches it to `custom` after the first manual edit.
+
+## 12. Custom preset storage
+
+`src/beauty-custom-presets.c` keeps user presets in a single JSON file in the
+OBS module config directory (`custom-presets.json`). The file is intentionally
+small and human-editable:
+
+```json
+{
+  "version": 1,
+  "presets": [
+    {
+      "name": "My Look",
+      "amount": 0.35,
+      "radius": 6.0,
+      "detail": 0.35,
+      "skin_detect": true,
+      "...": "the same creative keys as the built-in presets"
+    }
+  ]
+}
+```
+
+- The in-memory list is loaded lazily and cached; `reload()` drops the cache.
+- Writes use `obs_data_save_json_safe()` (`.tmp` + `.bak`), so a crash during a
+  save does not corrupt the previous file.
+- Names are trimmed, limited to 64 characters, and compared
+  case-insensitively. They cannot match `custom` or a built-in preset id.
+- Applying a preset fills missing keys from the built-in Default preset, which
+  keeps older or hand-edited files usable.
+- Tests override the path with `OBS_BEAUTY_CUSTOM_PRESET_PATH`; production
+  builds resolve it through `obs_module_config_path()`.
+- The UI stores a transient status message in `struct beauty_filter`
+  (`preset_status`), never in `obs_data`, so status text is not saved with the
+  scene collection.
+
+The property callback receives the filter through
+`obs_properties_create_param(filter, NULL)` and
+`obs_properties_get_param()`. This is why the property page can update the
+source settings and refresh itself from a button callback.

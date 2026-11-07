@@ -23,6 +23,30 @@ Trên Windows, `BEAUTY_OBS33_PLUGIN_LAYOUT` mặc định `ON` và staging dùng
 OBS 33+. Thêm `-DBEAUTY_OBS33_PLUGIN_LAYOUT=OFF` nếu cần test layout legacy cho
 OBS 32 trở xuống.
 
+### Sanitizer
+
+AddressSanitizer và UndefinedBehaviorSanitizer là tùy chọn:
+
+```bash
+cmake -S . -B build-sanitize -DCMAKE_BUILD_TYPE=Debug \
+  -DBEAUTY_BUILD_TESTS=ON -DBEAUTY_SANITIZE=address,undefined
+cmake --build build-sanitize -j"$(nproc)"
+
+ASAN_OPTIONS=detect_leaks=0:abort_on_error=1 \
+UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
+xvfb-run -a ./build-sanitize/beauty-load-test \
+  ./build-sanitize/obs-beauty-filter.so \
+  ./build-sanitize/rundir/share/obs/obs-plugins/obs-beauty-filter \
+  /usr/lib/obs-plugins/image-source.so \
+  /usr/share/obs/obs-plugins/image-source
+```
+
+Dùng `-DBEAUTY_SANITIZE=undefined` khi runtime ASan không map được shadow
+memory (ví dụ trong một số container). Trên musl/Alpine, cấu hình với
+`CC=clang`; GCC của Alpine không kèm `libasan`/`libubsan`. Tắt leak detection
+vì libobs và Mesa giữ các allocation tồn tại đến hết process mà plugin không
+sở hữu.
+
 ## 2. Face-region unit test
 
 Test thuần CPU, không cần graphics:
@@ -55,10 +79,16 @@ Test thuần CPU, không cần graphics:
 Kỳ vọng:
 
 ```text
-OK: preset table, lookup, apply, defaults and NULL handling verified
+OK: built-in and custom presets, lookup, apply, defaults and NULL handling verified
 ```
 
 Test kiểm tra số lượng preset và ID duy nhất, khoảng giá trị hợp lệ, chuỗi quality, hành vi `find()` với `custom`/ID lạ, việc `apply()` ghi đủ mọi khóa mà không đè lên lựa chọn preset, preset `default` khớp với `beauty_defaults()`, và tham số `NULL` được bỏ qua.
+
+Phần custom preset ghi một file JSON thật qua `OBS_BEAUTY_CUSTOM_PRESET_PATH`,
+đọc lại từ đĩa, rồi kiểm tra trim tên, ghi đè/xóa không phân biệt hoa thường,
+từ chối tên trùng preset có sẵn hoặc tên dành riêng, từ chối ký tự điều khiển,
+giới hạn độ dài và fallback về preset Default khi thiếu khóa. Ba file tạm
+(`json`, `.tmp`, `.bak`) được dọn ở cuối.
 
 ## 4. Load + render integration test
 
@@ -146,6 +176,43 @@ Nếu ra `0,0,0,0`, filter creation fail, hoặc sai lệch màu lớn, xem log 
 > `image-source.dll` và thư mục data tương ứng. Nếu không truyền, test chỉ kiểm
 > tra load + compile effect.
 
+### Render matrix / golden image
+
+`beauty-render-matrix-test` render mọi preset có sẵn ở 360p, 720p, 1080p và
+1440p, sau đó chạy một lượt 16F ở 720p. Test kiểm tra alpha luôn đục, mỗi preset
+thực sự thay đổi frame, và giá trị 16F hữu hạn, không âm và giữ highlight trên
+mức trắng SDR.
+
+```bash
+# Chỉ kiểm tra invariant (Linux và Windows)
+xvfb-run -a ./build/beauty-render-matrix-test \
+  ./build/obs-beauty-filter.so \
+  ./build/rundir/share/obs/obs-plugins/obs-beauty-filter
+
+# So sánh golden image dạng lấy mẫu (CI Linux)
+BEAUTY_MATRIX_GOLDEN=tests/golden/render-matrix.txt \
+xvfb-run -a ./build/beauty-render-matrix-test \
+  ./build/obs-beauty-filter.so \
+  ./build/rundir/share/obs/obs-plugins/obs-beauty-filter
+
+# Tạo lại golden image sau khi cố ý thay đổi hình ảnh
+BEAUTY_MATRIX_WRITE_GOLDEN=tests/golden/render-matrix.txt \
+xvfb-run -a ./build/beauty-render-matrix-test \
+  ./build/obs-beauty-filter.so \
+  ./build/rundir/share/obs/obs-plugins/obs-beauty-filter
+
+# Bật 4K và xuất PPM để xem bằng mắt
+BEAUTY_MATRIX_4K=1 BEAUTY_MATRIX_DUMP_DIR=/tmp/beauty-frames \
+xvfb-run -a ./build/beauty-render-matrix-test \
+  ./build/obs-beauty-filter.so \
+  ./build/rundir/share/obs/obs-plugins/obs-beauty-filter
+```
+
+Golden lưu màu trung bình của lưới 8×6, không lưu frame byte-exact, nên chịu
+được sai số làm tròn của GPU mà vẫn bắt được thay đổi shader/preset.
+`BEAUTY_MATRIX_TOLERANCE` đặt sai lệch tối đa mỗi kênh (mặc định 20). CI Windows
+chạy invariant mà không so golden vì D3D11 và OpenGL làm tròn khác nhau.
+
 ## 5. Ghi chú orientation khi đọc pixel
 
 Test integration dùng `gs_stage_texture()` + `gs_stagesurface_map()` để đọc pixel. Trên OpenGL/llvmpipe trong môi trường CI hiện tại, hàng đầu tiên map ra là **hàng trên** của ảnh (top-down), nên `render_pixel()` dùng `row = y` và pattern vẽ với gốc toạ độ top-based (`translate(x, y)`).
@@ -160,7 +227,13 @@ Mở **Help → Log Files → View Current Log** và tìm:
 - `Failed to load '...beauty_filter.effect'` — **không** được xuất hiện.
 - `Compiler warnings/errors for ...beauty_filter.effect` — **không** được xuất hiện.
 - `Source ID 'beauty_filter' not found` — **không** được xuất hiện sau khi thêm filter.
-- `[obs-beauty-filter] Failed to allocate GPU resources` — **không** được xuất hiện.
+- `[obs-beauty-filter] Failed to allocate GPU resources` — **không** được xuất
+  hiện khi hoạt động bình thường. Khi có, filter hiện thông báo lỗi màu đỏ và
+  cho nguồn đi qua nguyên vẹn.
+- `[obs-beauty-filter] Could not read/write custom presets` — chỉ xuất hiện khi
+  `custom-presets.json` không đọc được hoặc thư mục config không ghi được.
+  Kiểm tra đường dẫn và quyền file; filter vẫn hoạt động nếu thiếu danh sách
+  custom.
 
 Khi thêm filter lần đầu, OBS sẽ compile cả 6 technique (`MaskPass`, `MaskAnalysis`, `BlurBase`, `DrawFast`, `DrawBalanced`, `DrawHigh`); lỗi ở bất kỳ technique nào cũng làm effect load fail.
 
@@ -191,8 +264,69 @@ Khi thêm filter lần đầu, OBS sẽ compile cả 6 technique (`MaskPass`, `M
 | 21 | Da có texture, Detail 0 → 1 | Detail 0 làm mịn; Detail 1 trả lại lỗ chân lông/nếp nhăn nhỏ |
 | 22 | Gradient mượt, ngõ ra 8-bit | Anti-banding on: không thấy dải; off: dải quay lại |
 | 23 | Camera cao cấp 1440p/4K, Quality High | Da mịn nhưng còn chi tiết, không halo, không bệt |
+| 24 | Lưu custom preset, khởi động lại OBS | Preset hiện là `Custom: <tên>` và khôi phục đủ mọi control |
+| 25 | Lưu đè tên đã có với hoa thường khác | Chỉ còn một mục, giá trị được cập nhật |
+| 26 | Xóa custom preset đang chọn | Mục biến mất, lựa chọn quay về `Custom` |
+| 27 | Reset toàn bộ | Mọi control trở về preset Default |
+| 28 | Tạm đổi tên `data/beauty_filter.effect` | Filter cho nguồn đi qua, hiện thông báo lỗi GPU, không ra frame đen |
+| 29 | Sửa `custom-presets.json` thiếu một khóa | Preset vẫn load, giá trị thiếu fallback về Default |
 
-## 8. Kiểm tra hiệu năng
+## 8. Hướng dẫn benchmark — Intel i5-1235U
+
+Đây là máy tham chiếu cho các ngưỡng hiệu năng: Intel Core i5-1235U (2 P-core
++ 8 E-core), Iris Xe 80 EU, 16 GB DDR4/DDR5 **dual-channel**, Windows 11,
+OBS 30.2 trở lên. RAM single-channel gần như giảm một nửa băng thông iGPU và
+không phải cấu hình so sánh hợp lệ.
+
+### Cách đo
+
+1. Dùng camera thật hoặc test source 30/60 fps ở độ phân giải cần đo. Không
+   benchmark trên ảnh tĩnh hoặc frame bị pause.
+2. Mở **Stats** của OBS (View → Stats) ít nhất 5 phút khi **chưa gắn filter**;
+   ghi lại *average time to render frame*, *frames missed* và mức dùng GPU.
+3. Gắn filter với preset và Quality cần đo, chạy thêm 5 phút và ghi cùng các
+   chỉ số.
+4. Filter overhead = frame time có filter − frame time không filter. Frame time
+   tuyệt đối quan trọng hơn overhead vì OBS còn render scene và encode.
+5. Xác nhận: không missed frame, GPU dưới 85–90 %, RAM không tăng, UI vẫn mượt.
+6. Lặp lại cho từng preset thực dùng. Các preset khác nhau chủ yếu ở Radius,
+   Detail, Glow và Quality; `Studio` và `Soft` nặng nhất.
+
+Không dùng truy vấn `gs_timer` đồng bộ để đo production: nó làm nghẽn pipeline
+GPU và làm kết quả cao hơn thực tế. Stats của OBS đã báo frame time mà không bị
+nghẽn đó.
+
+### Ngưỡng khuyến nghị
+
+| Nguồn | FPS | Quality | Preset | Overhead tối đa | Frame time tổng tối đa | Điều kiện đạt |
+|---|---:|---|---|---:|---:|---|
+| 1080p | 30 | Balanced | Default / Natural | 3.0 ms | 20 ms | 0 missed frame trong 10 phút |
+| 1080p | 60 | Balanced | Default / Natural | 4.0 ms | 12 ms | 0 missed frame, GPU < 90 % |
+| 1080p | 60 | High | Cinema / Studio | 6.0 ms | 12 ms | 0 missed frame; hạ mức nếu drop |
+| 1440p | 30 | High | Cinema | 6.0 ms | 20 ms | 0 missed frame |
+| 1440p | 60 | Balanced | Cinema | 8.0 ms | 12 ms | 0 missed frame; High thường quá nặng |
+| 4K | 30 | Balanced | Cinema | 12 ms | 25 ms | 0 missed frame; dùng Fast nếu cần |
+| 4K | 60 | Fast | bất kỳ | 6.0 ms | 16 ms | Không khuyến nghị trên Iris Xe |
+
+Đây là giá trị định hướng, không phải bảo đảm tuyệt đối: thermal limit, băng
+thông bộ nhớ chia sẻ và các source khác trong OBS đều thay đổi kết quả. Máy
+không đạt ngưỡng nên chuyển sang **Fast** trước khi giảm chất lượng hình ảnh
+xuống dưới mức scene cần.
+
+### Nếu benchmark không đạt
+
+1. Hạ **Quality** một mức (High → Balanced → Fast).
+2. Giảm **Radius** (ví dụ 10 → 6) và **Glow**.
+3. Tắt **Face-aware zones** nếu không dùng teeth/eye.
+4. Bỏ các filter xếp chồng (denoise/sharpen) hoặc chỉ chuyển chúng ra sau
+   beauty filter nếu kết quả vẫn đúng.
+5. Kiểm tra laptop đang cắm điện, chế độ hiệu năng cao, và camera không bị ép
+   độ phân giải cao hơn canvas.
+
+Ghi kết quả vào issue kèm preset, Quality, độ phân giải, frame time và phiên
+bản OBS. Xem ma trận tương thích tại [COMPATIBILITY.md](COMPATIBILITY.md).
+
+## 9. Kiểm tra hiệu năng
 
 1. Dùng **Stats** của OBS (View → Stats) để xem FPS và dropped frames.
 2. So sánh 3 mức Quality với cùng scene.
@@ -206,7 +340,7 @@ Khi thêm filter lần đầu, OBS sẽ compile cả 6 technique (`MaskPass`, `M
 
 Không có CPU readback full-frame trong plugin. Chi phí CPU chỉ là grid 64×N (tối đa 16 KB) mỗi 6 frame khi auto face-aware bật.
 
-## 9. Kiểm tra chất lượng hình ảnh
+## 10. Kiểm tra chất lượng hình ảnh
 
 - Chụp screenshot trước/sau với cùng ánh sáng, cùng frame.
 - Kiểm tra ở 100% zoom các vùng: mắt, lông mày, viền môi, tóc mai, đường viền hàm.
@@ -215,7 +349,7 @@ Không có CPU readback full-frame trong plugin. Chi phí CPU chỉ là grid 64�
 - Với nhiều tông da, chụp ít nhất 3 mức sáng/tối khác nhau và xác nhận mask + face box.
 - Với HDR, kiểm tra highlight (đèn, cửa sổ) trước/sau để chắc không bị clip.
 
-## 10. Test trên Windows cụ thể
+## 11. Test trên Windows cụ thể
 
 - Windows 10/11, OBS 30.2+ (64-bit); ưu tiên xác nhận trên OBS 33.0.1 trở lên.
 - GPU Intel iGPU, NVIDIA, AMD.
@@ -234,7 +368,7 @@ Không có CPU readback full-frame trong plugin. Chi phí CPU chỉ là grid 64�
 - Test headless đã bao phủ scRGB; readback 16F vẫn có thể khác giữa D3D11 và OpenGL nên cần xác nhận lại bằng nguồn/canvas HDR thực tế.
 - Khi sửa effect, tránh constructor vector một tham số như `float3(x)`: FXC của libobs-d3d11 báo lỗi `X3014: incorrect number of arguments to numeric-type constructor`. Hãy viết `float3(x, x, x)`. Compiler Linux/OpenGL chấp nhận cả hai nên chỉ CI Windows mới phát hiện được lỗi này.
 
-## 11. CI gợi ý
+## 12. CI gợi ý
 
 Có thể chạy job Linux:
 

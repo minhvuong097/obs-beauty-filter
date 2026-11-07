@@ -6,7 +6,7 @@ cmake_minimum_required(VERSION 3.28...3.30)
 #   2. Standalone: point CMAKE_PREFIX_PATH at an OBS build/install tree that
 #      provides libobsConfig.cmake.
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
-  project(obs-beauty-filter VERSION 1.3.0 LANGUAGES C)
+  project(obs-beauty-filter VERSION 1.4.0 LANGUAGES C)
   set(BEAUTY_FILTER_STANDALONE ON)
   find_package(libobs REQUIRED)
 else()
@@ -49,12 +49,53 @@ if(WIN32 AND BEAUTY_FILTER_STANDALONE AND CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DE
   endif()
 endif()
 
+# Sanitizers are opt-in because they slow rendering down and require a
+# compiler runtime that is not installed everywhere.  Use:
+#   -DBEAUTY_SANITIZE=address,undefined   full ASan + UBSan (CI default)
+#   -DBEAUTY_SANITIZE=undefined           UBSan only (works on musl/Alpine)
+set(BEAUTY_SANITIZE "OFF" CACHE STRING
+    "Sanitizers to enable (OFF, address,undefined or undefined)")
+set_property(CACHE BEAUTY_SANITIZE PROPERTY STRINGS
+             OFF address,undefined undefined)
+if(NOT BEAUTY_SANITIZE STREQUAL "OFF")
+  if(MSVC)
+    message(FATAL_ERROR
+            "BEAUTY_SANITIZE is only supported with GCC or Clang")
+  endif()
+
+  include(CheckCSourceCompiles)
+  set(_beauty_sanitize_flags "-fsanitize=${BEAUTY_SANITIZE} -fno-omit-frame-pointer")
+  set(CMAKE_REQUIRED_FLAGS "${_beauty_sanitize_flags}")
+  set(CMAKE_REQUIRED_LINK_OPTIONS "-fsanitize=${BEAUTY_SANITIZE}")
+  # Re-check every configure so that installing a runtime package does not
+  # leave a stale negative result cached.
+  unset(BEAUTY_SANITIZE_SUPPORTED CACHE)
+  check_c_source_compiles("int main(void) { return 0; }"
+                          BEAUTY_SANITIZE_SUPPORTED)
+  unset(CMAKE_REQUIRED_FLAGS)
+  unset(CMAKE_REQUIRED_LINK_OPTIONS)
+  unset(_beauty_sanitize_flags)
+
+  if(NOT BEAUTY_SANITIZE_SUPPORTED)
+    message(FATAL_ERROR
+            "The current compiler (${CMAKE_C_COMPILER}) cannot link with "
+            "-fsanitize=${BEAUTY_SANITIZE}. GCC on musl/Alpine does not ship "
+            "libasan; configure a Clang build (CC=clang) or use "
+            "-DBEAUTY_SANITIZE=undefined.")
+  endif()
+
+  add_compile_options(-fsanitize=${BEAUTY_SANITIZE} -fno-omit-frame-pointer)
+  add_link_options(-fsanitize=${BEAUTY_SANITIZE})
+endif()
+
 set(TARGET_NAME obs-beauty-filter)
 
 add_library(${TARGET_NAME} MODULE)
 target_sources(
   ${TARGET_NAME}
   PRIVATE
+    src/beauty-custom-presets.c
+    src/beauty-custom-presets.h
     src/beauty-filter.c
     src/beauty-filter.h
     src/beauty-presets.c
@@ -96,6 +137,20 @@ if(BEAUTY_BUILD_TESTS)
   target_link_libraries(beauty-load-test PRIVATE OBS::libobs)
   target_compile_features(beauty-load-test PRIVATE c_std_99)
 
+  add_executable(
+    beauty-render-matrix-test
+    tests/render-matrix-test.c
+    src/beauty-presets.c
+  )
+  target_include_directories(beauty-render-matrix-test PRIVATE src)
+  target_link_libraries(beauty-render-matrix-test PRIVATE OBS::libobs)
+  target_compile_features(beauty-render-matrix-test PRIVATE c_std_99)
+  if(MSVC)
+    target_compile_options(beauty-render-matrix-test PRIVATE /W3 /utf-8)
+  else()
+    target_compile_options(beauty-render-matrix-test PRIVATE -Wall -Wextra)
+  endif()
+
   add_executable(beauty-face-region-test tests/face-region-test.c src/face-region.c)
   target_include_directories(beauty-face-region-test PRIVATE src)
   target_compile_features(beauty-face-region-test PRIVATE c_std_99)
@@ -105,9 +160,19 @@ if(BEAUTY_BUILD_TESTS)
     target_compile_options(beauty-face-region-test PRIVATE -Wall -Wextra)
   endif()
 
-  add_executable(beauty-preset-test tests/preset-test.c src/beauty-presets.c)
+  add_executable(
+    beauty-preset-test
+    tests/preset-test.c
+    src/beauty-custom-presets.c
+    src/beauty-presets.c
+  )
   target_include_directories(beauty-preset-test PRIVATE src)
   target_link_libraries(beauty-preset-test PRIVATE OBS::libobs)
+  # The test uses OBS_BEAUTY_CUSTOM_PRESET_PATH instead of the module config
+  # directory, so it does not need obs_current_module() from OBS_DECLARE_MODULE.
+  target_compile_definitions(beauty-preset-test PRIVATE
+    BEAUTY_CUSTOM_PRESETS_NO_MODULE_PATH
+  )
   target_compile_features(beauty-preset-test PRIVATE c_std_99)
   if(MSVC)
     target_compile_options(beauty-preset-test PRIVATE /W3 /utf-8)

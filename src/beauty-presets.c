@@ -37,11 +37,25 @@ static const struct beauty_preset presets[] = {
 	 true, 0.60,    0.15,  0.10,  "high",     true},
 };
 
+bool beauty_preset_is_custom_id(const char *id)
+{
+	return id && strncmp(id, BEAUTY_CUSTOM_PREFIX, strlen(BEAUTY_CUSTOM_PREFIX)) == 0 &&
+	       id[strlen(BEAUTY_CUSTOM_PREFIX)] != '\0';
+}
+
+const char *beauty_preset_custom_name(const char *id)
+{
+	if (!beauty_preset_is_custom_id(id))
+		return NULL;
+
+	return id + strlen(BEAUTY_CUSTOM_PREFIX);
+}
+
 const struct beauty_preset *beauty_preset_find(const char *id)
 {
 	size_t i;
 
-	if (!id || !*id || strcmp(id, "custom") == 0)
+	if (!id || !*id || strcmp(id, "custom") == 0 || beauty_preset_is_custom_id(id))
 		return NULL;
 
 	for (i = 0; i < beauty_preset_count(); i++) {

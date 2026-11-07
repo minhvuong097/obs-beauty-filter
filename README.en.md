@@ -5,7 +5,7 @@
 [![Build](https://github.com/minhvuong097/obs-beauty-filter/actions/workflows/build.yml/badge.svg)](https://github.com/minhvuong097/obs-beauty-filter/actions/workflows/build.yml)
 [![Latest release](https://img.shields.io/github/v/release/minhvuong097/obs-beauty-filter?display_name=tag)](https://github.com/minhvuong097/obs-beauty-filter/releases/latest)
 
-A GPU beauty filter for **OBS Studio** on Windows and Linux (macOS can be built from source but is not tested). Version **1.3.0** runs entirely on the GPU, plugs into the standard OBS filter pipeline, uses no AI model, never reads a full-resolution frame back to the CPU, and has no third-party runtime dependency.
+A GPU beauty filter for **OBS Studio** on Windows and Linux (macOS can be built from source but is not tested). Version **1.4.0** runs entirely on the GPU, plugs into the standard OBS filter pipeline, uses no AI model, never reads a full-resolution frame back to the CPU, and has no third-party runtime dependency.
 
 Goal: natural-looking skin for livestreams/webcams **and high-resolution cameras** while preserving eyes, eyebrows, hair, pores and the face outline — with correct HDR handling.
 
@@ -25,6 +25,9 @@ Goal: natural-looking skin for livestreams/webcams **and high-resolution cameras
 - **HDR-safe**: `GS_CS_709_EXTENDED`, `GS_CS_709_SCRGB` and `GS_CS_SRGB_16F` are processed in linear light; highlights above SDR white are preserved (no bypass, no clipping).
 - **Previews**: skin mask, split view and face/eye/mouth zones.
 - **Built-in starting presets**: Natural, Cinema, Studio, Soft, Beard, Dark skin, HDR and Default. Pick one, then fine-tune; any manual change switches the selection to **Custom**.
+- **Custom presets**: save, overwrite, reload and delete your own looks. They are stored as `custom-presets.json` in the OBS module config directory and survive scene-collection changes and restarts.
+- **Reset button**: return every control to the Default preset without removing the filter.
+- **Safe failure**: if the effect or a GPU texture cannot be created, the properties page shows an error and the source passes through unchanged instead of rendering black.
 - **Three performance levels**: Fast / Balanced / High.
 - **Alpha support**, SDR 8-bit and SDR 16-bit.
 - **Bilingual UI**: English and Vietnamese.
@@ -34,9 +37,12 @@ Goal: natural-looking skin for livestreams/webcams **and high-resolution cameras
 ```
 obs-beauty-filter/
 ├── CMakeLists.txt
+├── CHANGELOG.md
 ├── src/
 │   ├── beauty-filter.c      # OBS filter + properties + multi-pass renderer
 │   ├── beauty-filter.h
+│   ├── beauty-custom-presets.c # user preset JSON persistence
+│   ├── beauty-custom-presets.h
 │   ├── beauty-presets.c     # built-in starting presets
 │   ├── beauty-presets.h
 │   ├── beauty-settings.h    # shared obs_data setting names
@@ -50,12 +56,16 @@ obs-beauty-filter/
 │       └── vi-VN.ini
 ├── tests/
 │   ├── load-test.c          # load + render + mask/face/HDR integration test
-│   ├── preset-test.c        # preset table/lookup/apply unit test
-│   └── face-region-test.c   # face-detector unit test
+│   ├── render-matrix-test.c # 8 presets x 4 resolutions + 16F golden test
+│   ├── preset-test.c        # built-in/custom preset unit test
+│   ├── face-region-test.c   # face-detector unit test
+│   └── golden/
+│       └── render-matrix.txt # sampled golden image used by Linux CI
 ├── docs/
 │   ├── ARCHITECTURE.md      # + ARCHITECTURE.en.md
 │   ├── TUNING.md            # + TUNING.en.md
-│   └── TESTING.md           # + TESTING.en.md
+│   ├── TESTING.md           # + TESTING.en.md
+│   └── COMPATIBILITY.md     # + COMPATIBILITY.en.md
 └── scripts/
     ├── build-linux.sh
     └── build-windows.ps1
@@ -67,7 +77,7 @@ obs-beauty-filter/
 
 Download the latest build from **[GitHub Releases](https://github.com/minhvuong097/obs-beauty-filter/releases/latest)**:
 
-- Windows x64: `obs-beauty-filter-1.3.0-windows-x64.zip`
+- Windows x64: `obs-beauty-filter-1.4.0-windows-x64.zip`
 - Linux x86_64: `obs-beauty-filter-linux-x86_64.tar.gz`
 - Each release includes `SHA256SUMS.txt` so you can verify the download.
 
@@ -185,7 +195,7 @@ set `INSTALL_LIBDIR=...` for Debian/Ubuntu multiarch).
 ## Quick start
 
 1. Add **Beauty Filter** to the camera source (or to a scene containing the camera).
-2. Start with the defaults:
+2. Pick a **Starting preset** that matches your camera (`Natural` for a 1080p webcam, `Cinema` for 1440p/4K, `Studio` for close-ups), or start from the defaults:
    - **Amount** `0.35`
    - **Radius** `6`
    - **Detail preservation** `0.35`
@@ -193,12 +203,13 @@ set `INSTALL_LIBDIR=...` for Debian/Ubuntu multiarch).
    - **Face-aware zones** on, **Temporal mask stability** `0.60`
    - **Rosy tint** `0.15`
    - **Teeth whitening / Eye brightening** `0` (enable when needed)
-3. Enable **Show skin mask** to inspect the skin mask. If skin-coloured walls/wood also turn white, keep **Face-aware zones** on and lower **Skin sensitivity**.
-4. Enable **Show face zones** to inspect the face box, eyes and mouth. If the box is wrong, enable **Manual face box** and adjust `Face center X/Y`, `Face width/height`.
-5. Raise **Teeth whitening** to `0.2–0.5` and **Eye brightening** to `0.1–0.3`. If surrounding skin brightens too, reduce these values.
-6. Enable **Split preview** to compare the left half (original) with the right half (processed), then turn it off.
-7. If skin looks flat, raise **Detail preservation**, lower **Amount** or **Radius**.
-8. If the mask flickers during head motion, raise **Temporal mask stability** (`0.6–0.75`). If you see ghosting, lower it to `0.3–0.5`.
+3. When the look is right, type a name under **Custom preset name** and press **Save current settings as preset**; it appears in the dropdown as `Custom: <name>`. **Reset all settings** returns everything to Default.
+4. Enable **Show skin mask** to inspect the skin mask. If skin-coloured walls/wood also turn white, keep **Face-aware zones** on and lower **Skin sensitivity**.
+5. Enable **Show face zones** to inspect the face box, eyes and mouth. If the box is wrong, enable **Manual face box** and adjust `Face center X/Y`, `Face width/height`.
+6. Raise **Teeth whitening** to `0.2–0.5` and **Eye brightening** to `0.1–0.3`. If surrounding skin brightens too, reduce these values.
+7. Enable **Split preview** to compare the left half (original) with the right half (processed), then turn it off.
+8. If skin looks flat, raise **Detail preservation**, lower **Amount** or **Radius**.
+9. If the mask flickers during head motion, raise **Temporal mask stability** (`0.6–0.75`). If you see ghosting, lower it to `0.3–0.5`.
 
 ## Parameters
 
@@ -331,9 +342,12 @@ The dominant cost is the full-resolution fragment shader, plus a half-resolution
 cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBEAUTY_BUILD_TESTS=ON
 cmake --build build -j"$(nproc)"
 
-# Face-detector and preset unit tests
+# Face-detector, preset and render-matrix tests
 ./build/beauty-face-region-test
 ./build/beauty-preset-test
+xvfb-run -a ./build/beauty-render-matrix-test \
+  ./build/obs-beauty-filter.so \
+  ./build/rundir/share/obs/obs-plugins/obs-beauty-filter
 
 # Load + render + mask/face/HDR integration test
 xvfb-run -a ./build/beauty-load-test \
@@ -341,17 +355,30 @@ xvfb-run -a ./build/beauty-load-test \
   ./build/rundir/share/obs/obs-plugins/obs-beauty-filter \
   /usr/lib/obs-plugins/image-source.so \
   /usr/share/obs/obs-plugins/image-source
+
+# Full suite under ASan/UBSan (Clang on musl/Alpine)
+cmake -S . -B build-sanitize -DCMAKE_BUILD_TYPE=Debug \
+  -DBEAUTY_BUILD_TESTS=ON -DBEAUTY_SANITIZE=address,undefined
+cmake --build build-sanitize -j"$(nproc)"
 ```
 
-Expected final line:
+Expected final lines:
 
 ```text
+OK: built-in and custom presets, lookup, apply, defaults and NULL handling verified
+OK: render matrix verified 4 resolutions x 8 presets, opaque alpha, 16F range and finite output
 OK: module loaded, filter created, effect compiled, filter rendered, mask/opacity/face zones/texture/HDR verified
 ```
 
-The integration test covers: default filter output, skin mask, opacity 0, teeth/eye zones (with a manual face box), zone preview colours, frequency separation on a textured skin pattern (contrast drops at low Detail and returns at high Detail), Rec.709 extended HDR and scRGB HDR (values above 1.0 are preserved, actually processed, and not double-scaled). No shader errors are allowed. See [docs/TESTING.en.md](docs/TESTING.en.md) for the full test matrix.
+The integration test covers: default filter output, skin mask, opacity 0, teeth/eye zones (with a manual face box), zone preview colours, frequency separation on a textured skin pattern (contrast drops at low Detail and returns at high Detail), Rec.709 extended HDR and scRGB HDR (values above 1.0 are preserved, actually processed, and not double-scaled). It also checks that the preset/save/delete/reset property controls exist. The render matrix runs all 8 presets at 360p, 720p, 1080p and 1440p (opt-in 4K), verifies opaque alpha and finite 16F output, and compares a sampled golden image on Linux. See [docs/TESTING.en.md](docs/TESTING.en.md) for the full test matrix and the i5-1235U benchmark guide.
 
-> **Test status:** GitHub Actions builds and tests on both platforms. Linux (Alpine 3.21, OBS 30.2.3, OpenGL/Mesa llvmpipe) runs the full `beauty-face-region-test`, `beauty-preset-test` and `beauty-load-test` suite (render, mask, texture, HDR). Windows x64 builds directly against OBS 33.0.1 source plus `obs-deps`, runs `beauty-face-region-test`, `beauty-preset-test` and `beauty-load-test` on the real D3D11 path (module load + effect compilation), and packages the new plugin layout. A manual in-OBS render/HDR check on real hardware is still recommended; see [docs/TESTING.en.md](docs/TESTING.en.md).
+> **Test status:** GitHub Actions builds and tests on both platforms. Linux (Alpine 3.21, OBS 30.2.3, OpenGL/Mesa llvmpipe) runs the full `beauty-face-region-test`, `beauty-preset-test`, `beauty-render-matrix-test` (with golden image) and `beauty-load-test` suite, then repeats the suite under ASan/UBSan. Windows x64 builds directly against OBS 33.0.1 source plus `obs-deps`, runs the same tests on the real D3D11 path (matrix invariants, module load + effect compilation) and packages the new plugin layout. A manual in-OBS render/HDR check on real hardware is still recommended; see [docs/TESTING.en.md](docs/TESTING.en.md) and the [compatibility matrix](docs/COMPATIBILITY.en.md).
+
+## Changelog and compatibility
+
+See [CHANGELOG.md](CHANGELOG.md) for release notes and
+[docs/COMPATIBILITY.en.md](docs/COMPATIBILITY.en.md) for the tested OBS,
+platform and colour-space matrix.
 
 ## License
 

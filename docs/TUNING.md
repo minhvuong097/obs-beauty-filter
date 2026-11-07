@@ -155,6 +155,35 @@ Luôn kiểm tra **Show skin mask**: nếu vùng da tối không trắng, tăng 
 
 HDR có dải sáng rộng hơn, nên Glow và Rosy dễ trông quá tay. Bắt đầu thấp hơn preset SDR, kiểm tra highlight (đèn, cửa sổ) để chắc không bị cháy. `GS_CS_SRGB_16F` dùng cùng đường xử lý với Rec.709 extended; scRGB được xử lý theo thang 80 nit.
 
+### Lưu preset của riêng bạn
+
+1. Tinh chỉnh filter cho khớp camera và ánh sáng.
+2. Nhập tên vào **Tên preset tùy chỉnh**.
+3. Bấm **Lưu thông số hiện tại thành preset**. Preset xuất hiện trong menu dưới
+   dạng `Tùy chỉnh: <tên>` và được chọn ngay.
+4. Muốn cập nhật, chọn preset, chỉnh thông số rồi bấm Lưu lần nữa. Tên không
+   phân biệt hoa thường: lưu `My Look` đè lên `my look` sẽ thay thế mục cũ.
+5. Bấm **Xóa preset tùy chỉnh này** để xóa preset đang chọn. Nếu preset đó đang
+   dùng, lựa chọn quay về Tùy chỉnh.
+
+Tên phải dài 1–64 ký tự, không rỗng, không chứa ký tự điều khiển và không được
+trùng `custom` hoặc preset có sẵn (`Default`, `Natural`, `Cinema`, `Studio`,
+`Soft`, `Beard`, `Dark skin`, `HDR`). Sau mỗi thao tác, filter hiện một dòng
+trạng thái ngay dưới các nút.
+
+Preset tùy chỉnh nằm trong `custom-presets.json` ở thư mục cấu hình module của
+OBS (trên Windows:
+`%APPDATA%\obs-studio\plugin_config\obs-beauty-filter\custom-presets.json`).
+File dạng JSON dễ đọc và có thể backup; khóa nào thiếu sẽ fallback về preset
+Default.
+
+**Đặt lại toàn bộ về mặc định** khôi phục mọi thông số về preset Default, không
+xóa preset tùy chỉnh.
+
+Nếu effect hoặc texture GPU không tạo được, trang thuộc tính hiện thông báo lỗi
+màu đỏ và nguồn đi qua nguyên vẹn (không ra frame đen). Xem log OBS để biết lỗi
+cấp phát hoặc shader cụ thể, rồi mở lại filter hoặc khởi động lại OBS.
+
 ## 3. Tinh chỉnh face zones
 
 ### Khi nào cần bật?

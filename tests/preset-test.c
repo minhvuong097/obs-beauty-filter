@@ -5,6 +5,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
+#include "beauty-custom-presets.h"
 #include "beauty-presets.h"
 #include "beauty-settings.h"
 
@@ -12,6 +13,7 @@
 
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static int failures;
@@ -107,6 +109,14 @@ static void check_lookup(void)
 	expect(beauty_preset_find("does-not-exist") == NULL, "unknown id must be rejected");
 	expect(beauty_preset_find("natural") != NULL, "natural preset must exist");
 	expect(beauty_preset_find("cinema") != NULL, "cinema preset must exist");
+
+	expect(beauty_preset_is_custom_id("custom:Look"), "custom:Look must be a custom id");
+	expect(!beauty_preset_is_custom_id("custom"), "bare custom must not be a custom id");
+	expect(!beauty_preset_is_custom_id("custom:"), "empty custom name must be rejected");
+	expect(strcmp(beauty_preset_custom_name("custom:Look"), "Look") == 0,
+	       "custom name must be extracted");
+	expect(beauty_preset_custom_name("natural") == NULL,
+	       "built-in id must not yield a custom name");
 }
 
 static void check_apply(void)
@@ -204,6 +214,129 @@ static void check_null_arguments(void)
 	obs_data_release(settings);
 }
 
+static void set_custom_path(const char *path)
+{
+#ifdef _WIN32
+	_putenv_s("OBS_BEAUTY_CUSTOM_PRESET_PATH", path);
+#else
+	setenv("OBS_BEAUTY_CUSTOM_PRESET_PATH", path, 1);
+#endif
+}
+
+static void check_custom_presets(void)
+{
+	const char *path = "beauty-custom-preset-test.json";
+	const char *backup = "beauty-custom-preset-test.json.bak";
+	const char *temp = "beauty-custom-preset-test.json.tmp";
+	const struct beauty_preset *cinema = beauty_preset_find("cinema");
+	char name[BEAUTY_CUSTOM_PRESET_MAX_NAME + 1];
+	char long_name[BEAUTY_CUSTOM_PRESET_MAX_NAME + 2];
+	obs_data_t *settings;
+	obs_data_t *applied;
+
+	remove(path);
+	remove(backup);
+	remove(temp);
+	set_custom_path(path);
+	beauty_custom_presets_reload();
+
+	expect(beauty_custom_preset_count() == 0, "custom preset store must start empty");
+	expect(!beauty_custom_preset_name_normalise(NULL, name, sizeof(name)),
+	       "NULL custom name must be rejected");
+	expect(!beauty_custom_preset_name_normalise("", name, sizeof(name)),
+	       "empty custom name must be rejected");
+	expect(!beauty_custom_preset_name_normalise("   ", name, sizeof(name)),
+	       "whitespace-only custom name must be rejected");
+	expect(!beauty_custom_preset_name_normalise("custom", name, sizeof(name)),
+	       "reserved custom name must be rejected");
+	expect(!beauty_custom_preset_name_normalise("CUSTOM", name, sizeof(name)),
+	       "reserved custom name must be case-insensitive");
+	expect(!beauty_custom_preset_name_normalise("natural", name, sizeof(name)),
+	       "built-in name must be rejected");
+	expect(!beauty_custom_preset_name_normalise("NATURAL", name, sizeof(name)),
+	       "built-in name must be rejected case-insensitively");
+	expect(!beauty_custom_preset_name_normalise("bad\nname", name, sizeof(name)),
+	       "control characters must be rejected");
+
+	memset(long_name, 'x', sizeof(long_name));
+	long_name[sizeof(long_name) - 1] = '\0';
+	expect(!beauty_custom_preset_name_normalise(long_name, name, sizeof(name)),
+	       "over-long custom name must be rejected");
+
+	expect(beauty_custom_preset_name_normalise("  My Look  ", name, sizeof(name)),
+	       "valid custom name must be accepted");
+	expect(strcmp(name, "My Look") == 0, "custom name must be trimmed");
+
+	expect(cinema != NULL, "cinema preset must exist for custom tests");
+	if (!cinema)
+		return;
+
+	settings = obs_data_create();
+	if (!settings)
+		return;
+
+	beauty_preset_apply(settings, cinema);
+	obs_data_set_bool(settings, S_SKIN_DETECT, false);
+	obs_data_set_double(settings, S_AMOUNT, 0.42);
+
+	expect(!beauty_custom_preset_save("natural", settings),
+	       "saving with a built-in name must fail");
+	expect(beauty_custom_preset_save("  My Look  ", settings),
+	       "valid custom preset must save");
+	expect(beauty_custom_preset_count() == 1, "one custom preset must be listed");
+	expect(beauty_custom_preset_name_at(0, name, sizeof(name)) &&
+		       strcmp(name, "My Look") == 0,
+	       "custom preset name must round-trip");
+	expect(beauty_custom_preset_exists("my look"),
+	       "custom preset lookup must be case-insensitive");
+	expect(!beauty_custom_preset_apply(NULL, "My Look"),
+	       "custom apply must reject NULL settings");
+	expect(!beauty_custom_preset_apply(settings, "missing"),
+	       "custom apply must reject unknown names");
+
+	/* Reload from disk to verify persistence rather than the cache. */
+	beauty_custom_presets_reload();
+	expect(beauty_custom_preset_count() == 1, "custom preset must survive a reload");
+
+	applied = obs_data_create();
+	if (applied) {
+		beauty_preset_apply(applied, beauty_preset_find("default"));
+		expect(beauty_custom_preset_apply(applied, "MY LOOK"),
+		       "custom preset must apply case-insensitively");
+		expect_double(applied, S_AMOUNT, 0.42, "custom apply amount");
+		expect_double(applied, S_RADIUS, cinema->radius, "custom apply radius");
+		expect(!obs_data_get_bool(applied, S_SKIN_DETECT),
+		       "custom preset must restore skin detection");
+		obs_data_release(applied);
+	}
+
+	/* Saving the same name must overwrite, not duplicate. */
+	obs_data_set_double(settings, S_AMOUNT, 0.77);
+	expect(beauty_custom_preset_save("my look", settings),
+	       "overwriting a custom preset must succeed");
+	expect(beauty_custom_preset_count() == 1, "overwrite must not duplicate the preset");
+
+	beauty_custom_presets_reload();
+	applied = obs_data_create();
+	if (applied) {
+		beauty_preset_apply(applied, beauty_preset_find("default"));
+		expect(beauty_custom_preset_apply(applied, "My Look"),
+		       "overwritten preset must apply");
+		expect_double(applied, S_AMOUNT, 0.77, "overwritten amount must persist");
+		obs_data_release(applied);
+	}
+
+	expect(beauty_custom_preset_delete("MY LOOK"), "custom preset must delete");
+	expect(beauty_custom_preset_count() == 0, "custom preset store must be empty again");
+	expect(!beauty_custom_preset_delete("My Look"), "deleting a missing preset must fail");
+
+	obs_data_release(settings);
+	remove(path);
+	remove(backup);
+	remove(temp);
+	beauty_custom_presets_reload();
+}
+
 int main(void)
 {
 	/* obs_data_* is self-contained; no graphics/display or obs_startup(). */
@@ -212,12 +345,14 @@ int main(void)
 	check_apply();
 	check_default_preset();
 	check_null_arguments();
+	check_custom_presets();
 
 	if (failures) {
 		fprintf(stderr, "%d preset test failure(s)\n", failures);
 		return 1;
 	}
 
-	printf("OK: preset table, lookup, apply, defaults and NULL handling verified\n");
+	printf("OK: built-in and custom presets, lookup, apply, defaults and NULL handling "
+	       "verified\n");
 	return 0;
 }

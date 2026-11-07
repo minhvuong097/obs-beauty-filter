@@ -456,6 +456,28 @@ int main(int argc, char **argv)
 		return fail("filter creation / effect compilation");
 	}
 
+	/* The property page must expose the preset controls even without a
+	 * camera attached.  This also catches missing locale-independent
+	 * property names. */
+	{
+		obs_properties_t *props = obs_source_properties(filter);
+		static const char *const required[] = {
+			"preset", "preset_name", "preset_save", "preset_delete",
+			"preset_reset",
+		};
+		if (!props)
+			return fail("filter properties");
+		for (size_t i = 0; i < OBS_COUNTOF(required); i++) {
+			if (!obs_properties_get(props, required[i])) {
+				fprintf(stderr, "FAIL: missing property '%s'\n", required[i]);
+				obs_properties_destroy(props);
+				obs_source_release(filter);
+				return 1;
+			}
+		}
+		obs_properties_destroy(props);
+	}
+
 	if (argc >= 5) {
 		if (!load_module(argv[3], argv[4]))
 			return 1;

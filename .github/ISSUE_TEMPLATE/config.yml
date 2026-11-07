@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Download the latest release
+    url: https://github.com/minhvuong097/obs-beauty-filter/releases/latest
+    about: Get the Windows or Linux package and verify its SHA-256 checksum.
+  - name: Tuning and troubleshooting guide
+    url: https://github.com/minhvuong097/obs-beauty-filter/blob/main/docs/TUNING.en.md
+    about: Presets, face-zone tuning, skin tones, HDR and performance tips.
+  - name: OBS Studio support
+    url: https://obsproject.com/forum/
+    about: Problems with OBS itself (crashes, capture, encoders) belong here.

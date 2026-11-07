@@ -2,7 +2,7 @@
 
 **[English](ARCHITECTURE.en.md) | Tiếng Việt**
 
-Tài liệu này mô tả luồng xử lý, công thức shader và các quyết định thiết kế của plugin **1.3.0** để ổn định trong pipeline filter của OBS.
+Tài liệu này mô tả luồng xử lý, công thức shader và các quyết định thiết kế của plugin **1.4.0** để ổn định trong pipeline filter của OBS.
 
 ## 1. Vòng đời filter và pipeline render
 
@@ -429,7 +429,8 @@ Hướng phát triển: preset, compute shader cho radius lớn, đo GPU time, v
 
 | Khóa | Kiểu | Ghi chú |
 |---|---|---|
-| `preset` | string | `custom` hoặc id preset có sẵn; chỉ là lựa chọn trên UI |
+| `preset` | string | `custom`, id preset có sẵn hoặc `custom:<tên>`; chỉ là lựa chọn trên UI |
+| `preset_name` | string | tên preset tùy chỉnh gần nhất người dùng nhập; không lưu vào file preset |
 | `amount` | double | 0..1 |
 | `radius` | double | px @1080p |
 | `detail` | double | 0..1 |
@@ -458,3 +459,42 @@ Hướng phát triển: preset, compute shader cho radius lớn, đo GPU time, v
 | `anti_banding` | bool | dithering cho ngõ ra 8-bit |
 
 `src/beauty-presets.c` quản lý bảng preset có sẵn. Khi áp preset, plugin ghi các khóa tinh chỉnh ở trên nhưng không ghi `preset`; callback của property lưu lựa chọn và chuyển sang `custom` sau lần chỉnh tay đầu tiên.
+
+## 12. Lưu preset tùy chỉnh
+
+`src/beauty-custom-presets.c` lưu preset người dùng trong một file JSON duy nhất
+ở thư mục cấu hình module của OBS (`custom-presets.json`). File nhỏ và có thể
+sửa bằng tay:
+
+```json
+{
+  "version": 1,
+  "presets": [
+    {
+      "name": "My Look",
+      "amount": 0.35,
+      "radius": 6.0,
+      "detail": 0.35,
+      "skin_detect": true,
+      "...": "các khóa sáng tạo giống preset có sẵn"
+    }
+  ]
+}
+```
+
+- Danh sách trong bộ nhớ được load lazy và cache; `reload()` xóa cache.
+- Ghi file bằng `obs_data_save_json_safe()` (`.tmp` + `.bak`), nên crash giữa
+  lúc lưu không làm hỏng file trước đó.
+- Tên được trim, giới hạn 64 ký tự và so sánh không phân biệt hoa thường.
+  Không được trùng `custom` hoặc id preset có sẵn.
+- Khi áp preset, khóa nào thiếu sẽ lấy từ preset Default, giúp file cũ hoặc file
+  sửa tay vẫn dùng được.
+- Test override đường dẫn bằng `OBS_BEAUTY_CUSTOM_PRESET_PATH`; bản production
+  lấy đường dẫn qua `obs_module_config_path()`.
+- UI giữ thông báo trạng thái tạm thời trong `struct beauty_filter`
+  (`preset_status`), không ghi vào `obs_data`, nên không bị lưu cùng scene
+  collection.
+
+Callback property nhận filter qua `obs_properties_create_param(filter, NULL)` và
+`obs_properties_get_param()`. Nhờ vậy trang thuộc tính có thể cập nhật settings
+của source và tự refresh từ callback của nút.

@@ -9,6 +9,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
+#include "beauty-custom-presets.h"
 #include "beauty-filter.h"
 #include "beauty-presets.h"
 #include "beauty-settings.h"
@@ -29,6 +30,19 @@
 #define T_PRESET                obs_module_text("Preset")
 #define T_PRESET_DESCRIPTION    obs_module_text("Preset.Description")
 #define T_PRESET_CUSTOM         obs_module_text("Preset.custom")
+#define T_PRESET_NAME           obs_module_text("Preset.Name")
+#define T_PRESET_NAME_DESC      obs_module_text("Preset.Name.Description")
+#define T_PRESET_SAVE           obs_module_text("Preset.Save")
+#define T_PRESET_DELETE         obs_module_text("Preset.Delete")
+#define T_PRESET_RESET          obs_module_text("Preset.Reset")
+#define T_PRESET_CUSTOM_ENTRY   obs_module_text("Preset.CustomEntry")
+#define T_PRESET_STATUS_SAVED   obs_module_text("Preset.StatusSaved")
+#define T_PRESET_STATUS_DELETED obs_module_text("Preset.StatusDeleted")
+#define T_PRESET_STATUS_BAD     obs_module_text("Preset.StatusBadName")
+#define T_PRESET_STATUS_WRITE   obs_module_text("Preset.StatusWriteFailed")
+#define T_PRESET_STATUS_MISSING obs_module_text("Preset.StatusNotFound")
+#define T_PRESET_STATUS_RESET   obs_module_text("Preset.StatusReset")
+#define T_ERROR_INFO            obs_module_text("ErrorInfo")
 
 #define T_GROUP_SMOOTHING       obs_module_text("Group.Smoothing")
 #define T_AMOUNT                obs_module_text("Smoothing.Amount")
@@ -181,9 +195,12 @@ struct beauty_filter {
 	float dither_strength;
 
 	bool resources_ready;
+	bool effect_failed;
+	bool resource_failed;
 	bool history_valid;
 	int mask_index;
 	uint32_t frame_counter;
+	char preset_status[192];
 
 	struct beauty_face_region auto_face;
 	bool auto_face_valid;
@@ -367,13 +384,19 @@ static bool beauty_ensure_resources(struct beauty_filter *filter, uint32_t width
 	if (!filter->src_texrender || !filter->mask_texrender[0] ||
 	    !filter->mask_texrender[1] || !filter->analysis_texrender ||
 	    !filter->base_texrender || !filter->analysis_stage || !filter->white_tex) {
-		blog(LOG_ERROR, "[obs-beauty-filter] Failed to allocate GPU resources for %ux%u",
-		     width, height);
+		if (!filter->resource_failed) {
+			blog(LOG_ERROR,
+			     "[obs-beauty-filter] Failed to allocate GPU resources for %ux%u; "
+			     "passing the source through",
+			     width, height);
+			filter->resource_failed = true;
+		}
 		beauty_release_resources(filter);
 		return false;
 	}
 
 	filter->resources_ready = true;
+	filter->resource_failed = false;
 	return true;
 }
 
@@ -868,6 +891,146 @@ static void beauty_set_description(obs_properties_t *props, const char *name, co
 static void beauty_update_visibility(obs_properties_t *props, bool skin_detect, bool face_aware,
 				     bool face_manual);
 
+static void beauty_set_status(struct beauty_filter *filter, const char *text)
+{
+	if (!filter)
+		return;
+
+	if (!text) {
+		filter->preset_status[0] = '\0';
+		return;
+	}
+
+	snprintf(filter->preset_status, sizeof(filter->preset_status), "%s", text);
+}
+
+static void beauty_set_defaults_as_values(obs_data_t *settings)
+{
+	const struct beauty_preset *preset = beauty_preset_find("default");
+
+	if (preset)
+		beauty_preset_apply(settings, preset);
+
+	obs_data_set_bool(settings, S_SKIN_DETECT, true);
+	obs_data_set_bool(settings, S_MASK_PREVIEW, false);
+	obs_data_set_bool(settings, S_ZONE_PREVIEW, false);
+	obs_data_set_bool(settings, S_FACE_MANUAL, false);
+	obs_data_set_double(settings, S_FACE_CX, 0.50);
+	obs_data_set_double(settings, S_FACE_CY, 0.45);
+	obs_data_set_double(settings, S_FACE_W, 0.32);
+	obs_data_set_double(settings, S_FACE_H, 0.42);
+	obs_data_set_bool(settings, S_SPLIT_VIEW, false);
+	obs_data_set_double(settings, S_OPACITY, 1.0);
+	obs_data_set_string(settings, S_PRESET, "default");
+	obs_data_set_string(settings, S_PRESET_NAME, "");
+}
+
+static struct beauty_filter *properties_filter(obs_properties_t *props, void *data)
+{
+	struct beauty_filter *filter = obs_properties_get_param(props);
+
+	return filter ? filter : data;
+}
+
+static bool reset_settings_clicked(obs_properties_t *props, obs_property_t *property, void *data)
+{
+	struct beauty_filter *filter = properties_filter(props, data);
+	obs_data_t *settings;
+
+	UNUSED_PARAMETER(property);
+
+	if (!filter || !filter->context)
+		return false;
+
+	settings = obs_source_get_settings(filter->context);
+	if (!settings)
+		return false;
+
+	beauty_set_defaults_as_values(settings);
+	beauty_set_status(filter, T_PRESET_STATUS_RESET);
+	obs_source_update(filter->context, settings);
+
+	obs_data_release(settings);
+	return true;
+}
+
+static bool save_preset_clicked(obs_properties_t *props, obs_property_t *property, void *data)
+{
+	struct beauty_filter *filter = properties_filter(props, data);
+	char name[BEAUTY_CUSTOM_PRESET_MAX_NAME + 1];
+	obs_data_t *settings;
+
+	UNUSED_PARAMETER(property);
+
+	if (!filter || !filter->context)
+		return false;
+
+	settings = obs_source_get_settings(filter->context);
+	if (!settings)
+		return false;
+
+	if (!beauty_custom_preset_name_normalise(
+		    obs_data_get_string(settings, S_PRESET_NAME), name, sizeof(name))) {
+		beauty_set_status(filter, T_PRESET_STATUS_BAD);
+	} else if (!beauty_custom_preset_save(name, settings)) {
+		beauty_set_status(filter, T_PRESET_STATUS_WRITE);
+	} else {
+		char id[sizeof(BEAUTY_CUSTOM_PREFIX) + BEAUTY_CUSTOM_PRESET_MAX_NAME];
+
+		snprintf(id, sizeof(id), "%s%s", BEAUTY_CUSTOM_PREFIX, name);
+		obs_data_set_string(settings, S_PRESET_NAME, name);
+		obs_data_set_string(settings, S_PRESET, id);
+		snprintf(filter->preset_status, sizeof(filter->preset_status),
+			 T_PRESET_STATUS_SAVED, name);
+		obs_source_update(filter->context, settings);
+	}
+
+	obs_data_release(settings);
+	return true;
+}
+
+static bool delete_preset_clicked(obs_properties_t *props, obs_property_t *property, void *data)
+{
+	struct beauty_filter *filter = properties_filter(props, data);
+	char name[BEAUTY_CUSTOM_PRESET_MAX_NAME + 1];
+	const char *current;
+	obs_data_t *settings;
+	bool have_name;
+
+	UNUSED_PARAMETER(property);
+
+	if (!filter || !filter->context)
+		return false;
+
+	settings = obs_source_get_settings(filter->context);
+	if (!settings)
+		return false;
+
+	current = obs_data_get_string(settings, S_PRESET);
+	have_name = beauty_preset_is_custom_id(current) &&
+		    beauty_custom_preset_name_normalise(beauty_preset_custom_name(current),
+							name, sizeof(name));
+	if (!have_name)
+		have_name = beauty_custom_preset_name_normalise(
+			obs_data_get_string(settings, S_PRESET_NAME), name, sizeof(name));
+
+	if (!have_name) {
+		beauty_set_status(filter, T_PRESET_STATUS_BAD);
+	} else if (!beauty_custom_preset_delete(name)) {
+		beauty_set_status(filter, T_PRESET_STATUS_MISSING);
+	} else {
+		if (beauty_preset_is_custom_id(current) &&
+		    !beauty_custom_preset_exists(beauty_preset_custom_name(current)))
+			obs_data_set_string(settings, S_PRESET, "custom");
+		snprintf(filter->preset_status, sizeof(filter->preset_status),
+			 T_PRESET_STATUS_DELETED, name);
+		obs_source_update(filter->context, settings);
+	}
+
+	obs_data_release(settings);
+	return true;
+}
+
 static bool beauty_mark_custom(obs_data_t *settings)
 {
 	const char *preset = obs_data_get_string(settings, S_PRESET);
@@ -885,7 +1048,7 @@ static bool beauty_mark_custom(obs_data_t *settings)
 static bool setting_modified(obs_properties_t *props, obs_property_t *property,
 			     obs_data_t *settings)
 {
-	UNUSED_PARAMETER(props);
+	beauty_set_status(obs_properties_get_param(props), NULL);
 	UNUSED_PARAMETER(property);
 
 	return beauty_mark_custom(settings);
@@ -912,13 +1075,32 @@ static obs_property_t *add_bool_setting(obs_properties_t *group, const char *nam
 static bool preset_modified(obs_properties_t *props, obs_property_t *property,
 			    obs_data_t *settings)
 {
-	const struct beauty_preset *preset;
+	struct beauty_filter *filter = obs_properties_get_param(props);
+	const char *id = obs_data_get_string(settings, S_PRESET);
+
 	UNUSED_PARAMETER(property);
 
-	preset = beauty_preset_find(obs_data_get_string(settings, S_PRESET));
-	if (preset) {
-		beauty_preset_apply(settings, preset);
-		obs_data_set_string(settings, S_PRESET, preset->id);
+	if (beauty_preset_is_custom_id(id)) {
+		const char *name = beauty_preset_custom_name(id);
+
+		if (beauty_custom_preset_apply(settings, name)) {
+			obs_data_set_string(settings, S_PRESET_NAME, name);
+			beauty_set_status(filter, NULL);
+		} else {
+			obs_data_set_string(settings, S_PRESET, "custom");
+			beauty_set_status(filter, T_PRESET_STATUS_MISSING);
+		}
+	} else {
+		const struct beauty_preset *preset = beauty_preset_find(id);
+
+		if (preset) {
+			beauty_preset_apply(settings, preset);
+			obs_data_set_string(settings, S_PRESET, preset->id);
+			obs_data_set_string(settings, S_PRESET_NAME, "");
+			beauty_set_status(filter, NULL);
+		} else if (strcmp(id, "custom") == 0) {
+			beauty_set_status(filter, NULL);
+		}
 	}
 
 	beauty_update_visibility(props, obs_data_get_bool(settings, S_SKIN_DETECT),
@@ -958,6 +1140,7 @@ static bool skin_detect_modified(obs_properties_t *props, obs_property_t *proper
 
 	UNUSED_PARAMETER(property);
 
+	beauty_set_status(obs_properties_get_param(props), NULL);
 	beauty_mark_custom(settings);
 	beauty_update_visibility(props, skin, face, manual);
 	return true;
@@ -972,6 +1155,7 @@ static bool face_aware_modified(obs_properties_t *props, obs_property_t *propert
 
 	UNUSED_PARAMETER(property);
 
+	beauty_set_status(obs_properties_get_param(props), NULL);
 	beauty_mark_custom(settings);
 	beauty_update_visibility(props, skin, face, manual);
 	return true;
@@ -986,6 +1170,7 @@ static bool face_manual_modified(obs_properties_t *props, obs_property_t *proper
 
 	UNUSED_PARAMETER(property);
 
+	beauty_set_status(obs_properties_get_param(props), NULL);
 	beauty_update_visibility(props, skin, face, manual);
 	return true;
 }
@@ -993,10 +1178,17 @@ static bool face_manual_modified(obs_properties_t *props, obs_property_t *proper
 static obs_properties_t *beauty_properties(void *data)
 {
 	struct beauty_filter *filter = data;
-	obs_properties_t *props = obs_properties_create();
+	obs_properties_t *props = obs_properties_create_param(filter, NULL);
 	obs_properties_t *group;
 	obs_property_t *info;
 	obs_property_t *p;
+
+	if (filter && (filter->effect_failed || filter->resource_failed)) {
+		info = obs_properties_add_text(props, S_ERROR_INFO, T_ERROR_INFO,
+					       OBS_TEXT_INFO);
+		obs_property_text_set_info_type(info, OBS_TEXT_INFO_ERROR);
+		obs_property_text_set_info_word_wrap(info, true);
+	}
 
 	info = obs_properties_add_text(props, S_HDR_INFO, T_HDR_INFO, OBS_TEXT_INFO);
 	obs_property_text_set_info_type(info, OBS_TEXT_INFO_NORMAL);
@@ -1013,8 +1205,34 @@ static obs_properties_t *beauty_properties(void *data)
 		snprintf(locale_key, sizeof(locale_key), "Preset.%s", preset->id);
 		obs_property_list_add_string(p, obs_module_text(locale_key), preset->id);
 	}
+	for (size_t i = 0; i < beauty_custom_preset_count(); i++) {
+		char name[BEAUTY_CUSTOM_PRESET_MAX_NAME + 1];
+		char label[160];
+		char value[sizeof(BEAUTY_CUSTOM_PREFIX) + BEAUTY_CUSTOM_PRESET_MAX_NAME];
+
+		if (!beauty_custom_preset_name_at(i, name, sizeof(name)))
+			continue;
+
+		snprintf(label, sizeof(label), T_PRESET_CUSTOM_ENTRY, name);
+		snprintf(value, sizeof(value), "%s%s", BEAUTY_CUSTOM_PREFIX, name);
+		obs_property_list_add_string(p, label, value);
+	}
 	obs_property_set_modified_callback(p, preset_modified);
 	beauty_set_description(props, S_PRESET, T_PRESET_DESCRIPTION);
+
+	obs_properties_add_text(props, S_PRESET_NAME, T_PRESET_NAME, OBS_TEXT_DEFAULT);
+	beauty_set_description(props, S_PRESET_NAME, T_PRESET_NAME_DESC);
+	obs_properties_add_button(props, "preset_save", T_PRESET_SAVE, save_preset_clicked);
+	obs_properties_add_button(props, "preset_delete", T_PRESET_DELETE,
+				  delete_preset_clicked);
+	obs_properties_add_button(props, "preset_reset", T_PRESET_RESET, reset_settings_clicked);
+
+	if (filter && filter->preset_status[0]) {
+		info = obs_properties_add_text(props, "preset_status_info",
+					       filter->preset_status, OBS_TEXT_INFO);
+		obs_property_text_set_info_type(info, OBS_TEXT_INFO_NORMAL);
+		obs_property_text_set_info_word_wrap(info, true);
+	}
 
 	/* --- Skin smoothing ------------------------------------------------- */
 	group = obs_properties_create();
@@ -1105,6 +1323,7 @@ static obs_properties_t *beauty_properties(void *data)
 static void beauty_defaults(obs_data_t *settings)
 {
 	obs_data_set_default_string(settings, S_PRESET, "custom");
+	obs_data_set_default_string(settings, S_PRESET_NAME, "");
 	obs_data_set_default_double(settings, S_AMOUNT, 0.35);
 	obs_data_set_default_double(settings, S_RADIUS, 6.0);
 	obs_data_set_default_double(settings, S_DETAIL, 0.35);
@@ -1154,6 +1373,7 @@ static void *beauty_create(obs_data_t *settings, obs_source_t *context)
 
 	obs_enter_graphics();
 	filter->effect = gs_effect_create_from_file(effect_path, NULL);
+	filter->effect_failed = !filter->effect;
 	if (filter->effect) {
 		filter->p_image = gs_effect_get_param_by_name(filter->effect, "image");
 		filter->p_mask_tex = gs_effect_get_param_by_name(filter->effect, "mask_tex");

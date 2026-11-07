@@ -24,6 +24,30 @@ If you use Visual Studio 2022, replace the generator with
 `-DBEAUTY_OBS33_PLUGIN_LAYOUT=OFF` to test the legacy layout for OBS 32 and
 older.
 
+### Sanitizers
+
+AddressSanitizer and UndefinedBehaviorSanitizer are opt-in:
+
+```bash
+cmake -S . -B build-sanitize -DCMAKE_BUILD_TYPE=Debug \
+  -DBEAUTY_BUILD_TESTS=ON -DBEAUTY_SANITIZE=address,undefined
+cmake --build build-sanitize -j"$(nproc)"
+
+ASAN_OPTIONS=detect_leaks=0:abort_on_error=1 \
+UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
+xvfb-run -a ./build-sanitize/beauty-load-test \
+  ./build-sanitize/obs-beauty-filter.so \
+  ./build-sanitize/rundir/share/obs/obs-plugins/obs-beauty-filter \
+  /usr/lib/obs-plugins/image-source.so \
+  /usr/share/obs/obs-plugins/image-source
+```
+
+Use `-DBEAUTY_SANITIZE=undefined` when the ASan runtime cannot map its shadow
+memory (for example inside some containers). On musl/Alpine, configure with
+`CC=clang`; Alpine's GCC does not ship `libasan`/`libubsan`. Leak detection is
+disabled because libobs and Mesa keep process-lifetime allocations that the
+plugin does not own.
+
 ## 2. Face-region unit test
 
 Pure CPU test, no graphics required:
@@ -56,10 +80,17 @@ Pure CPU test, no graphics required:
 Expected:
 
 ```text
-OK: preset table, lookup, apply, defaults and NULL handling verified
+OK: built-in and custom presets, lookup, apply, defaults and NULL handling verified
 ```
 
 It checks the preset count and unique IDs, value ranges, quality strings, `find()` behaviour for `custom`/unknown ids, that `apply()` writes every tuning key without overwriting the preset selection, that the `default` preset stays in sync with `beauty_defaults()`, and that `NULL` arguments are ignored.
+
+The custom-preset part writes a real JSON file through
+`OBS_BEAUTY_CUSTOM_PRESET_PATH`, reloads it from disk, and verifies trimming,
+case-insensitive overwrite/delete, rejection of built-in and reserved names,
+control-character rejection, name-length limits, and missing-key fallback to
+the Default preset. The three temporary files (`json`, `.tmp`, `.bak`) are
+removed at the end.
 
 ## 4. Load + render integration test
 
@@ -147,6 +178,44 @@ If you get `0,0,0,0`, filter creation fails, or colours are far off, check the s
 > tree; locate `image-source.dll` and its matching data directory. Without these
 > arguments, the test only checks load + effect compilation.
 
+### Render matrix / golden image
+
+`beauty-render-matrix-test` renders every built-in preset at 360p, 720p, 1080p
+and 1440p, then runs a 16F pass at 720p. It checks that output alpha stays
+opaque, that every preset changes the frame, and that 16F values are finite,
+non-negative and keep highlights above SDR white.
+
+```bash
+# Invariants only (Linux and Windows)
+xvfb-run -a ./build/beauty-render-matrix-test \
+  ./build/obs-beauty-filter.so \
+  ./build/rundir/share/obs/obs-plugins/obs-beauty-filter
+
+# Compare the sampled golden image (Linux CI)
+BEAUTY_MATRIX_GOLDEN=tests/golden/render-matrix.txt \
+xvfb-run -a ./build/beauty-render-matrix-test \
+  ./build/obs-beauty-filter.so \
+  ./build/rundir/share/obs/obs-plugins/obs-beauty-filter
+
+# Regenerate the golden image after an intentional visual change
+BEAUTY_MATRIX_WRITE_GOLDEN=tests/golden/render-matrix.txt \
+xvfb-run -a ./build/beauty-render-matrix-test \
+  ./build/obs-beauty-filter.so \
+  ./build/rundir/share/obs/obs-plugins/obs-beauty-filter
+
+# Opt-in 4K pass and PPM dumps for visual inspection
+BEAUTY_MATRIX_4K=1 BEAUTY_MATRIX_DUMP_DIR=/tmp/beauty-frames \
+xvfb-run -a ./build/beauty-render-matrix-test \
+  ./build/obs-beauty-filter.so \
+  ./build/rundir/share/obs/obs-plugins/obs-beauty-filter
+```
+
+The golden file stores the average RGB of an 8×6 grid, not a byte-exact frame,
+so it tolerates GPU rounding while still catching shader/preset regressions.
+`BEAUTY_MATRIX_TOLERANCE` sets the maximum per-channel difference (default 20).
+Windows CI runs the invariants without the golden comparison because D3D11 and
+OpenGL round differently.
+
 ## 5. Pixel-readback orientation note
 
 The integration test reads pixels with `gs_stage_texture()` + `gs_stagesurface_map()`. On OpenGL/llvmpipe in the current CI environment, the first mapped row is the **top** row of the image (top-down), so `render_pixel()` uses `row = y` and the pattern draws with a top-based origin (`translate(x, y)`).
@@ -161,7 +230,13 @@ Open **Help → Log Files → View Current Log** and look for:
 - `Failed to load '...beauty_filter.effect'` — must **not** appear.
 - `Compiler warnings/errors for ...beauty_filter.effect` — must **not** appear.
 - `Source ID 'beauty_filter' not found` — must **not** appear after adding the filter.
-- `[obs-beauty-filter] Failed to allocate GPU resources` — must **not** appear.
+- `[obs-beauty-filter] Failed to allocate GPU resources` — must **not** appear
+  during normal operation. When it does, the filter shows a red error message
+  and passes the source through.
+- `[obs-beauty-filter] Could not read/write custom presets` — appears only when
+  `custom-presets.json` is unreadable or the config directory is not writable.
+  Check the path and file permissions; the filter keeps working without the
+  custom list.
 
 On first use, OBS compiles all six techniques (`MaskPass`, `MaskAnalysis`, `BlurBase`, `DrawFast`, `DrawBalanced`, `DrawHigh`); a failure in any technique makes the effect fail to load.
 
@@ -192,8 +267,73 @@ On first use, OBS compiles all six techniques (`MaskPass`, `MaskAnalysis`, `Blur
 | 21 | Textured skin, Detail 0 → 1 | Detail 0 smooths; Detail 1 brings pores/fine lines back |
 | 22 | Smooth gradient, 8-bit output | Anti-banding on: no visible bands; off: bands return |
 | 23 | High-end 1440p/4K camera, Quality High | Skin smooth but detailed, no halo or plastic look |
+| 24 | Save a custom preset, restart OBS | Preset appears as `Custom: <name>` and restores every control |
+| 25 | Save over an existing name with different case | One entry remains, values are updated |
+| 26 | Delete the selected custom preset | Entry disappears and the selection falls back to `Custom` |
+| 27 | Reset all settings | Every control returns to the Default preset |
+| 28 | Rename `data/beauty_filter.effect` temporarily | Filter passes the source through, shows the GPU error message, no black frame |
+| 29 | Hand-edit `custom-presets.json` with a missing key | Preset loads, missing value falls back to Default |
 
-## 8. Performance checks
+## 8. Benchmark guide — Intel i5-1235U
+
+This is the reference low-power machine for the performance targets: Intel
+Core i5-1235U (2 P-cores + 8 E-cores), Iris Xe 80 EU, 16 GB **dual-channel**
+DDR4/DDR5, Windows 11, OBS 30.2 or newer. Single-channel memory roughly halves
+iGPU bandwidth and is not a valid comparison.
+
+### Method
+
+1. Use a real camera or a 30 fps / 60 fps test source at the target resolution.
+   Do not benchmark the filter on a paused or still image.
+2. Run OBS in **Stats** (View → Stats) for at least 5 minutes with the filter
+   **removed**; record *average time to render frame*, *frames missed* and GPU
+   utilisation.
+3. Add the filter with the preset and Quality level under test. Run another 5
+   minutes and record the same numbers.
+4. Filter overhead = filtered frame time − unfiltered frame time. The absolute
+   frame time matters more than the overhead because OBS also renders the scene
+   and encodes.
+5. Verify: no missed frames, GPU below 85–90 %, no memory growth, and the UI
+   stays responsive.
+6. Repeat for each preset you actually use. Presets differ mostly in Radius,
+   Detail, Glow and Quality, so `Studio` and `Soft` are the heaviest.
+
+Do not use a synchronous `gs_timer` query for production measurements: it
+stalls the GPU pipeline and inflates the result. OBS Stats already reports the
+frame time without that stall.
+
+### Recommended thresholds
+
+| Source | FPS | Quality | Preset | Max filter overhead | Max total frame time | Pass criteria |
+|---|---:|---|---|---:|---:|---|
+| 1080p | 30 | Balanced | Default / Natural | 3.0 ms | 20 ms | 0 missed frames in 10 min |
+| 1080p | 60 | Balanced | Default / Natural | 4.0 ms | 12 ms | 0 missed frames, GPU < 90 % |
+| 1080p | 60 | High | Cinema / Studio | 6.0 ms | 12 ms | 0 missed frames; step down if missed |
+| 1440p | 30 | High | Cinema | 6.0 ms | 20 ms | 0 missed frames |
+| 1440p | 60 | Balanced | Cinema | 8.0 ms | 12 ms | 0 missed frames; High is usually too slow |
+| 4K | 30 | Balanced | Cinema | 12 ms | 25 ms | 0 missed frames; use Fast if needed |
+| 4K | 60 | Fast | any | 6.0 ms | 16 ms | Not recommended on Iris Xe |
+
+These are guidance values, not hard guarantees: thermal limits, shared memory
+bandwidth and other OBS sources change the result. A machine that cannot meet
+the threshold should move **Fast** before reducing image quality below what the
+scene needs.
+
+### If the benchmark fails
+
+1. Lower **Quality** one step (High → Balanced → Fast).
+2. Lower **Radius** (for example 10 → 6) and **Glow**.
+3. Disable **Face-aware zones** when you do not use teeth/eye controls.
+4. Remove stacked filters (denoise/sharpen) or move them after the beauty
+   filter only if the result still looks correct.
+5. Check that the laptop is on AC power, in performance mode, and that the
+   camera is not forcing a higher resolution than the canvas.
+
+Record the result in your issue report with the preset, Quality, resolution,
+frame times and OBS version. See the compatibility matrix in
+[COMPATIBILITY.en.md](COMPATIBILITY.en.md).
+
+## 9. Performance checks
 
 1. Use OBS **Stats** (View → Stats) for FPS and dropped frames.
 2. Compare the three Quality levels on the same scene.
@@ -207,7 +347,7 @@ On first use, OBS compiles all six techniques (`MaskPass`, `MaskAnalysis`, `Blur
 
 The plugin never reads back a full frame. CPU cost is only the 64×N grid (at most 16 KB) every 6 frames when automatic face-aware detection is on.
 
-## 9. Image-quality checks
+## 10. Image-quality checks
 
 - Capture before/after screenshots with the same lighting and frame.
 - At 100% zoom, inspect eyes, eyebrows, lip line, sideburns and jawline.
@@ -216,7 +356,7 @@ The plugin never reads back a full frame. CPU cost is only the 64×N grid (at mo
 - For multiple skin tones, capture at least three light/dark levels and confirm both mask and face box.
 - For HDR, compare highlights (lights, windows) before/after to confirm they are not clipped.
 
-## 10. Windows-specific testing
+## 11. Windows-specific testing
 
 - Windows 10/11, OBS 30.2+ (64-bit); confirm on OBS 33.0.1 or newer first.
 - Intel iGPU, NVIDIA and AMD GPUs.
@@ -235,7 +375,7 @@ The plugin never reads back a full frame. CPU cost is only the 64×N grid (at mo
 - The headless test now covers scRGB; 16F readback can still differ between D3D11 and OpenGL, so confirm with a real HDR source/canvas.
 - When editing the effect, avoid single-scalar vector constructors such as `float3(x)`: libobs-d3d11's FXC rejects them with `X3014: incorrect number of arguments to numeric-type constructor`. Write `float3(x, x, x)` instead. The Linux/OpenGL compiler accepts both, so only the Windows CI catches this.
 
-## 11. Suggested CI
+## 12. Suggested CI
 
 A Linux job can run:
 

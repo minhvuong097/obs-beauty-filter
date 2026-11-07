@@ -113,8 +113,8 @@ if ($LASTEXITCODE -ne 0) { throw "Plugin build failed" }
 if ($LASTEXITCODE -ne 0) { throw "Face-region test failed" }
 
 # Exercise libobs-d3d11 and compile the effect on the real Windows graphics
-# path.  The full render matrix runs on Linux/OpenGL; this basic invocation
-# catches D3D11 shader compilation and module-loading regressions.  OBS keeps
+# path.  The render matrix also runs here (without the Linux golden image) to
+# catch D3D11 shader compilation, resolution and alpha regressions.  OBS keeps
 # its runtime DLLs in the build's rundir and its effect files in the source
 # tree, so put both on the process search/data paths.  os_dlopen() uses
 # LOAD_LIBRARY_SEARCH_DEFAULT_DIRS, which ignores PATH, so the graphics module
@@ -138,6 +138,14 @@ Copy-Item $LibobsD3d11.FullName (Join-Path $BuildDir "RelWithDebInfo")
   (Join-Path $BuildDir "RelWithDebInfo\obs-beauty-filter.dll") `
   (Join-Path $BuildDir "rundir\plugins\obs-beauty-filter\data")
 if ($LASTEXITCODE -ne 0) { throw "Windows module load / effect compilation test failed" }
+
+# Resolution/alpha/16F invariants on D3D11.  The golden image is intentionally
+# not compared here: it is generated on Linux/llvmpipe and would not match
+# D3D11 rounding.
+& (Join-Path $BuildDir "RelWithDebInfo\beauty-render-matrix-test.exe") `
+  (Join-Path $BuildDir "RelWithDebInfo\obs-beauty-filter.dll") `
+  (Join-Path $BuildDir "rundir\plugins\obs-beauty-filter\data")
+if ($LASTEXITCODE -ne 0) { throw "Windows render matrix test failed" }
 
 Remove-Item Env:\OBS_BEAUTY_DATA_PATH
 

@@ -11,7 +11,9 @@
 /* clang-format off */
 
 #define S_PRESET                "preset"
+#define S_PRESET_NAME           "preset_name"
 #define S_HDR_INFO              "hdr_info"
+#define S_ERROR_INFO            "error_info"
 
 #define S_AMOUNT                "amount"
 #define S_RADIUS                "radius"

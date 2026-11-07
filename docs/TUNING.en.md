@@ -155,6 +155,36 @@ Always check **Show skin mask**: if dark skin is not white, raise Sensitivity; i
 
 HDR has a wider brightness range, so Glow and Rosy can easily look excessive. Start lower than the SDR presets and check highlights (lights, windows) for clipping. `GS_CS_SRGB_16F` uses the same path as Rec.709 extended; scRGB is handled with the 80-nit scale.
 
+### Saving your own preset
+
+1. Tune the filter until it matches your camera and lighting.
+2. Type a name in **Custom preset name**.
+3. Press **Save current settings as preset**. The preset appears in the
+   dropdown as `Custom: <name>` and is selected immediately.
+4. To update it later, select it, change the controls, and press Save again.
+   Names are case-insensitive: saving `My Look` over `my look` replaces it.
+5. Press **Delete this custom preset** to remove the selected preset. If it was
+   active, the selection falls back to Custom.
+
+Names must be 1–64 characters, cannot be empty or contain control characters,
+and cannot match `custom` or a built-in preset (`Default`, `Natural`, `Cinema`,
+`Studio`, `Soft`, `Beard`, `Dark skin`, `HDR`). The filter shows a short status
+message under the buttons after each action.
+
+Custom presets live in `custom-presets.json` in the OBS module configuration
+directory (on Windows:
+`%APPDATA%\obs-studio\plugin_config\obs-beauty-filter\custom-presets.json`).
+The file is human-readable and safe to back up; a missing key falls back to the
+Default preset.
+
+**Reset all settings** restores the whole filter to the Default preset. It does
+not delete custom presets.
+
+If the effect or a GPU texture cannot be created, the property page shows a red
+error message and the source passes through unchanged (no black frame). Check
+the OBS log for the exact allocation or shader error, then reopen the filter or
+restart OBS.
+
 ## 3. Tuning the face zones
 
 ### When to enable them

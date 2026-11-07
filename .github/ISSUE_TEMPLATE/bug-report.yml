@@ -1,0 +1,130 @@
+name: Bug report
+description: Something is broken, looks wrong, or crashes OBS.
+title: "[Bug] "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a problem. Please attach an OBS log
+        and a before/after screenshot when the issue is visual.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: A clear description of the problem.
+      placeholder: "The skin mask turns an orange wall white at 1440p..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Add Beauty Filter to a 1080p camera
+        2. Select the Cinema preset
+        3. Set Skin sensitivity to 0.7
+        4. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+
+  - type: input
+    id: plugin-version
+    attributes:
+      label: Plugin version
+      description: From the release tag or the ZIP filename.
+      placeholder: "1.4.0"
+    validations:
+      required: true
+
+  - type: input
+    id: obs-version
+    attributes:
+      label: OBS Studio version
+      description: Help → About.
+      placeholder: "33.0.1"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows 11
+        - Windows 10
+        - Linux (X11)
+        - Linux (Wayland)
+        - macOS
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: gpu
+    attributes:
+      label: GPU and driver
+      placeholder: "Intel Iris Xe / driver 31.0.101.5333"
+    validations:
+      required: true
+
+  - type: input
+    id: source
+    attributes:
+      label: Source resolution and frame rate
+      placeholder: "1920x1080 @ 60 fps"
+    validations:
+      required: true
+
+  - type: textarea
+    id: settings
+    attributes:
+      label: Filter settings
+      description: Preset, Quality, Amount, Radius, Detail and any non-default control.
+
+  - type: dropdown
+    id: quality
+    attributes:
+      label: Quality level
+      options:
+        - Fast
+        - Balanced
+        - High
+        - Not sure
+
+  - type: textarea
+    id: log
+    attributes:
+      label: OBS log
+      description: |
+        Help → Log Files → View Current Log. Paste the link or the relevant
+        lines, especially anything containing `obs-beauty-filter` or
+        `beauty_filter.effect`.
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: media
+    attributes:
+      label: Screenshots or video
+      description: Before/after frames, mask preview or zone preview help a lot.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I am using the latest release.
+          required: true
+        - label: I removed other filters to confirm this is not a filter-order issue.
+        - label: I reproduced the problem after restarting OBS.
