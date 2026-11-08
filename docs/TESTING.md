@@ -270,6 +270,7 @@ Khi thêm filter lần đầu, OBS sẽ compile cả 6 technique (`MaskPass`, `M
 | 27 | Reset toàn bộ | Mọi control trở về preset Default |
 | 28 | Tạm đổi tên `data/beauty_filter.effect` | Filter cho nguồn đi qua, hiện thông báo lỗi GPU, không ra frame đen |
 | 29 | Sửa `custom-presets.json` thiếu một khóa | Preset vẫn load, giá trị thiếu fallback về Default |
+| 30 | Chạy bộ cài `.exe` trên máy OBS 33 sạch | Setup ghi DLL và `data\` vào `%ProgramData%\obs-studio\plugins\obs-beauty-filter`, OBS hiện **Beauty Filter**, gỡ cài chỉ xóa plugin |
 
 ## 8. Hướng dẫn benchmark — Intel i5-1235U
 
@@ -367,6 +368,26 @@ Không có CPU readback full-frame trong plugin. Chi phí CPU chỉ là grid 64�
 - Chạy `beauty-face-region-test.exe`, `beauty-preset-test.exe` và `beauty-load-test.exe`; kiểm tra cả HDR Rec.709 extended và scRGB trên GPU thật.
 - Test headless đã bao phủ scRGB; readback 16F vẫn có thể khác giữa D3D11 và OpenGL nên cần xác nhận lại bằng nguồn/canvas HDR thực tế.
 - Khi sửa effect, tránh constructor vector một tham số như `float3(x)`: FXC của libobs-d3d11 báo lỗi `X3014: incorrect number of arguments to numeric-type constructor`. Hãy viết `float3(x, x, x)`. Compiler Linux/OpenGL chấp nhận cả hai nên chỉ CI Windows mới phát hiện được lỗi này.
+
+### Smoke test bộ cài
+
+CI Windows biên dịch `installer/obs-beauty-filter.iss` bằng Inno Setup 6 sau
+bước đóng gói, rồi cài silent vào thư mục tạm:
+
+```powershell
+.\obs-beauty-filter-1.5.0-windows-x64-setup.exe /VERYSILENT /SUPPRESSMSGBOXES `
+  /NORESTART /SP- /DIR=C:\temp\beauty-installer-test /LOG=install.log
+```
+
+Test kiểm tra `obs-beauty-filter.dll`, `data\beauty_filter.effect`,
+`data\locale\en-US.ini`, `data\locale\vi-VN.ini` và `unins000.exe`, chạy
+uninstaller silent rồi xác nhận DLL đã biến mất.
+
+Để thử trên máy local mà không đụng bản OBS thật, truyền `/DIR` trỏ tới thư mục
+rỗng. Để thử nhận diện portable, dùng một cây OBS portable thật (hoặc cây tạm có
+`bin\64bit\obs64.exe` và `portable_mode.txt`) rồi truyền `/OBSDIR=<cây-đó>`;
+setup phải cài vào `<cây-đó>\plugins\obs-beauty-filter`. Chạy setup không kèm
+tham số trên máy không có OBS sẽ cài vào `%ProgramData%\obs-studio\plugins`.
 
 ## 12. CI gợi ý
 

@@ -5,6 +5,34 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.5.0] - 2026-11-08
+
+### Added
+
+- **Windows `.exe` installer.** `obs-beauty-filter-1.5.0-windows-x64-setup.exe`
+  detects the OBS Studio installation, closes a running OBS when needed, and
+  installs the plugin into the OBS 33+ third-party plugin directory
+  (`%ProgramData%\obs-studio\plugins\obs-beauty-filter`). It creates an entry in
+  **Apps & Features** with a working uninstaller and offers to launch OBS when
+  setup finishes.
+- **Portable OBS support in the installer.** When a portable tree is detected
+  (`portable_mode`, `portable_mode.txt`, `obs_portable_mode` or
+  `obs_portable_mode.txt`), the plugin is installed into
+  `<OBS>\plugins\obs-beauty-filter` instead.
+- **Installer smoke test in Windows CI.** The workflow installs the generated
+  setup silently into a temporary directory, verifies the DLL/effect/locales
+  and uninstaller, then removes everything again.
+
+### Changed
+
+- The installer refuses to run on OBS 32 and older with a message that points
+  to the ZIP package and the legacy layout instructions, so it can never
+  install the new layout where an older OBS will not find it.
+- Windows CI now publishes both the ZIP and the `.exe` in the
+  `obs-beauty-filter-windows-x64` artifact.
+- README installation instructions now lead with the `.exe` installer and keep
+  the ZIP/manual layout as the fallback for older OBS and advanced setups.
+
 ## [1.4.0] - 2026-11-06
 
 ### Added
@@ -95,6 +123,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - OBS 33+ plugin layout on Windows, legacy layout for OBS 32 and older.
 - Linux and Windows CI builds with packaged artifacts.
 
+[1.5.0]: https://github.com/minhvuong097/obs-beauty-filter/releases/tag/v1.5.0
 [1.4.0]: https://github.com/minhvuong097/obs-beauty-filter/releases/tag/v1.4.0
 [1.3.0]: https://github.com/minhvuong097/obs-beauty-filter/releases/tag/v1.3.0
 [1.2.0]: https://github.com/minhvuong097/obs-beauty-filter/releases/tag/v1.2.0

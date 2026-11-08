@@ -54,17 +54,20 @@ jobs:
         shell: pwsh
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File .github/scripts/build-windows-ci.ps1
 
-      - name: Show package checksum
+      - name: Show package checksums
         shell: pwsh
         run: |
-          $zip = Get-ChildItem -Path . -Filter "obs-beauty-filter-*-windows-x64.zip"
-          if (-not $zip) { throw "Windows package not found" }
-          Get-FileHash -Algorithm SHA256 $zip.FullName | Format-List
+          $packages = Get-ChildItem -Path . -Filter "obs-beauty-filter-*-windows-x64*"
+          if (-not $packages) { throw "Windows packages not found" }
+          Get-FileHash -Algorithm SHA256 $packages.FullName |
+            ForEach-Object { "{0}  {1}" -f $_.Hash.ToLowerInvariant(), (Split-Path -Leaf $_.Path) }
 
-      - name: Upload Windows artifact
+      - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
           name: obs-beauty-filter-windows-x64
-          path: obs-beauty-filter-*-windows-x64.zip
+          path: |
+            obs-beauty-filter-*-windows-x64.zip
+            obs-beauty-filter-*-windows-x64-setup.exe
           if-no-files-found: error
           retention-days: 30

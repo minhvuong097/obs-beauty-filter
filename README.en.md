@@ -5,7 +5,7 @@
 [![Build](https://github.com/minhvuong097/obs-beauty-filter/actions/workflows/build.yml/badge.svg)](https://github.com/minhvuong097/obs-beauty-filter/actions/workflows/build.yml)
 [![Latest release](https://img.shields.io/github/v/release/minhvuong097/obs-beauty-filter?display_name=tag)](https://github.com/minhvuong097/obs-beauty-filter/releases/latest)
 
-A GPU beauty filter for **OBS Studio** on Windows and Linux (macOS can be built from source but is not tested). Version **1.4.0** runs entirely on the GPU, plugs into the standard OBS filter pipeline, uses no AI model, never reads a full-resolution frame back to the CPU, and has no third-party runtime dependency.
+A GPU beauty filter for **OBS Studio** on Windows and Linux (macOS can be built from source but is not tested). Version **1.5.0** runs entirely on the GPU, plugs into the standard OBS filter pipeline, uses no AI model, never reads a full-resolution frame back to the CPU, and has no third-party runtime dependency.
 
 Goal: natural-looking skin for livestreams/webcams **and high-resolution cameras** while preserving eyes, eyebrows, hair, pores and the face outline — with correct HDR handling.
 
@@ -66,6 +66,8 @@ obs-beauty-filter/
 │   ├── TUNING.md            # + TUNING.en.md
 │   ├── TESTING.md           # + TESTING.en.md
 │   └── COMPATIBILITY.md     # + COMPATIBILITY.en.md
+├── installer/
+│   └── obs-beauty-filter.iss # Inno Setup source for the Windows installer
 └── scripts/
     ├── build-linux.sh
     └── build-windows.ps1
@@ -73,15 +75,44 @@ obs-beauty-filter/
 
 ## Windows installation
 
-### Option A — prebuilt binary
+### Option A — installer `.exe` (recommended)
 
-Download the latest build from **[GitHub Releases](https://github.com/minhvuong097/obs-beauty-filter/releases/latest)**:
+Download `obs-beauty-filter-1.5.0-windows-x64-setup.exe` from
+**[GitHub Releases](https://github.com/minhvuong097/obs-beauty-filter/releases/latest)**
+and run it. The installer:
 
-- Windows x64: `obs-beauty-filter-1.4.0-windows-x64.zip`
+1. Detects the OBS Studio 33+ installation from the Windows registry.
+2. Asks OBS to close if it is running, so the DLL can be replaced safely.
+3. Installs `obs-beauty-filter.dll` and `data\` into
+   `C:\ProgramData\obs-studio\plugins\obs-beauty-filter\` — the OBS 33+
+   third-party plugin layout — and registers **OBS Beauty Filter** in
+   **Apps & Features** with an uninstaller.
+4. Offers to launch OBS when setup finishes. Add **Beauty Filter** to a source
+   via **Filters** → **+**.
+
+For a **portable OBS** tree, setup looks for `portable_mode`,
+`portable_mode.txt`, `obs_portable_mode` or `obs_portable_mode.txt` and installs
+into `<OBS-portable-root>\plugins\obs-beauty-filter\` instead. If the portable
+copy is not detected, run the installer with `/OBSDIR=<OBS-portable-root>` or
+pick `<OBS-portable-root>\plugins\obs-beauty-filter` on the destination page.
+
+> The `.exe` installer requires **OBS Studio 33 or newer**. On OBS 32 and older
+> it stops with an explanatory message; use the ZIP below with the legacy
+> layout. The plugin is not code-signed, so Windows SmartScreen may show
+> "Windows protected your PC" — choose **More info** → **Run anyway** after
+> verifying the SHA-256 checksum from the release.
+
+Uninstall it from **Settings → Apps → Installed apps** (or
+**Add or remove programs**). Uninstalling removes the plugin files and leaves
+your OBS scenes, profiles and custom presets untouched.
+
+### Option B — prebuilt ZIP (manual install)
+
+- Windows x64: `obs-beauty-filter-1.5.0-windows-x64.zip`
 - Linux x86_64: `obs-beauty-filter-linux-x86_64.tar.gz`
 - Each release includes `SHA256SUMS.txt` so you can verify the download.
 
-**OBS Studio 33+ — new layout (recommended):**
+**OBS Studio 33+ — new layout:**
 
 1. Close OBS Studio.
 2. Create this directory:
@@ -112,7 +143,7 @@ Download the latest build from **[GitHub Releases](https://github.com/minhvuong0
 > If OBS 33 starts in **Safe Mode**, third-party plugins are not loaded. Leave
 > Safe Mode and restart OBS.
 
-### Option B — build from source (recommended for development)
+### Option C — build from source (recommended for development)
 
 **In-tree build** (easiest if you already build OBS from source):
 
@@ -172,7 +203,21 @@ Or use the script:
 > matching `plugins` directory above (or the portable OBS `...\plugins\`
 > directory).
 
-> If you only have an installed OBS without the OBS SDK/source, use the prebuilt binary from **Option A**. Building requires OBS source (in-tree) or an OBS SDK/CMake package (standalone).
+To build both the ZIP and the `.exe` installer in one step, install
+[Inno Setup 6](https://jrsoftware.org/isinfo.php) (the script can install it
+through Chocolatey) and add `-Installer`:
+
+```powershell
+.\scripts\build-windows.ps1 -ObsBuild "C:\obs-studio\build_x64" `
+  -ObsSdk "C:\obs-deps\x64" -Package -Installer
+```
+
+Both files are written to `dist\`. See `installer/obs-beauty-filter.iss` for
+the OBS detection, portable-mode and uninstall rules.
+
+> If you only have an installed OBS without the OBS SDK/source, use the
+> prebuilt installer or ZIP from Options A/B. Building requires OBS source
+> (in-tree) or an OBS SDK/CMake package (standalone).
 
 ### Linux
 
@@ -372,7 +417,7 @@ OK: module loaded, filter created, effect compiled, filter rendered, mask/opacit
 
 The integration test covers: default filter output, skin mask, opacity 0, teeth/eye zones (with a manual face box), zone preview colours, frequency separation on a textured skin pattern (contrast drops at low Detail and returns at high Detail), Rec.709 extended HDR and scRGB HDR (values above 1.0 are preserved, actually processed, and not double-scaled). It also checks that the preset/save/delete/reset property controls exist. The render matrix runs all 8 presets at 360p, 720p, 1080p and 1440p (opt-in 4K), verifies opaque alpha and finite 16F output, and compares a sampled golden image on Linux. See [docs/TESTING.en.md](docs/TESTING.en.md) for the full test matrix and the i5-1235U benchmark guide.
 
-> **Test status:** GitHub Actions builds and tests on both platforms. Linux (Alpine 3.21, OBS 30.2.3, OpenGL/Mesa llvmpipe) runs the full `beauty-face-region-test`, `beauty-preset-test`, `beauty-render-matrix-test` (with golden image) and `beauty-load-test` suite, then repeats the suite under ASan/UBSan. Windows x64 builds directly against OBS 33.0.1 source plus `obs-deps`, runs the same tests on the real D3D11 path (matrix invariants, module load + effect compilation) and packages the new plugin layout. A manual in-OBS render/HDR check on real hardware is still recommended; see [docs/TESTING.en.md](docs/TESTING.en.md) and the [compatibility matrix](docs/COMPATIBILITY.en.md).
+> **Test status:** GitHub Actions builds and tests on both platforms. Linux (Alpine 3.21, OBS 30.2.3, OpenGL/Mesa llvmpipe) runs the full `beauty-face-region-test`, `beauty-preset-test`, `beauty-render-matrix-test` (with golden image) and `beauty-load-test` suite, then repeats the suite under ASan/UBSan. Windows x64 builds directly against OBS 33.0.1 source plus `obs-deps`, runs the same tests on the real D3D11 path (matrix invariants, module load + effect compilation), packages the new plugin layout, builds the `.exe` installer and silently installs/uninstalls it in a smoke test. A manual in-OBS render/HDR check on real hardware is still recommended; see [docs/TESTING.en.md](docs/TESTING.en.md) and the [compatibility matrix](docs/COMPATIBILITY.en.md).
 
 ## Changelog and compatibility
 

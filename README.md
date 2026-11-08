@@ -5,7 +5,7 @@
 [![Build](https://github.com/minhvuong097/obs-beauty-filter/actions/workflows/build.yml/badge.svg)](https://github.com/minhvuong097/obs-beauty-filter/actions/workflows/build.yml)
 [![Latest release](https://img.shields.io/github/v/release/minhvuong097/obs-beauty-filter?display_name=tag)](https://github.com/minhvuong097/obs-beauty-filter/releases/latest)
 
-Plugin bộ lọc làm đẹp cho **OBS Studio** trên Windows và Linux (macOS có thể build từ source nhưng chưa được kiểm thử). Phiên bản **1.4.0** chạy hoàn toàn trên GPU, hòa vào pipeline filter tiêu chuẩn của OBS, không cần model AI, không đọc ngược frame full-resolution về CPU và không phụ thuộc runtime bên thứ ba.
+Plugin bộ lọc làm đẹp cho **OBS Studio** trên Windows và Linux (macOS có thể build từ source nhưng chưa được kiểm thử). Phiên bản **1.5.0** chạy hoàn toàn trên GPU, hòa vào pipeline filter tiêu chuẩn của OBS, không cần model AI, không đọc ngược frame full-resolution về CPU và không phụ thuộc runtime bên thứ ba.
 
 Mục tiêu: làn da mịn tự nhiên cho livestream/webcam **và camera độ phân giải cao** mà vẫn giữ chi tiết mắt, lông mày, tóc, lỗ chân lông và viền khuôn mặt; đồng thời xử lý đúng nguồn HDR.
 
@@ -66,6 +66,8 @@ obs-beauty-filter/
 │   ├── TUNING.md            # + TUNING.en.md
 │   ├── TESTING.md           # + TESTING.en.md
 │   └── COMPATIBILITY.md     # + COMPATIBILITY.en.md
+├── installer/
+│   └── obs-beauty-filter.iss # script Inno Setup cho bộ cài Windows
 └── scripts/
     ├── build-linux.sh
     └── build-windows.ps1
@@ -73,15 +75,44 @@ obs-beauty-filter/
 
 ## Cài đặt trên Windows
 
-### Cách A — dùng bản build sẵn
+### Cách A — bộ cài `.exe` (khuyến nghị)
 
-Tải bản mới nhất tại **[GitHub Releases](https://github.com/minhvuong097/obs-beauty-filter/releases/latest)**:
+Tải `obs-beauty-filter-1.5.0-windows-x64-setup.exe` tại
+**[GitHub Releases](https://github.com/minhvuong097/obs-beauty-filter/releases/latest)**
+rồi chạy. Bộ cài sẽ:
 
-- Windows x64: `obs-beauty-filter-1.4.0-windows-x64.zip`
+1. Tự tìm bản cài OBS Studio 33+ qua registry Windows.
+2. Yêu cầu đóng OBS nếu đang chạy để thay DLL an toàn.
+3. Cài `obs-beauty-filter.dll` và thư mục `data\` vào
+   `C:\ProgramData\obs-studio\plugins\obs-beauty-filter\` — đúng layout plugin
+   bên thứ ba của OBS 33+ — đồng thời tạo mục **OBS Beauty Filter** trong
+   **Apps & Features** kèm uninstaller.
+4. Có tùy chọn mở OBS khi cài xong. Thêm **Beauty Filter** vào source qua
+   **Filters** → dấu **+**.
+
+Với **OBS portable**, bộ cài nhận diện file `portable_mode`, `portable_mode.txt`,
+`obs_portable_mode` hoặc `obs_portable_mode.txt` và cài vào
+`<thư-mục-OBS-portable>\plugins\obs-beauty-filter\`. Nếu không tự nhận diện
+được, chạy installer với `/OBSDIR=<thư-mục-OBS-portable>` hoặc chọn
+`<thư-mục-OBS-portable>\plugins\obs-beauty-filter` ở trang chọn thư mục.
+
+> Bộ cài `.exe` yêu cầu **OBS Studio 33 trở lên**. Trên OBS 32 trở xuống, bộ
+> cài dừng lại và hướng dẫn dùng gói ZIP với layout legacy bên dưới. Plugin
+> chưa được ký số nên Windows SmartScreen có thể hiện "Windows protected your
+> PC" — chọn **More info** → **Run anyway** sau khi đối chiếu SHA-256 của bản
+> tải với checksum trong release.
+
+Gỡ cài đặt trong **Settings → Apps → Installed apps** (hoặc **Add or remove
+programs**). Quá trình gỡ chỉ xóa file plugin, không đụng tới scene, profile
+hay custom preset của OBS.
+
+### Cách B — gói ZIP build sẵn (cài thủ công)
+
+- Windows x64: `obs-beauty-filter-1.5.0-windows-x64.zip`
 - Linux x86_64: `obs-beauty-filter-linux-x86_64.tar.gz`
 - Mỗi release có kèm `SHA256SUMS.txt` để kiểm tra tệp tải về.
 
-**OBS Studio 33+ — layout mới (khuyến nghị):**
+**OBS Studio 33+ — layout mới:**
 
 1. Đóng OBS Studio.
 2. Tạo thư mục:
@@ -112,7 +143,7 @@ Tải bản mới nhất tại **[GitHub Releases](https://github.com/minhvuong0
 > Nếu OBS 33 khởi động ở **Safe Mode**, plugin bên thứ ba sẽ không được load.
 > Hãy thoát Safe Mode rồi mở lại OBS.
 
-### Cách B — build từ source (khuyến nghị khi phát triển)
+### Cách C — build từ source (khuyến nghị khi phát triển)
 
 **Build in-tree** (đơn giản nhất nếu đã build OBS từ source):
 
@@ -169,7 +200,21 @@ Hoặc dùng script:
 > trên máy, ngược lại dùng Visual Studio 2022. File zip tạo trong `dist\`; giải
 > nén vào đúng thư mục `plugins` ở trên (hoặc `...\plugins\` của bản portable).
 
-> Nếu chỉ có OBS đã cài mà không có OBS SDK/source, hãy dùng bản build sẵn ở **Cách A**. Muốn tự build thì cần OBS source (in-tree) hoặc OBS SDK/CMake package (standalone).
+Để tạo cả ZIP và bộ cài `.exe` trong một bước, cài
+[Inno Setup 6](https://jrsoftware.org/isinfo.php) (script có thể tự cài qua
+Chocolatey) rồi thêm `-Installer`:
+
+```powershell
+.\scripts\build-windows.ps1 -ObsBuild "C:\obs-studio\build_x64" `
+  -ObsSdk "C:\obs-deps\x64" -Package -Installer
+```
+
+Cả hai file được ghi vào `dist\`. Quy tắc nhận diện OBS, portable mode và gỡ
+cài đặt nằm trong `installer/obs-beauty-filter.iss`.
+
+> Nếu chỉ có OBS đã cài mà không có OBS SDK/source, hãy dùng bộ cài hoặc gói
+> ZIP ở Cách A/B. Muốn tự build thì cần OBS source (in-tree) hoặc OBS
+> SDK/CMake package (standalone).
 
 ### Linux
 
@@ -369,7 +414,7 @@ OK: module loaded, filter created, effect compiled, filter rendered, mask/opacit
 
 Test integration kiểm tra: filter mặc định, skin mask, opacity 0, teeth/eye zones (có mặt thủ công), zone preview, **frequency separation trên pattern da có texture** (contrast giảm khi Detail thấp và quay lại khi Detail cao), HDR Rec.709 extended và scRGB (giữ giá trị > 1, thực sự được xử lý và không bị scale hai lần), và các control preset/lưu/xóa/reset có tồn tại. Render matrix chạy cả 8 preset ở 360p, 720p, 1080p và 1440p (4K tùy chọn), kiểm tra alpha đục, ngõ ra 16F hữu hạn và so golden image dạng lấy mẫu trên Linux. Không được có lỗi shader trong log. Xem [docs/TESTING.md](docs/TESTING.md) cho test matrix đầy đủ và hướng dẫn benchmark i5-1235U.
 
-> **Trạng thái kiểm thử:** GitHub Actions build và chạy test tự động trên hai nền tảng. Linux (Alpine 3.21, OBS 30.2.3, OpenGL/Mesa llvmpipe) chạy đầy đủ `beauty-face-region-test`, `beauty-preset-test`, `beauty-render-matrix-test` (kèm golden image) và `beauty-load-test` (render, mask, texture, HDR), sau đó lặp lại dưới ASan/UBSan. Windows x64 build trực tiếp với source OBS 33.0.1 + `obs-deps`, chạy cùng bộ test trên đường D3D11 thật (render matrix invariant, load module + compile effect), rồi đóng gói theo layout plugin mới. Vẫn nên xác nhận render/HDR thủ công trong OBS trên phần cứng thật; xem [docs/TESTING.md](docs/TESTING.md) và [ma trận tương thích](docs/COMPATIBILITY.md).
+> **Trạng thái kiểm thử:** GitHub Actions build và chạy test tự động trên hai nền tảng. Linux (Alpine 3.21, OBS 30.2.3, OpenGL/Mesa llvmpipe) chạy đầy đủ `beauty-face-region-test`, `beauty-preset-test`, `beauty-render-matrix-test` (kèm golden image) và `beauty-load-test` (render, mask, texture, HDR), sau đó lặp lại dưới ASan/UBSan. Windows x64 build trực tiếp với source OBS 33.0.1 + `obs-deps`, chạy cùng bộ test trên đường D3D11 thật (render matrix invariant, load module + compile effect), rồi đóng gói theo layout plugin mới, tạo bộ cài `.exe` và chạy smoke test cài/gỡ silent. Vẫn nên xác nhận render/HDR thủ công trong OBS trên phần cứng thật; xem [docs/TESTING.md](docs/TESTING.md) và [ma trận tương thích](docs/COMPATIBILITY.md).
 
 ## Changelog và tương thích
 

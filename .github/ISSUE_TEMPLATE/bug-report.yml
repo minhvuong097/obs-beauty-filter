@@ -41,8 +41,8 @@ body:
     id: plugin-version
     attributes:
       label: Plugin version
-      description: From the release tag or the ZIP filename.
-      placeholder: "1.4.0"
+      description: From the release tag, the installer filename or the ZIP filename.
+      placeholder: "1.5.0"
     validations:
       required: true
 

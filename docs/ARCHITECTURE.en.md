@@ -2,7 +2,7 @@
 
 **English | [Tiếng Việt](ARCHITECTURE.md)**
 
-This document describes the processing flow, shader maths and design decisions of plugin **1.4.0** that keep it stable inside OBS' filter pipeline.
+This document describes the processing flow, shader maths and design decisions of plugin **1.5.0** that keep it stable inside OBS' filter pipeline.
 
 ## 1. Filter lifecycle and render pipeline
 

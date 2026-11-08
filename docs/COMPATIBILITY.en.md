@@ -11,7 +11,7 @@ push and tag.
 | Platform | OBS Studio | Graphics backend | Status | Notes |
 |---|---|---|---|---|
 | Linux x86_64, Alpine 3.21 | 30.2.3 | OpenGL / Mesa llvmpipe (software) | **CI, full suite** | Render matrix + golden image, load/render/HDR test, ASan/UBSan |
-| Windows x64 (GitHub `windows-2022`) | 33.0.1 (built from source) | D3D11 (WARP/runner GPU) | **CI, full suite** | Effect compilation, load/render test, render-matrix invariants, packaging |
+| Windows x64 (GitHub `windows-2022`) | 33.0.1 (built from source) | D3D11 (WARP/runner GPU) | **CI, full suite** | Effect compilation, load/render test, render-matrix invariants, ZIP packaging and `.exe` installer smoke test |
 | Windows 10/11 x64 | 33.0.1 | D3D11, real GPU | Manually tested | Prebuilt package, OBS 33+ plugin layout |
 | Windows 10/11 x64 | 30.2 – 32.x | D3D11, real GPU | Buildable / legacy layout | OBS 33 still loads the legacy layout but marks it Legacy |
 | Linux x86_64 | 30.2 – 33.x | OpenGL, real GPU | Buildable | Package path depends on the distribution |

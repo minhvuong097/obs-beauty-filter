@@ -8,6 +8,7 @@ param(
   [string]$Layout = "obs33",
   [string]$InstallPrefix = "",
   [switch]$Package,
+  [switch]$Installer,
   [string]$PackageDir = "$PSScriptRoot\..\dist"
 )
 
@@ -62,7 +63,7 @@ if ($InstallPrefix) {
   if ($LASTEXITCODE -ne 0) { throw "Install failed" }
 }
 
-if ($Package) {
+if ($Package -or $Installer) {
   $staging = Join-Path $BuildDir "package"
   if (Test-Path $staging) {
     Remove-Item -Recurse -Force $staging
@@ -77,19 +78,52 @@ if ($Package) {
   $version = $versionMatch.Matches[0].Groups[1].Value
 
   New-Item -ItemType Directory -Force -Path $PackageDir | Out-Null
-  $zipPath = Join-Path $PackageDir "obs-beauty-filter-$version-windows-x64.zip"
-  if (Test-Path $zipPath) {
-    Remove-Item -Force $zipPath
+
+  if ($Package) {
+    $zipPath = Join-Path $PackageDir "obs-beauty-filter-$version-windows-x64.zip"
+    if (Test-Path $zipPath) {
+      Remove-Item -Force $zipPath
+    }
+
+    if ($Layout -eq "obs33") {
+      $packageSource = Join-Path $staging "obs-beauty-filter"
+    } else {
+      $packageSource = Join-Path $staging "*"
+    }
+
+    Compress-Archive -Path $packageSource -DestinationPath $zipPath
+    Write-Host "Package: $zipPath"
   }
 
-  if ($Layout -eq "obs33") {
-    $packageSource = Join-Path $staging "obs-beauty-filter"
-  } else {
-    $packageSource = Join-Path $staging "*"
-  }
+  if ($Installer) {
+    if ($Layout -ne "obs33") {
+      throw "-Installer chỉ hỗ trợ layout obs33 (OBS Studio 33+)."
+    }
 
-  Compress-Archive -Path $packageSource -DestinationPath $zipPath
-  Write-Host "Package: $zipPath"
+    $isccCandidates = @(
+      (Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"),
+      (Join-Path $env:ProgramFiles "Inno Setup 6\ISCC.exe")
+    )
+    $iscc = $isccCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+    if (-not $iscc) {
+      Write-Host "Chưa có Inno Setup, đang cài bằng Chocolatey..."
+      choco install innosetup -y --no-progress
+      $iscc = $isccCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+    }
+    if (-not $iscc) { throw "Không tìm thấy ISCC.exe của Inno Setup 6." }
+
+    $issPath = Join-Path $RootDir "installer\obs-beauty-filter.iss"
+    & $iscc `
+      "/DPluginVersion=$version" `
+      "/DPluginPackageDir=$staging\obs-beauty-filter" `
+      "/DOutputDir=$PackageDir" `
+      $issPath
+    if ($LASTEXITCODE -ne 0) { throw "Tạo bộ cài thất bại." }
+
+    $setupPath = Join-Path $PackageDir "obs-beauty-filter-$version-windows-x64-setup.exe"
+    if (-not (Test-Path $setupPath)) { throw "Không tìm thấy bộ cài tại $setupPath" }
+    Write-Host "Installer: $setupPath"
+  }
 }
 
 Write-Host ""
@@ -114,4 +148,8 @@ if ($Package) {
   } else {
     Write-Host "Giải nén file zip vào thư mục cài OBS, ví dụ C:\Program Files\obs-studio."
   }
+}
+
+if ($Installer) {
+  Write-Host "Bộ cài .exe nằm trong $PackageDir; chạy để cài trực tiếp vào OBS 33+."
 }

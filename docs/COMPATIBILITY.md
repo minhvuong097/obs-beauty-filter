@@ -11,7 +11,7 @@ tự động chạy trên mỗi push và tag.
 | Nền tảng | OBS Studio | Backend đồ họa | Trạng thái | Ghi chú |
 |---|---|---|---|---|
 | Linux x86_64, Alpine 3.21 | 30.2.3 | OpenGL / Mesa llvmpipe (phần mềm) | **CI, toàn bộ test** | Render matrix + golden image, load/render/HDR, ASan/UBSan |
-| Windows x64 (GitHub `windows-2022`) | 33.0.1 (build từ source) | D3D11 (GPU của runner) | **CI, toàn bộ test** | Biên dịch effect, load/render, render-matrix invariants, đóng gói |
+| Windows x64 (GitHub `windows-2022`) | 33.0.1 (build từ source) | D3D11 (GPU của runner) | **CI, toàn bộ test** | Biên dịch effect, load/render, render-matrix invariants, đóng gói ZIP và smoke test bộ cài `.exe` |
 | Windows 10/11 x64 | 33.0.1 | D3D11, GPU thật | Đã kiểm thử thủ công | Gói build sẵn, layout OBS 33+ |
 | Windows 10/11 x64 | 30.2 – 32.x | D3D11, GPU thật | Build được / layout legacy | OBS 33 vẫn nạp layout legacy nhưng đánh dấu Legacy |
 | Linux x86_64 | 30.2 – 33.x | OpenGL, GPU thật | Build được | Đường dẫn cài đặt tùy distro |

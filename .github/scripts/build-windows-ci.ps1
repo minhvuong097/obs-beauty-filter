@@ -172,3 +172,100 @@ if (Test-Path $ZipPath) {
 }
 Compress-Archive -Path (Join-Path $PackageDir "obs-beauty-filter") -DestinationPath $ZipPath
 Write-Host "Created $ZipPath"
+
+# ---------------------------------------------------------------------------
+# Windows installer (.exe)
+# ---------------------------------------------------------------------------
+# The installer bundles the same package/obs-beauty-filter tree as the ZIP and
+# writes it to %ProgramData%\obs-studio\plugins\obs-beauty-filter (or
+# <portable-OBS>\plugins\obs-beauty-filter when a portable tree is detected).
+# Inno Setup 6 is preinstalled on some runners and available through Chocolatey
+# on the GitHub-hosted Windows images.
+$IsccCandidates = @(
+  (Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"),
+  (Join-Path $env:ProgramFiles "Inno Setup 6\ISCC.exe")
+)
+$Iscc = $IsccCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+if (-not $Iscc) {
+  Write-Host "Installing Inno Setup via Chocolatey"
+  choco install innosetup -y --no-progress
+  $Iscc = $IsccCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+}
+if (-not $Iscc) {
+  throw "ISCC.exe was not found after installing Inno Setup"
+}
+
+$SetupPath = Join-Path $RootDir "obs-beauty-filter-$PluginVersion-windows-x64-setup.exe"
+if (Test-Path $SetupPath) {
+  Remove-Item -Force $SetupPath
+}
+
+$IssPath = Join-Path $RootDir "installer\obs-beauty-filter.iss"
+& $Iscc `
+  "/DPluginVersion=$PluginVersion" `
+  "/DPluginPackageDir=$PackageDir\obs-beauty-filter" `
+  "/DOutputDir=$RootDir" `
+  $IssPath
+if ($LASTEXITCODE -ne 0) { throw "Installer build failed" }
+if (-not (Test-Path $SetupPath)) {
+  throw "Installer was not created at $SetupPath"
+}
+Write-Host "Created $SetupPath"
+
+# Installer smoke test.  There is no OBS installation on the CI runner, so the
+# installer takes the default OBS 33+ layout; /DIR redirects the plugin folder
+# to a temporary directory.  Verify the payload, uninstall silently, and make
+# sure nothing is left behind.
+$SmokeDir = Join-Path $RootDir "installer-smoke"
+$SmokeLog = Join-Path $RootDir "installer-smoke.log"
+Remove-Item -Recurse -Force $SmokeDir -ErrorAction SilentlyContinue
+Remove-Item -Force $SmokeLog -ErrorAction SilentlyContinue
+
+$InstallProc = Start-Process -FilePath $SetupPath -Wait -PassThru -ArgumentList @(
+  "/VERYSILENT",
+  "/SUPPRESSMSGBOXES",
+  "/NORESTART",
+  "/SP-",
+  "/DIR=$SmokeDir",
+  "/LOG=$SmokeLog"
+)
+if ($InstallProc.ExitCode -ne 0) {
+  throw "Silent installer run failed with exit code $($InstallProc.ExitCode). See $SmokeLog"
+}
+
+$ExpectedFiles = @(
+  "obs-beauty-filter.dll",
+  "data\beauty_filter.effect",
+  "data\locale\en-US.ini",
+  "data\locale\vi-VN.ini",
+  "unins000.exe"
+)
+foreach ($RelativePath in $ExpectedFiles) {
+  $FullPath = Join-Path $SmokeDir $RelativePath
+  if (-not (Test-Path $FullPath)) {
+    throw "Installer payload is missing $RelativePath"
+  }
+}
+
+$UninstallProc = Start-Process -FilePath (Join-Path $SmokeDir "unins000.exe") -Wait -PassThru -ArgumentList @(
+  "/VERYSILENT",
+  "/SUPPRESSMSGBOXES",
+  "/NORESTART"
+)
+if ($UninstallProc.ExitCode -ne 0) {
+  throw "Silent uninstall failed with exit code $($UninstallProc.ExitCode)"
+}
+
+# Inno's uninstaller may finish cleanup just after the process exits.
+for ($i = 0; $i -lt 30 -and (Test-Path (Join-Path $SmokeDir "obs-beauty-filter.dll")); $i++) {
+  Start-Sleep -Milliseconds 500
+}
+if (Test-Path (Join-Path $SmokeDir "obs-beauty-filter.dll")) {
+  throw "Uninstaller did not remove obs-beauty-filter.dll"
+}
+Remove-Item -Recurse -Force $SmokeDir -ErrorAction SilentlyContinue
+Remove-Item -Force $SmokeLog -ErrorAction SilentlyContinue
+Write-Host "Installer smoke test passed"
+
+Get-FileHash -Algorithm SHA256 $ZipPath, $SetupPath |
+  ForEach-Object { Write-Host "$($_.Hash.ToLowerInvariant())  $(Split-Path -Leaf $_.Path)" }

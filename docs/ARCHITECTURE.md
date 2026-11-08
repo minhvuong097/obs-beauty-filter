@@ -2,7 +2,7 @@
 
 **[English](ARCHITECTURE.en.md) | Tiếng Việt**
 
-Tài liệu này mô tả luồng xử lý, công thức shader và các quyết định thiết kế của plugin **1.4.0** để ổn định trong pipeline filter của OBS.
+Tài liệu này mô tả luồng xử lý, công thức shader và các quyết định thiết kế của plugin **1.5.0** để ổn định trong pipeline filter của OBS.
 
 ## 1. Vòng đời filter và pipeline render
 

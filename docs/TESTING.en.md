@@ -273,6 +273,7 @@ On first use, OBS compiles all six techniques (`MaskPass`, `MaskAnalysis`, `Blur
 | 27 | Reset all settings | Every control returns to the Default preset |
 | 28 | Rename `data/beauty_filter.effect` temporarily | Filter passes the source through, shows the GPU error message, no black frame |
 | 29 | Hand-edit `custom-presets.json` with a missing key | Preset loads, missing value falls back to Default |
+| 30 | Run the `.exe` installer on a clean OBS 33 machine | Setup writes the DLL and `data\` under `%ProgramData%\obs-studio\plugins\obs-beauty-filter`, OBS lists **Beauty Filter**, and uninstalling removes only the plugin |
 
 ## 8. Benchmark guide — Intel i5-1235U
 
@@ -374,6 +375,27 @@ The plugin never reads back a full frame. CPU cost is only the 64×N grid (at mo
 - Run `beauty-face-region-test.exe`, `beauty-preset-test.exe` and `beauty-load-test.exe`; verify both HDR Rec.709 extended and scRGB on real hardware.
 - The headless test now covers scRGB; 16F readback can still differ between D3D11 and OpenGL, so confirm with a real HDR source/canvas.
 - When editing the effect, avoid single-scalar vector constructors such as `float3(x)`: libobs-d3d11's FXC rejects them with `X3014: incorrect number of arguments to numeric-type constructor`. Write `float3(x, x, x)` instead. The Linux/OpenGL compiler accepts both, so only the Windows CI catches this.
+
+### Installer smoke test
+
+Windows CI compiles `installer/obs-beauty-filter.iss` with Inno Setup 6 after
+packaging and then installs the setup silently into a temporary directory:
+
+```powershell
+.\obs-beauty-filter-1.5.0-windows-x64-setup.exe /VERYSILENT /SUPPRESSMSGBOXES `
+  /NORESTART /SP- /DIR=C:\temp\beauty-installer-test /LOG=install.log
+```
+
+It verifies `obs-beauty-filter.dll`, `data\beauty_filter.effect`,
+`data\locale\en-US.ini`, `data\locale\vi-VN.ini` and `unins000.exe`, runs the
+uninstaller silently, and confirms the DLL is gone.
+
+To reproduce locally without touching the real OBS installation, pass `/DIR`
+pointing at an empty directory. To exercise portable detection, use a real
+portable OBS tree (or a temporary tree containing `bin\64bit\obs64.exe` and
+`portable_mode.txt`) and pass `/OBSDIR=<tree>`; setup should install into
+`<tree>\plugins\obs-beauty-filter`. Running setup without either switch on a
+machine without OBS installs to `%ProgramData%\obs-studio\plugins`.
 
 ## 12. Suggested CI
 
