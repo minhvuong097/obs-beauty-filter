@@ -187,18 +187,18 @@ end;
 
 function InitializeSetup(): Boolean;
 var
-  Override: string;
+  ObsOverrideArg: string;
   DefaultDir: string;
 begin
   Result := True;
   ObsDir := '';
   ObsMajor := 0;
   ObsVersionKnown := False;
-  Override := '';
+  ObsOverrideArg := '';
   DefaultDir := '';
 
-  if GetCommandLineParam('/OBSDIR', Override) and AcceptObsDir(Override) then
-    ObsDir := Override
+  if GetCommandLineParam('/OBSDIR', ObsOverrideArg) and AcceptObsDir(ObsOverrideArg) then
+    ObsDir := ObsOverrideArg
   else
   begin
     ObsDir := TryObsDirFromRegistry();
