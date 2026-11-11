@@ -1,13 +1,13 @@
 # OBS Beauty Filter — brand assets
 
-The visual identity for **OBS Beauty Filter**: a six-blade camera aperture whose
-iris opening turns into a beauty sparkle.
+The visual identity for **OBS Beauty Filter**: an editorial serif wordmark
+anchored by a **B** monogram, with a rose-to-peach finish and a beauty sparkle.
 
 | | |
 |---|---|
-| Mark concept | A lens aperture (six rounded blades) with a glowing iris core and a highlight sparkle — the "beauty filter" moment where a camera lens becomes light. |
-| Personality | Precise, soft, modern. Studio tooling, not toy software. |
-| Wordmark | **Manrope** ExtraBold, tight tracking; `OBS` kicker in Bold with wide tracking. |
+| Mark concept | A high-contrast serif **B** (Beauty) in a rose→peach gradient on a deep-navy tile, finished with a four-point sparkle. Elegant first, technical second. |
+| Personality | Editorial, warm, premium. A beauty brand that happens to be a GPU filter. |
+| Wordmark | **Fraunces** SemiBold with tight tracking: `Beauty` in the accent gradient, `Filter` in ink or white, `OBS` as a letterspaced **Manrope** Bold kicker. |
 
 ## Files
 
@@ -37,8 +37,8 @@ for stamps, watermarks, embroidery and other one-colour reproduction.
 
 | Role | Hex | Notes |
 |---|---|---|
-| Rose (primary) | `#FF5C9E` | Left end of the aperture gradient, accents |
-| Peach (secondary) | `#FFB36B` | Right end of the gradient, iris glow |
+| Rose (primary) | `#FF5C9E` | Start of the monogram/wordmark gradient, accents |
+| Peach (secondary) | `#FFB36B` | End of the gradient, warm highlights |
 | Ink | `#0B1020` | Dark background / mono on light |
 | Ink raised | `#1A2340` | Tile gradient end |
 | Text on dark | `#F7F8FC` | Wordmark, dark theme |
@@ -46,9 +46,10 @@ for stamps, watermarks, embroidery and other one-colour reproduction.
 | Text on light | `#0D1424` | Wordmark, light theme |
 | Muted on light | `#5B6B8C` | `OBS` kicker, subtitles |
 
-The aperture gradient runs from `#FF6FA8` through `#FF5C9E` to `#FFB36B` on a
-`-170,-180 → 170,180` diagonal. Keep it diagonal; do not flatten it to one colour
-outside the mono variants.
+The accent gradient runs from `#FF5C9E` through `#FF7FA8` to `#FFB36B`. On the
+monogram it follows a `120,1450 → 1450,-120` diagonal in glyph units; on the
+`Beauty` wordmark it is horizontal. Keep it diagonal on the mark and do not
+flatten it to one colour outside the mono variants.
 
 ## Clearspace and minimum size
 
@@ -56,8 +57,12 @@ outside the mono variants.
   other logos) enters that zone.
 - Minimum sizes: icon **16 px**; horizontal lockup **120 px** wide; stacked
   lockup **96 px** wide. Below that, use the icon alone.
-- The tile corner radius is `118/512` (≈23%) of the tile. Keep the mark centred
-  and do not re-round, rotate or outline the tile.
+- The tile corner radius is `118/512` (≈23%) of the tile. Keep the monogram
+  optically centred (the generator centres the glyph bounds, not the advance
+  width) and do not re-round, rotate or outline the tile.
+- The `OBS` kicker is set in caps with `0.36 em` tracking and sits roughly one
+  cap-height above the wordmark. Do not lowercase it or merge it into the
+  wordmark.
 
 ## Usage
 
@@ -84,8 +89,10 @@ python3 tools/brand/gen.py        # needs fontTools; rsvg-convert for PNGs
 ```
 
 The generator writes `assets/brand/svg/` and, when `rsvg-convert` is installed,
-`assets/brand/png/`. All wordmark text is converted to paths, so the SVGs render
-identically without the font installed.
+`assets/brand/png/` (including the multi-resolution `icon.ico`). All wordmark
+text is converted to paths, so the SVGs render identically without the fonts
+installed. Fonts in `tools/brand/fonts/`: Fraunces SemiBold/Bold for the
+monogram and wordmark, Manrope Bold/SemiBold for the kicker and taglines.
 
 ## Licence
 
@@ -94,15 +101,19 @@ lockups, banner) are **not** covered by the GPL: they are © 2026
 minhvuong097, and you may use them unmodified to refer to this project
 (screenshots, reviews, tutorials, "works with OBS Beauty Filter" statements).
 Any other use, modified versions, or derived marks need written permission.
-Manrope is licensed under the SIL Open Font License 1.1 — see
-`tools/brand/fonts/OFL.txt`.
+Fraunces and Manrope are licensed under the SIL Open Font License 1.1 — see
+`tools/brand/fonts/OFL-Fraunces.txt` and `tools/brand/fonts/OFL.txt`.
 
 ---
 
 ## Tiếng Việt
 
-Logo là **khẩu độ sáu lá** của ống kính, phần mống mắt phát sáng thành tia
-sparkle — ẩn dụ "ống kính biến thành làn da đẹp".
+Logo là monogram **B** kiểu serif (Beauty) trên nền navy, tô gradient hồng→đào
+và điểm một tia sparkle; tên đầy đủ "OBS Beauty Filter" được set bằng serif
+Fraunces, với `OBS` là kicker chữ Manrope.
+
+- Tên đầy đủ luôn xuất hiện: `OBS` + `Beauty Filter`, không rút gọn thành "BF"
+  hay chỉ "Beauty".
 
 - Nền tối dùng `logo-horizontal-dark` / `logo-stacked-dark`; nền sáng dùng bản
   `light`; in một màu dùng bản `mono`.

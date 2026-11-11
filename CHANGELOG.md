@@ -9,7 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- **Brand identity.** A six-blade aperture mark with a glowing iris, plus app
+- **Brand identity.** An editorial identity built around the full product name:
+  a **B** monogram (Fraunces serif, rose→peach gradient, beauty sparkle) plus a
+  serif wordmark — `OBS` kicker, gradient `Beauty`, ink/white `Filter` — with app
   icon, horizontal/stacked lockups (dark, light, mono) and a hero banner.
   Sources live in `assets/brand/svg`, exports in `assets/brand/png`, and
   `tools/brand/gen.py` regenerates everything. See

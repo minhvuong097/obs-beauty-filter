@@ -1,32 +1,43 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="OBS Beauty Filter"><defs>
   <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
-    <stop offset="0" stop-color="#11182C"/>
-    <stop offset="1" stop-color="#1C2542"/>
+    <stop offset="0" stop-color="#121A31"/>
+    <stop offset="1" stop-color="#1D2745"/>
   </linearGradient>
-  <radialGradient id="tileGlow" cx="0.30" cy="0.22" r="0.85">
-    <stop offset="0" stop-color="#FF5C9E" stop-opacity="0.20"/>
-    <stop offset="0.55" stop-color="#FF5C9E" stop-opacity="0.05"/>
+  <radialGradient id="tileGlow" cx="0.28" cy="0.20" r="0.9">
+    <stop offset="0" stop-color="#FF5C9E" stop-opacity="0.22"/>
+    <stop offset="0.55" stop-color="#FF5C9E" stop-opacity="0.06"/>
     <stop offset="1" stop-color="#FF5C9E" stop-opacity="0"/>
   </radialGradient>
-  <linearGradient id="accent" x1="0.10" y1="0.05" x2="0.90" y2="1.00">
+  <linearGradient id="bgrad" gradientUnits="userSpaceOnUse"
+                  x1="120" y1="1450" x2="1450" y2="-120">
     <stop offset="0" stop-color="#FF5C9E"/>
-    <stop offset="0.55" stop-color="#FF8A8A"/>
+    <stop offset="0.55" stop-color="#FF7FA8"/>
     <stop offset="1" stop-color="#FFB36B"/>
   </linearGradient>
-  <linearGradient id="petalGrad" gradientUnits="userSpaceOnUse"
-                  x1="-170" y1="-180" x2="170" y2="180">
-    <stop offset="0" stop-color="#FF6FA8"/>
-    <stop offset="0.50" stop-color="#FF5C9E"/>
+  <linearGradient id="wgrad" gradientUnits="userSpaceOnUse"
+                  x1="0" y1="0" x2="6174.0" y2="0">
+    <stop offset="0" stop-color="#FF5C9E"/>
+    <stop offset="0.55" stop-color="#FF7FA8"/>
     <stop offset="1" stop-color="#FFB36B"/>
   </linearGradient>
-  <radialGradient id="markGlow" cx="0.5" cy="0.5" r="0.5">
-    <stop offset="0" stop-color="#FFB36B" stop-opacity="0.42"/>
-    <stop offset="0.45" stop-color="#FF5C9E" stop-opacity="0.20"/>
+  <radialGradient id="bgGlowA" cx="8%" cy="0%" r="78%">
+    <stop offset="0" stop-color="#FF5C9E" stop-opacity="0.26"/>
+    <stop offset="0.55" stop-color="#FF5C9E" stop-opacity="0.07"/>
     <stop offset="1" stop-color="#FF5C9E" stop-opacity="0"/>
   </radialGradient>
-  <radialGradient id="core" cx="0.38" cy="0.32" r="0.75">
-    <stop offset="0" stop-color="#FFFFFF"/>
-    <stop offset="0.45" stop-color="#FFE2C4"/>
-    <stop offset="1" stop-color="#FFB36B"/>
+  <radialGradient id="bgGlowB" cx="106%" cy="112%" r="62%">
+    <stop offset="0" stop-color="#FFB36B" stop-opacity="0.20"/>
+    <stop offset="0.6" stop-color="#FFB36B" stop-opacity="0.05"/>
+    <stop offset="1" stop-color="#FFB36B" stop-opacity="0"/>
   </radialGradient>
-</defs><g transform="translate(256 252) scale(1.0)"><circle r="150" fill="url(#markGlow)"/><path d="M 113.21 -121.40 A 166.0 166.0 0 0 1 161.75 -37.34 L 74.00 0.00 L 37.00 -64.09 Z" fill="url(#petalGrad)" stroke="url(#petalGrad)" stroke-width="4" stroke-linejoin="round"/><path d="M 117.40 -119.47 A 167.5 167.5 0 0 1 162.16 -41.94" fill="none" stroke="#FFFFFF" stroke-opacity="0.22" stroke-width="3.5" stroke-linecap="round"/><path d="M 161.75 37.34 A 166.0 166.0 0 0 1 113.21 121.40 L 37.00 64.09 L 74.00 0.00 Z" fill="url(#petalGrad)" stroke="url(#petalGrad)" stroke-width="4" stroke-linejoin="round"/><path d="M 162.16 41.94 A 167.5 167.5 0 0 1 117.40 119.47" fill="none" stroke="#FFFFFF" stroke-opacity="0.22" stroke-width="3.5" stroke-linecap="round"/><path d="M 48.53 158.75 A 166.0 166.0 0 0 1 -48.53 158.75 L -37.00 64.09 L 37.00 64.09 Z" fill="url(#petalGrad)" stroke="url(#petalGrad)" stroke-width="4" stroke-linejoin="round"/><path d="M 44.76 161.41 A 167.5 167.5 0 0 1 -44.76 161.41" fill="none" stroke="#FFFFFF" stroke-opacity="0.22" stroke-width="3.5" stroke-linecap="round"/><path d="M -113.21 121.40 A 166.0 166.0 0 0 1 -161.75 37.34 L -74.00 0.00 L -37.00 64.09 Z" fill="url(#petalGrad)" stroke="url(#petalGrad)" stroke-width="4" stroke-linejoin="round"/><path d="M -117.40 119.47 A 167.5 167.5 0 0 1 -162.16 41.94" fill="none" stroke="#FFFFFF" stroke-opacity="0.22" stroke-width="3.5" stroke-linecap="round"/><path d="M -161.75 -37.34 A 166.0 166.0 0 0 1 -113.21 -121.40 L -37.00 -64.09 L -74.00 0.00 Z" fill="url(#petalGrad)" stroke="url(#petalGrad)" stroke-width="4" stroke-linejoin="round"/><path d="M -162.16 -41.94 A 167.5 167.5 0 0 1 -117.40 -119.47" fill="none" stroke="#FFFFFF" stroke-opacity="0.22" stroke-width="3.5" stroke-linecap="round"/><path d="M -48.53 -158.75 A 166.0 166.0 0 0 1 48.53 -158.75 L 37.00 -64.09 L -37.00 -64.09 Z" fill="url(#petalGrad)" stroke="url(#petalGrad)" stroke-width="4" stroke-linejoin="round"/><path d="M -44.76 -161.41 A 167.5 167.5 0 0 1 44.76 -161.41" fill="none" stroke="#FFFFFF" stroke-opacity="0.22" stroke-width="3.5" stroke-linecap="round"/><circle r="26" fill="#0B1020"/><circle r="26" fill="url(#core)"/><path d="M 0.00 -42.00 Q 3.57 -3.57 42.00 0.00 Q 3.57 3.57 0.00 42.00 Q -3.57 3.57 -42.00 0.00 Q -3.57 -3.57 0.00 -42.00 Z" fill="#FFFFFF" opacity="0.97"/><path d="M 150.00 -117.00 Q 151.10 -105.11 163.00 -104.00 Q 151.10 -102.89 150.00 -91.00 Q 148.90 -102.89 137.00 -104.00 Q 148.90 -105.11 150.00 -117.00 Z" fill="#FFFFFF" opacity="0.9"/></g></svg>
+  <linearGradient id="wgradL" gradientUnits="userSpaceOnUse"
+                  x1="0" y1="0" x2="6174.0" y2="0">
+    <stop offset="0" stop-color="#E23A74"/>
+    <stop offset="0.55" stop-color="#F04A80"/>
+    <stop offset="1" stop-color="#FF7A4D"/>
+  </linearGradient>
+  <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#FF5C9E"/>
+    <stop offset="1" stop-color="#FFB36B"/>
+  </linearGradient>
+</defs><g transform="translate(256 252) scale(1.0)"><g transform="translate(-109.790 111.300) scale(0.159000 -0.159000)" fill="url(#bgrad)"><path transform="translate(0.00 0)" d="M1319 335Q1319 186 1196.5 93.0Q1074 0 828 0H115Q89 0 75.5 12.5Q62 25 62 47Q62 82 98 97L150 111Q176 120 186.5 134.0Q197 148 197 175V1233Q197 1256 187.5 1268.0Q178 1280 151 1289L98 1303Q62 1318 62 1353Q62 1375 75.5 1387.5Q89 1400 115 1400H646Q835 1400 968.0 1348.5Q1101 1297 1171.5 1205.0Q1242 1113 1242 992Q1242 892 1186.5 815.0Q1131 738 1026.0 694.5Q921 651 770 651L820 677Q973 677 1085.0 633.5Q1197 590 1258.0 513.0Q1319 436 1319 335ZM697 609H470V703H675Q754 703 808.0 733.5Q862 764 889.0 825.0Q916 886 916 978Q916 1077 878.0 1150.5Q840 1224 771.0 1264.0Q702 1304 608 1304H551V185Q551 140 576.5 118.0Q602 96 649 96H741Q813 96 864.0 127.0Q915 158 941.5 214.5Q968 271 968 349Q968 469 899.0 539.0Q830 609 697 609Z"/></g><path d="M 126.00 -149.00 Q 127.95 -127.95 149.00 -126.00 Q 127.95 -124.05 126.00 -103.00 Q 124.05 -124.05 103.00 -126.00 Q 124.05 -127.95 126.00 -149.00 Z" fill="#FFFFFF" opacity="0.92"/></g></svg>
