@@ -52,6 +52,8 @@ jobs:
 
       - name: Build, test and package
         shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File .github/scripts/build-windows-ci.ps1
 
       - name: Show package checksums

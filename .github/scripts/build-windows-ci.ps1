@@ -15,6 +15,7 @@ $BuildDir = Join-Path $RootDir "build"
 $PackageDir = Join-Path $RootDir "package"
 
 New-Item -ItemType Directory -Force -Path $CiDir | Out-Null
+$DepsZip = Join-Path $CiDir "windows-deps-$DepsVersion-x64.zip"
 
 function Download-File {
   param(
@@ -30,8 +31,59 @@ function Download-File {
   Invoke-WebRequest -Uri $Uri -OutFile $OutFile
 }
 
+# Downloads one asset of a GitHub release through the REST API instead of the
+# browser URL.  GitHub's CDN has returned HTTP 504 for individual release
+# assets while the API asset endpoint kept working, so this is our fallback.
+function Save-GitHubReleaseAsset {
+  param(
+    [Parameter(Mandatory = $true)][string]$Repo,
+    [Parameter(Mandatory = $true)][string]$Tag,
+    [Parameter(Mandatory = $true)][string]$Name,
+    [Parameter(Mandatory = $true)][string]$OutFile
+  )
+
+  if (Test-Path $OutFile) {
+    return
+  }
+
+  $Headers = @{ Accept = "application/vnd.github+json" }
+  if ($env:GITHUB_TOKEN) {
+    $Headers.Authorization = "Bearer $($env:GITHUB_TOKEN)"
+  }
+
+  $Release = Invoke-RestMethod -Headers $Headers `
+    -Uri "https://api.github.com/repos/$Repo/releases/tags/$Tag"
+  $Asset = $Release.assets | Where-Object { $_.name -eq $Name } |
+    Select-Object -First 1
+  if (-not $Asset) {
+    throw "Release asset $Name was not found in $Repo@$Tag"
+  }
+
+  $TempFile = "$OutFile.part"
+  Remove-Item -Force $TempFile -ErrorAction SilentlyContinue
+  Write-Host "Downloading $Name through the GitHub API ($($Asset.size) bytes)"
+  & curl.exe -fsSL --retry 3 --retry-delay 2 `
+    -H "Accept: application/octet-stream" `
+    -H "User-Agent: obs-beauty-filter-ci" `
+    -o $TempFile $Asset.url
+  if ($LASTEXITCODE -ne 0) {
+    Remove-Item -Force $TempFile -ErrorAction SilentlyContinue
+    throw "Failed to download $Name through the GitHub API"
+  }
+
+  if ($Asset.digest -and $Asset.digest.StartsWith("sha256:")) {
+    $Expected = $Asset.digest.Substring("sha256:".Length)
+    $Actual = (Get-FileHash -Algorithm SHA256 $TempFile).Hash.ToLowerInvariant()
+    if ($Actual -ne $Expected) {
+      Remove-Item -Force $TempFile
+      throw "Checksum mismatch for ${Name}: expected $Expected, got $Actual"
+    }
+  }
+
+  Move-Item -Force $TempFile $OutFile
+}
+
 if (-not (Test-Path (Join-Path $DepsDir "include"))) {
-  $DepsZip = Join-Path $CiDir "windows-deps-$DepsVersion-x64.zip"
   Download-File `
     -Uri "https://github.com/obsproject/obs-deps/releases/download/$DepsVersion/windows-deps-$DepsVersion-x64.zip" `
     -OutFile $DepsZip
@@ -51,6 +103,49 @@ if (-not (Test-Path (Join-Path $ObsSrcDir "CMakeLists.txt"))) {
     -Uri "https://github.com/obsproject/obs-studio/archive/refs/tags/$ObsVersion.zip" `
     -OutFile $ObsZip
   Expand-Archive -Path $ObsZip -DestinationPath $CiDir -Force
+}
+
+# OBS 33's Windows x64 configure unconditionally configures a Win32 child tree
+# (build_x86) for the virtual-camera and capture helpers, and that child pulls
+# the small x86 prebuilt deps archive even when only x64 targets are built.
+# GitHub's CDN has answered the browser download URL for that archive with HTTP
+# 504, so fetch it up front and seed OBS' .deps cache: buildspec.cmake reuses an
+# existing archive instead of downloading it again.
+$ObsDepsCache = Join-Path $ObsSrcDir ".deps"
+New-Item -ItemType Directory -Force -Path $ObsDepsCache | Out-Null
+
+$ObsX86DepsZip = Join-Path $ObsDepsCache "windows-deps-$DepsVersion-x86.zip"
+if (-not (Test-Path $ObsX86DepsZip)) {
+  $BrowserUri = "https://github.com/obsproject/obs-deps/releases/download/$DepsVersion/windows-deps-$DepsVersion-x86.zip"
+  $TempZip = "$ObsX86DepsZip.part"
+  $Downloaded = $false
+
+  for ($Attempt = 1; $Attempt -le 3 -and -not $Downloaded; $Attempt++) {
+    try {
+      Write-Host "Downloading $BrowserUri (attempt $Attempt)"
+      Invoke-WebRequest -Uri $BrowserUri -OutFile $TempZip -UseBasicParsing
+      $Downloaded = $true
+    } catch {
+      Remove-Item -Force $TempZip -ErrorAction SilentlyContinue
+      Write-Host "  attempt $Attempt failed: $($_.Exception.Message)"
+    }
+  }
+
+  if ($Downloaded) {
+    Move-Item -Force $TempZip $ObsX86DepsZip
+  } else {
+    Save-GitHubReleaseAsset -Repo "obsproject/obs-deps" -Tag $DepsVersion `
+      -Name "windows-deps-$DepsVersion-x86.zip" -OutFile $ObsX86DepsZip
+  }
+  Write-Host "Seeded $(Split-Path -Leaf $ObsX86DepsZip) into $ObsDepsCache"
+}
+
+# Reuse the x64 archive we already downloaded instead of letting OBS fetch the
+# same 64 MB file again from the release CDN.
+$ObsX64DepsZip = Join-Path $ObsDepsCache "windows-deps-$DepsVersion-x64.zip"
+if (-not (Test-Path $ObsX64DepsZip) -and (Test-Path $DepsZip)) {
+  Copy-Item $DepsZip $ObsX64DepsZip
+  Write-Host "Seeded $(Split-Path -Leaf $ObsX64DepsZip) into $ObsDepsCache"
 }
 
 # OBS 33 installs libobsConfig.cmake into <prefix>/cmake on Windows (the
@@ -231,6 +326,12 @@ $InstallProc = Start-Process -FilePath $SetupPath -Wait -PassThru -ArgumentList 
 )
 if ($InstallProc.ExitCode -ne 0) {
   throw "Silent installer run failed with exit code $($InstallProc.ExitCode). See $SmokeLog"
+}
+
+# Give the installer a moment to flush its files in case an elevated child
+# process outlives the launcher on a runner with UAC enabled.
+for ($i = 0; $i -lt 60 -and -not (Test-Path (Join-Path $SmokeDir "obs-beauty-filter.dll")); $i++) {
+  Start-Sleep -Milliseconds 500
 }
 
 $ExpectedFiles = @(
