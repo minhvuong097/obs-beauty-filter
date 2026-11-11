@@ -22,6 +22,11 @@ assets/brand/
 │   ├── logo-stacked-mono-{white,black}.svg
 │   └── banner.svg                    # 1280×640 hero / social preview
 └── png/                              # convenience exports of the SVGs
+    ├── icon-{512,256,128,64,48,32,16}.png
+    ├── icon.ico                      # 16–256 px, used by the Windows installer
+    ├── logo-horizontal-*.png
+    ├── logo-stacked-*.png
+    └── banner.png / social-preview.png
 ```
 
 `dark` variants have light text and are for dark backgrounds; `light` variants
