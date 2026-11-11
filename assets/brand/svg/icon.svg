@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="OBS Beauty Filter"><defs>
+  <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#11182C"/>
+    <stop offset="1" stop-color="#1C2542"/>
+  </linearGradient>
+  <radialGradient id="tileGlow" cx="0.30" cy="0.22" r="0.85">
+    <stop offset="0" stop-color="#FF5C9E" stop-opacity="0.20"/>
+    <stop offset="0.55" stop-color="#FF5C9E" stop-opacity="0.05"/>
+    <stop offset="1" stop-color="#FF5C9E" stop-opacity="0"/>
+  </radialGradient>
+  <linearGradient id="accent" x1="0.10" y1="0.05" x2="0.90" y2="1.00">
+    <stop offset="0" stop-color="#FF5C9E"/>
+    <stop offset="0.55" stop-color="#FF8A8A"/>
+    <stop offset="1" stop-color="#FFB36B"/>
+  </linearGradient>
+  <linearGradient id="petalGrad" gradientUnits="userSpaceOnUse"
+                  x1="-170" y1="-180" x2="170" y2="180">
+    <stop offset="0" stop-color="#FF6FA8"/>
+    <stop offset="0.50" stop-color="#FF5C9E"/>
+    <stop offset="1" stop-color="#FFB36B"/>
+  </linearGradient>
+  <radialGradient id="markGlow" cx="0.5" cy="0.5" r="0.5">
+    <stop offset="0" stop-color="#FFB36B" stop-opacity="0.42"/>
+    <stop offset="0.45" stop-color="#FF5C9E" stop-opacity="0.20"/>
+    <stop offset="1" stop-color="#FF5C9E" stop-opacity="0"/>
+  </radialGradient>
+  <radialGradient id="core" cx="0.38" cy="0.32" r="0.75">
+    <stop offset="0" stop-color="#FFFFFF"/>
+    <stop offset="0.45" stop-color="#FFE2C4"/>
+    <stop offset="1" stop-color="#FFB36B"/>
+  </radialGradient>
+</defs><g transform="translate(0 0) scale(1.0)"><rect x="6" y="6" width="500" height="500" rx="118" fill="url(#tile)"/><rect x="6" y="6" width="500" height="500" rx="118" fill="none" stroke="#FFFFFF" stroke-opacity="0.06" stroke-width="3"/><circle cx="256" cy="250" r="240" fill="url(#tileGlow)"/><g transform="translate(256 252) scale(1.0)"><circle r="150" fill="url(#markGlow)"/><path d="M 113.21 -121.40 A 166.0 166.0 0 0 1 161.75 -37.34 L 74.00 0.00 L 37.00 -64.09 Z" fill="url(#petalGrad)" stroke="url(#petalGrad)" stroke-width="4" stroke-linejoin="round"/><path d="M 117.40 -119.47 A 167.5 167.5 0 0 1 162.16 -41.94" fill="none" stroke="#FFFFFF" stroke-opacity="0.22" stroke-width="3.5" stroke-linecap="round"/><path d="M 161.75 37.34 A 166.0 166.0 0 0 1 113.21 121.40 L 37.00 64.09 L 74.00 0.00 Z" fill="url(#petalGrad)" stroke="url(#petalGrad)" stroke-width="4" stroke-linejoin="round"/><path d="M 162.16 41.94 A 167.5 167.5 0 0 1 117.40 119.47" fill="none" stroke="#FFFFFF" stroke-opacity="0.22" stroke-width="3.5" stroke-linecap="round"/><path d="M 48.53 158.75 A 166.0 166.0 0 0 1 -48.53 158.75 L -37.00 64.09 L 37.00 64.09 Z" fill="url(#petalGrad)" stroke="url(#petalGrad)" stroke-width="4" stroke-linejoin="round"/><path d="M 44.76 161.41 A 167.5 167.5 0 0 1 -44.76 161.41" fill="none" stroke="#FFFFFF" stroke-opacity="0.22" stroke-width="3.5" stroke-linecap="round"/><path d="M -113.21 121.40 A 166.0 166.0 0 0 1 -161.75 37.34 L -74.00 0.00 L -37.00 64.09 Z" fill="url(#petalGrad)" stroke="url(#petalGrad)" stroke-width="4" stroke-linejoin="round"/><path d="M -117.40 119.47 A 167.5 167.5 0 0 1 -162.16 41.94" fill="none" stroke="#FFFFFF" stroke-opacity="0.22" stroke-width="3.5" stroke-linecap="round"/><path d="M -161.75 -37.34 A 166.0 166.0 0 0 1 -113.21 -121.40 L -37.00 -64.09 L -74.00 0.00 Z" fill="url(#petalGrad)" stroke="url(#petalGrad)" stroke-width="4" stroke-linejoin="round"/><path d="M -162.16 -41.94 A 167.5 167.5 0 0 1 -117.40 -119.47" fill="none" stroke="#FFFFFF" stroke-opacity="0.22" stroke-width="3.5" stroke-linecap="round"/><path d="M -48.53 -158.75 A 166.0 166.0 0 0 1 48.53 -158.75 L 37.00 -64.09 L -37.00 -64.09 Z" fill="url(#petalGrad)" stroke="url(#petalGrad)" stroke-width="4" stroke-linejoin="round"/><path d="M -44.76 -161.41 A 167.5 167.5 0 0 1 44.76 -161.41" fill="none" stroke="#FFFFFF" stroke-opacity="0.22" stroke-width="3.5" stroke-linecap="round"/><circle r="26" fill="#0B1020"/><circle r="26" fill="url(#core)"/><path d="M 0.00 -42.00 Q 3.57 -3.57 42.00 0.00 Q 3.57 3.57 0.00 42.00 Q -3.57 3.57 -42.00 0.00 Q -3.57 -3.57 0.00 -42.00 Z" fill="#FFFFFF" opacity="0.97"/><path d="M 150.00 -117.00 Q 151.10 -105.11 163.00 -104.00 Q 151.10 -102.89 150.00 -91.00 Q 148.90 -102.89 137.00 -104.00 Q 148.90 -105.11 150.00 -117.00 Z" fill="#FFFFFF" opacity="0.9"/></g></g></svg>

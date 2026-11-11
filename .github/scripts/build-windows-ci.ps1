@@ -339,6 +339,7 @@ $ExpectedFiles = @(
   "data\beauty_filter.effect",
   "data\locale\en-US.ini",
   "data\locale\vi-VN.ini",
+  "obs-beauty-filter.ico",
   "unins000.exe"
 )
 foreach ($RelativePath in $ExpectedFiles) {

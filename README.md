@@ -1,6 +1,12 @@
-# OBS Beauty Filter
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/brand/png/logo-horizontal-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="assets/brand/png/logo-horizontal-light.png">
+    <img alt="OBS Beauty Filter" src="assets/brand/png/logo-horizontal-dark.png" width="420">
+  </picture>
+</p>
 
-**[English](README.en.md) | Tiếng Việt**
+<p align="center"><a href="README.en.md">English</a> | <strong>Tiếng Việt</strong></p>
 
 [![Build](https://github.com/minhvuong097/obs-beauty-filter/actions/workflows/build.yml/badge.svg)](https://github.com/minhvuong097/obs-beauty-filter/actions/workflows/build.yml)
 [![Latest release](https://img.shields.io/github/v/release/minhvuong097/obs-beauty-filter?display_name=tag)](https://github.com/minhvuong097/obs-beauty-filter/releases/latest)
@@ -68,6 +74,8 @@ obs-beauty-filter/
 │   └── COMPATIBILITY.md     # + COMPATIBILITY.en.md
 ├── installer/
 │   └── obs-beauty-filter.iss # script Inno Setup cho bộ cài Windows
+├── assets/brand/             # logo, icon, lockup, banner
+├── tools/brand/gen.py        # sinh lại bộ nhận diện
 └── scripts/
     ├── build-linux.sh
     └── build-windows.ps1
@@ -421,6 +429,13 @@ Test integration kiểm tra: filter mặc định, skin mask, opacity 0, teeth/e
 Xem [CHANGELOG.md](CHANGELOG.md) cho ghi chú phát hành và
 [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) cho ma trận OBS, nền tảng và
 không gian màu đã kiểm thử.
+
+## Bộ nhận diện
+
+Logo, icon và các lockup ngang/dọc nằm trong [`assets/brand`](assets/brand), kèm
+hướng dẫn dùng ngắn ([`assets/brand/README.md`](assets/brand/README.md)) về màu,
+khoảng trống, kích thước tối thiểu và các biến thể mono/sáng/tối. Bộ nhận diện
+**không** thuộc GPL — đọc hướng dẫn trước khi dùng lại.
 
 ## Giấy phép
 

@@ -47,11 +47,12 @@ OutputBaseFilename=obs-beauty-filter-{#PluginVersion}-windows-x64-setup
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
+SetupIconFile=..\assets\brand\png\icon.ico
 LicenseFile=..\LICENSE
 CloseApplications=yes
 RestartApplications=no
 UninstallDisplayName={#PluginDisplayName}
-UninstallDisplayIcon={app}\{#PluginName}.dll
+UninstallDisplayIcon={app}\obs-beauty-filter.ico
 SetupLogging=yes
 UsePreviousAppDir=yes
 
@@ -65,6 +66,7 @@ en.LaunchObs=Launch OBS Studio
 
 [Files]
 Source: "{#PluginPackageDir}\{#PluginName}.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\assets\brand\png\icon.ico"; DestDir: "{app}"; DestName: "obs-beauty-filter.ico"; Flags: ignoreversion
 Source: "{#PluginPackageDir}\data\*"; DestDir: "{app}\data"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [UninstallDelete]

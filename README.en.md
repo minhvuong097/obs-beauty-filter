@@ -1,6 +1,12 @@
-# OBS Beauty Filter
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/brand/png/logo-horizontal-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="assets/brand/png/logo-horizontal-light.png">
+    <img alt="OBS Beauty Filter" src="assets/brand/png/logo-horizontal-dark.png" width="420">
+  </picture>
+</p>
 
-**English | [Tiếng Việt](README.md)**
+<p align="center"><strong>English</strong> | <a href="README.md">Tiếng Việt</a></p>
 
 [![Build](https://github.com/minhvuong097/obs-beauty-filter/actions/workflows/build.yml/badge.svg)](https://github.com/minhvuong097/obs-beauty-filter/actions/workflows/build.yml)
 [![Latest release](https://img.shields.io/github/v/release/minhvuong097/obs-beauty-filter?display_name=tag)](https://github.com/minhvuong097/obs-beauty-filter/releases/latest)
@@ -68,6 +74,8 @@ obs-beauty-filter/
 │   └── COMPATIBILITY.md     # + COMPATIBILITY.en.md
 ├── installer/
 │   └── obs-beauty-filter.iss # Inno Setup source for the Windows installer
+├── assets/brand/             # logo, icon, lockups, banner
+├── tools/brand/gen.py        # regenerates the brand kit
 └── scripts/
     ├── build-linux.sh
     └── build-windows.ps1
@@ -424,6 +432,14 @@ The integration test covers: default filter output, skin mask, opacity 0, teeth/
 See [CHANGELOG.md](CHANGELOG.md) for release notes and
 [docs/COMPATIBILITY.en.md](docs/COMPATIBILITY.en.md) for the tested OBS,
 platform and colour-space matrix.
+
+## Brand assets
+
+Logo, app icon and horizontal/stacked lockups live in
+[`assets/brand`](assets/brand), together with a short usage guide
+([`assets/brand/README.md`](assets/brand/README.md)) covering colours,
+clearspace, minimum sizes and the mono/dark/light variants. The brand assets are
+not covered by the GPL — see that guide before reusing them.
 
 ## License
 

@@ -5,6 +5,20 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Brand identity.** A six-blade aperture mark with a glowing iris, plus app
+  icon, horizontal/stacked lockups (dark, light, mono) and a hero banner.
+  Sources live in `assets/brand/svg`, exports in `assets/brand/png`, and
+  `tools/brand/gen.py` regenerates everything. See
+  [`assets/brand/README.md`](assets/brand/README.md) for the palette,
+  clearspace and usage rules.
+- **Installer branding.** The Windows setup now uses the app icon
+  (`SetupIconFile`) and ships `obs-beauty-filter.ico` so the entry in **Apps &
+  Features** and the uninstaller show the real logo.
+
 ## [1.5.0] - 2026-11-11
 
 ### Added
