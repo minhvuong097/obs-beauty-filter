@@ -198,7 +198,7 @@ def wordmark(size, x, baseline, name_color, prefix_color, prefix_opacity=None):
     return body, prefix_w + (nx1 - nx0)
 
 
-def horizontal(name_color, prefix_color, mono=None, icon_size=116, gap=26, pad=10,
+def horizontal(name_color, prefix_color, mono=None, icon_size=116, gap=26, pad=12,
                name_size=58):
     height = icon_size + 2 * pad
     cap = extra_bold.cap * name_size / extra_bold.upem
@@ -206,7 +206,7 @@ def horizontal(name_color, prefix_color, mono=None, icon_size=116, gap=26, pad=1
     tx = pad + icon_size + gap
     body, text_w = wordmark(name_size, tx, baseline, name_color, prefix_color,
                             0.72 if mono else None)
-    width = int(round(tx + text_w + pad + 8))
+    width = int(round(tx + text_w + pad))
     contrast = white_or_ink(mono)
     svg = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
