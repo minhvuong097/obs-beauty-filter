@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
-"""Generate the OBS Beauty Filter brand kit: serif wordmark + B monogram."""
+"""Generate the OBS Beauty Filter brand kit.
+
+The mark is the six-petal aperture flower; the wordmark is the full product
+name set on a single line next to it (Manrope, OFL).
+
+    python3 tools/brand/gen.py
+
+Needs fontTools. When ``rsvg-convert`` is on PATH the PNG/ICO exports are
+regenerated too.
+"""
 import os
 import shutil
 import struct
@@ -8,8 +17,8 @@ import sys
 import zlib
 
 from fontTools.pens.boundsPen import BoundsPen
-from fontTools.ttLib import TTFont
 from fontTools.pens.svgPathPen import SVGPathPen
+from fontTools.ttLib import TTFont
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
@@ -17,271 +26,279 @@ OUT_SVG = os.path.join(ROOT, "assets", "brand", "svg")
 OUT_PNG = os.path.join(ROOT, "assets", "brand", "png")
 FONT_DIR = os.path.join(HERE, "fonts")
 
-ROSE = "#FF5C9E"
-ROSE_LIGHT = "#FF7FA8"
-PEACH = "#FFB36B"
-TEXT = "#F7F8FC"
-MUTED = "#93A5C7"
-LIGHT_TEXT = "#0D1424"
-LIGHT_MUTED = "#5B6B8C"
+# ── palette ────────────────────────────────────────────────────────────────
+TILE_IN = "#1D1145"
+TILE_OUT = "#0A0720"
+PETALS = ["#FF7AB8", "#FF9A62", "#FFD36B", "#5EEAD4", "#6EA8FF", "#B14CF2"]
+CORE = "#120C2A"
+WHITE = "#F7F8FC"
+MUTED = "#A9B3D6"
+INK = "#0D1424"
+MUTED_LIGHT = "#5B6B8C"
+
+PETAL_D = "M100 100 C114 80 136 56 100 32 C64 56 86 80 100 100 Z"
+SPARK_D = (
+    "M100 93 C100.84 98.32 101.68 99.16 107 100 C101.68 100.84 "
+    "100.84 101.68 100 107 C99.16 101.68 98.32 100.84 93 100 "
+    "C98.32 99.16 99.16 98.32 100 93 Z"
+)
+# The source artwork is drawn on a 184×184 tile inside a 200×200 box.
+TILE_BOX = 184.0
+TILE_ORIGIN = -8.0
 
 
-class WM:
+class Typeface:
+    """A static font with SVG path extraction and real ink metrics."""
+
     def __init__(self, filename):
         self.tt = TTFont(os.path.join(FONT_DIR, filename))
         self.upem = self.tt["head"].unitsPerEm
+        self.cap = self.tt["OS/2"].sCapHeight
         self.cmap = self.tt.getBestCmap()
         self.gs = self.tt.getGlyphSet()
         self.hmtx = self.tt["hmtx"]
 
-    def width_units(self, text, tracking_em=0.0):
+    def _runs(self, text, tracking_em):
         penx = 0.0
         for ch in text:
-            g = self.cmap.get(ord(ch))
-            if g:
-                penx += self.hmtx[g][0] + tracking_em * self.upem
-        return penx - (tracking_em * self.upem if text else 0)
+            name = self.cmap.get(ord(ch))
+            if name is not None:
+                yield name, penx
+            penx += self.hmtx[name][0] + tracking_em * self.upem
 
-    def body(self, text, size, x, y, fill, tracking_em=0.0):
+    def advance(self, text, size, tracking_em=0.0):
+        units = 0.0
+        for ch in text:
+            name = self.cmap.get(ord(ch))
+            if name:
+                units += self.hmtx[name][0] + tracking_em * self.upem
+        if text:
+            units -= tracking_em * self.upem
+        return units * size / self.upem
+
+    def ink(self, text, size, tracking_em=0.0):
+        """Ink box in px relative to the pen origin: (x0, y0, x1, y1)."""
         s = size / self.upem
-        penx = 0.0
+        x0 = y0 = 1e9
+        x1 = y1 = -1e9
+        for name, dx in self._runs(text, tracking_em):
+            pen = BoundsPen(self.gs)
+            self.gs[name].draw(pen)
+            if not pen.bounds:
+                continue
+            gx0, gy0, gx1, gy1 = pen.bounds
+            x0 = min(x0, (dx + gx0) * s)
+            x1 = max(x1, (dx + gx1) * s)
+            y0 = min(y0, gy0 * s)
+            y1 = max(y1, gy1 * s)
+        return x0, y0, x1, y1
+
+    def draw(self, text, size, x, y, fill, tracking_em=0.0, opacity=None):
+        s = size / self.upem
+        alpha = f' fill-opacity="{opacity}"' if opacity is not None else ""
         out = [
             f'<g transform="translate({x:.3f} {y:.3f}) scale({s:.6f} -{s:.6f})" '
-            f'fill="{fill}">'
+            f'fill="{fill}"{alpha}>'
         ]
-        for ch in text:
-            g = self.cmap.get(ord(ch))
-            if g is None:
-                continue
+        for name, dx in self._runs(text, tracking_em):
             pen = SVGPathPen(self.gs)
-            self.gs[g].draw(pen)
+            self.gs[name].draw(pen)
             d = pen.getCommands()
             if d:
-                out.append(f'<path transform="translate({penx:.2f} 0)" d="{d}"/>')
-            penx += self.hmtx[g][0] + tracking_em * self.upem
+                out.append(f'<path transform="translate({dx:.2f} 0)" d="{d}"/>')
         out.append("</g>")
-        return "".join(out), penx * s
-
-    def grad(self, gid, width_units):
-        return (
-            f'<linearGradient id="{gid}" gradientUnits="userSpaceOnUse" '
-            f'x1="0" y1="0" x2="{width_units:.1f}" y2="0">'
-            f'<stop offset="0" stop-color="{ROSE}"/>'
-            f'<stop offset="0.55" stop-color="{ROSE_LIGHT}"/>'
-            f'<stop offset="1" stop-color="{PEACH}"/>'
-            f"</linearGradient>"
-        )
+        return "".join(out)
 
 
-fraunces = WM("Fraunces-600.ttf")
-fraunces_b = WM("Fraunces-700.ttf")
-manrope_b = WM("Manrope-Bold.ttf")
-manrope_sb = WM("Manrope-SemiBold.ttf")
+extra_bold = Typeface("Manrope-ExtraBold.ttf")
+bold = Typeface("Manrope-Bold.ttf")
+semi_bold = Typeface("Manrope-SemiBold.ttf")
 
-WORD = "Beauty Filter"
-WORD_TRACK = -0.012
-WORD_UNITS = fraunces.width_units(WORD, WORD_TRACK)
-BEAUTY_UNITS = fraunces.width_units("Beauty", WORD_TRACK)
-
-def sparkle(cx, cy, s, fill, opacity=1.0):
-    q = s * 0.085
-    d = (
-        f"M {cx:.2f} {cy - s:.2f} "
-        f"Q {cx + q:.2f} {cy - q:.2f} {cx + s:.2f} {cy:.2f} "
-        f"Q {cx + q:.2f} {cy + q:.2f} {cx:.2f} {cy + s:.2f} "
-        f"Q {cx - q:.2f} {cy + q:.2f} {cx - s:.2f} {cy:.2f} "
-        f"Q {cx - q:.2f} {cy - q:.2f} {cx:.2f} {cy - s:.2f} Z"
-    )
-    return f'<path d="{d}" fill="{fill}" opacity="{opacity}"/>'
+NAME = "Beauty Filter"
+NAME_TRACK = -0.02
+PREFIX = "OBS "
+PREFIX_TRACK = 0.01
 
 
 DEFS = f"""<defs>
   <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
-    <stop offset="0" stop-color="#121A31"/>
-    <stop offset="1" stop-color="#1D2745"/>
+    <stop offset="0" stop-color="{TILE_IN}"/>
+    <stop offset="1" stop-color="{TILE_OUT}"/>
   </linearGradient>
-  <radialGradient id="tileGlow" cx="0.28" cy="0.20" r="0.9">
-    <stop offset="0" stop-color="{ROSE}" stop-opacity="0.22"/>
-    <stop offset="0.55" stop-color="{ROSE}" stop-opacity="0.06"/>
-    <stop offset="1" stop-color="{ROSE}" stop-opacity="0"/>
-  </radialGradient>
-  <linearGradient id="bgrad" gradientUnits="userSpaceOnUse"
-                  x1="120" y1="1450" x2="1450" y2="-120">
-    <stop offset="0" stop-color="{ROSE}"/>
-    <stop offset="0.55" stop-color="{ROSE_LIGHT}"/>
-    <stop offset="1" stop-color="{PEACH}"/>
+  <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.30"/>
+    <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
   </linearGradient>
-  <linearGradient id="wgrad" gradientUnits="userSpaceOnUse"
-                  x1="0" y1="0" x2="{BEAUTY_UNITS:.1f}" y2="0">
-    <stop offset="0" stop-color="{ROSE}"/>
-    <stop offset="0.55" stop-color="{ROSE_LIGHT}"/>
-    <stop offset="1" stop-color="{PEACH}"/>
-  </linearGradient>
-  <radialGradient id="bgGlowA" cx="8%" cy="0%" r="78%">
-    <stop offset="0" stop-color="{ROSE}" stop-opacity="0.26"/>
-    <stop offset="0.55" stop-color="{ROSE}" stop-opacity="0.07"/>
-    <stop offset="1" stop-color="{ROSE}" stop-opacity="0"/>
-  </radialGradient>
-  <radialGradient id="bgGlowB" cx="106%" cy="112%" r="62%">
-    <stop offset="0" stop-color="{PEACH}" stop-opacity="0.20"/>
-    <stop offset="0.6" stop-color="{PEACH}" stop-opacity="0.05"/>
-    <stop offset="1" stop-color="{PEACH}" stop-opacity="0"/>
-  </radialGradient>
-  <linearGradient id="wgradL" gradientUnits="userSpaceOnUse"
-                  x1="0" y1="0" x2="{BEAUTY_UNITS:.1f}" y2="0">
-    <stop offset="0" stop-color="#E23A74"/>
-    <stop offset="0.55" stop-color="#F04A80"/>
-    <stop offset="1" stop-color="#FF7A4D"/>
-  </linearGradient>
-  <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
-    <stop offset="0" stop-color="{ROSE}"/>
-    <stop offset="1" stop-color="{PEACH}"/>
-  </linearGradient>
+  <clipPath id="tileClip">
+    <rect x="8" y="8" width="184" height="184" rx="46"/>
+  </clipPath>
 </defs>"""
 
 
-def mark(cx=256, cy=252, scale=1.0, mono=None):
-    """Serif B monogram inside a thin lens ring, with a beauty sparkle."""
-    g = [f'<g transform="translate({cx} {cy}) scale({scale})">']
-
-    if mono:
-        b_fill = mono
-        ring = mono
-    else:
-        b_fill = "url(#bgrad)"
-        ring = "url(#bgrad)"
-
-    size = 318.0
-    s_ = size / fraunces_b.upem
-    bp = BoundsPen(fraunces_b.gs)
-    fraunces_b.gs[fraunces_b.cmap[ord("B")]].draw(bp)
-    xmin, ymin, xmax, ymax = bp.bounds
-    bx = -s_ * (xmin + xmax) / 2.0
-    by = s_ * (ymin + ymax) / 2.0
-    body, _ = fraunces_b.body("B", size, bx, by, b_fill, 0)
-    g.append(body)
-    g.append(sparkle(126, -126, 23, "#FFFFFF" if not mono else mono, 0.92))
-    g.append("</g>")
-    return "".join(g)
-
-
-def icon(size=512, x=0, y=0, mono=None):
-    k = size / 512.0
-    g = [f'<g transform="translate({x} {y}) scale({k})">']
-    if not mono:
-        g.append('<rect x="6" y="6" width="500" height="500" rx="118" fill="url(#tile)"/>')
-        g.append(
-            '<rect x="6" y="6" width="500" height="500" rx="118" fill="none" '
-            'stroke="#FFFFFF" stroke-opacity="0.07" stroke-width="3"/>'
-        )
-        g.append(
-            '<rect x="6" y="6" width="500" height="500" rx="118" fill="url(#tileGlow)"/>'
-        )
-    g.append(mark(mono=mono))
-    g.append("</g>")
-    return "".join(g)
-
-
-def horizontal(text_color, muted_color, kicker_color=None, mono=None,
-               word_grad="wgrad"):
-    pad = 8
-    icon_size = 132
-    gap = 30
-    name_size = 62
-    kicker_size = 17
-
-    tx = pad + icon_size + gap
-    name_y = pad + 118
-    kicker_y = pad + 50
-    kicker_color = kicker_color or muted_color
-
-    if mono:
-        body, word_w = fraunces.body(WORD, name_size, tx, name_y, mono, WORD_TRACK)
-    else:
-        b1, w1 = fraunces.body("Beauty", name_size, tx, name_y, f"url(#{word_grad})", WORD_TRACK)
-        b2, w2 = fraunces.body(" Filter", name_size, tx + w1, name_y, text_color, WORD_TRACK)
-        body, word_w = b1 + b2, w1 + w2
-    kicker, kicker_w = manrope_b.body("OBS", kicker_size, tx + 2, kicker_y,
-                                      kicker_color, 0.36)
-
-    width = int(tx + max(word_w, kicker_w) + pad + 10)
-    height = icon_size + 2 * pad
-
+def icon(size, x=0, y=0, mono=None, contrast="#FFFFFF"):
+    """The aperture flower on its tile. ``mono`` renders a one-colour mark."""
+    k = size / TILE_BOX
     parts = [
+        f'<g transform="translate({x} {y}) scale({k:.6f}) translate({TILE_ORIGIN} {TILE_ORIGIN})">'
+    ]
+    if mono:
+        # one-colour mark: solid flower with the iris knocked out
+        parts.append(
+            "".join(
+                f'<path d="{PETAL_D}" fill="{mono}" transform="rotate({i * 60} 100 100)"/>'
+                for i in range(6)
+            )
+        )
+        parts.append(f'<circle cx="100" cy="100" r="11" fill="{contrast}"/>')
+        parts.append(f'<path d="{SPARK_D}" fill="{mono}"/>')
+    else:
+        parts.append('<rect x="8" y="8" width="184" height="184" rx="46" fill="url(#tile)"/>')
+        parts.append(
+            '<g clip-path="url(#tileClip)"><rect x="8" y="8" width="184" height="86" '
+            'fill="url(#gloss)"/></g>'
+        )
+        parts.append(
+            '<rect x="8.75" y="8.75" width="182.5" height="182.5" rx="45.5" fill="none" '
+            'stroke="#FFFFFF" stroke-opacity="0.12" stroke-width="1.5"/>'
+        )
+        for i, colour in enumerate(PETALS):
+            parts.append(
+                f'<path d="{PETAL_D}" fill="{colour}" fill-opacity="0.92" '
+                f'transform="rotate({i * 60} 100 100)"/>'
+            )
+        parts.append(f'<circle cx="100" cy="100" r="11" fill="{CORE}"/>')
+        parts.append(f'<path d="{SPARK_D}" fill="{contrast}"/>')
+    parts.append("</g>")
+    return "".join(parts)
+
+
+def flower(size, x=0, y=0, mono=None, contrast="#FFFFFF"):
+    """The flower alone, no tile, filling a square of ``size``."""
+    k = size / 150.0
+    parts = [f'<g transform="translate({x + size / 2:.3f} {y + size / 2:.3f}) '
+             f'scale({k:.6f}) translate(-100 -100)">']
+    for i, colour in enumerate(PETALS):
+        fill = mono or colour
+        opacity = "" if mono else ' fill-opacity="0.92"'
+        parts.append(
+            f'<path d="{PETAL_D}" fill="{fill}"{opacity} transform="rotate({i * 60} 100 100)"/>'
+        )
+    parts.append(f'<circle cx="100" cy="100" r="11" fill="{mono and contrast or CORE}"/>')
+    parts.append(f'<path d="{SPARK_D}" fill="{mono or "#FFFFFF"}"/>')
+    parts.append("</g>")
+    return "".join(parts)
+
+
+def wordmark(size, x, baseline, name_color, prefix_color, prefix_opacity=None):
+    """`OBS Beauty Filter` on one baseline; returns (svg, ink width)."""
+    nx0, _, nx1, _ = extra_bold.ink(NAME, size, NAME_TRACK)
+    prefix_w = bold.advance(PREFIX, size, PREFIX_TRACK)
+    body = bold.draw(PREFIX, size, x, baseline, prefix_color, PREFIX_TRACK, prefix_opacity)
+    body += extra_bold.draw(NAME, size, x + prefix_w - nx0, baseline, name_color, NAME_TRACK)
+    return body, prefix_w + (nx1 - nx0)
+
+
+def horizontal(name_color, prefix_color, mono=None, icon_size=116, gap=26, pad=10,
+               name_size=58):
+    height = icon_size + 2 * pad
+    cap = extra_bold.cap * name_size / extra_bold.upem
+    baseline = pad + icon_size / 2 + cap / 2
+    tx = pad + icon_size + gap
+    body, text_w = wordmark(name_size, tx, baseline, name_color, prefix_color,
+                            0.72 if mono else None)
+    width = int(round(tx + text_w + pad + 8))
+    contrast = white_or_ink(mono)
+    svg = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
         f'viewBox="0 0 {width} {height}" role="img" aria-label="OBS Beauty Filter">',
         DEFS,
-        icon(icon_size, pad, pad, mono=mono),
-        kicker,
+        icon(icon_size, pad, pad, mono=mono, contrast=contrast),
         body,
         "</svg>",
     ]
-    return "\n".join(parts)
+    return "\n".join(svg)
 
 
-def stacked(text_color, muted_color, kicker_color=None, mono=None,
-            word_grad="wgrad"):
-    size, icon_size, name_size = 600, 196, 58
-    icon_x = (size - icon_size) / 2
-    kicker_color = kicker_color or muted_color
+def white_or_ink(mono):
+    """Sparkle colour that contrasts with a one-colour mark."""
+    if mono in ("#FFFFFF", "#F7F8FC"):
+        return TILE_OUT
+    return "#FFFFFF"
 
-    word_w = fraunces.width_units(WORD, WORD_TRACK) * name_size / fraunces.upem
-    kicker_w = manrope_b.width_units("OBS", 0.36) * 17 / manrope_b.upem
 
-    parts = [
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="400" '
-        f'viewBox="0 0 {size} 400" role="img" aria-label="OBS Beauty Filter">',
+def stacked(name_color, prefix_color, mono=None):
+    width, icon_size, name_size = 640, 168, 46
+    cap = extra_bold.cap * name_size / extra_bold.upem
+    nx0, _, nx1, _ = extra_bold.ink(NAME, name_size, NAME_TRACK)
+    prefix_w = bold.advance(PREFIX, name_size, PREFIX_TRACK)
+    text_w = prefix_w + (nx1 - nx0)
+
+    icon_y = 4
+    baseline = icon_y + icon_size + 34 + cap
+    x = (width - text_w) / 2 - nx0
+    body, _ = wordmark(name_size, x, baseline, name_color, prefix_color,
+                       0.72 if mono else None)
+    height = int(round(baseline + 16))
+    svg = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
+        f'viewBox="0 0 {width} {height}" role="img" aria-label="OBS Beauty Filter">',
         DEFS,
-        icon(icon_size, icon_x, 6, mono=mono),
-        manrope_b.body("OBS", 17, (size - kicker_w) / 2, 268, kicker_color, 0.36)[0],
-        (fraunces.body(WORD, name_size, (size - word_w) / 2, 340, mono, WORD_TRACK)[0]
-         if mono else
-         fraunces.body("Beauty", name_size, (size - word_w) / 2, 340, f"url(#{word_grad})", WORD_TRACK)[0]
-         + fraunces.body(" Filter", name_size,
-                         (size - word_w) / 2 + fraunces.width_units("Beauty", WORD_TRACK) * name_size / fraunces.upem,
-                         340, text_color, WORD_TRACK)[0]),
+        icon(icon_size, (width - icon_size) / 2, icon_y, mono=mono,
+             contrast=white_or_ink(mono)),
+        body,
         "</svg>",
     ]
-    return "\n".join(parts)
+    return "\n".join(svg)
 
 
 def banner():
-    w, h = 1280, 640
-    icon_size = 180
-    gap = 52
-    kicker_size = 20
-    name_size = 66
-    sub_size = 24
+    width, height = 1280, 640
+    icon_size = 212
+    gap = 60
+    name_size = 74
+    tagline_size = 27
 
-    word_w = fraunces.width_units(WORD, WORD_TRACK) * name_size / fraunces.upem
-    kicker_w = manrope_b.width_units("OBS", 0.36) * kicker_size / manrope_b.upem
-    sub_w = manrope_sb.width_units("Real-time GPU beauty for OBS Studio", 0.01) * sub_size / manrope_sb.upem
+    cap = extra_bold.cap * name_size / extra_bold.upem
+    nx0, _, nx1, _ = extra_bold.ink(NAME, name_size, NAME_TRACK)
+    prefix_w = bold.advance(PREFIX, name_size, PREFIX_TRACK)
+    text_w = prefix_w + (nx1 - nx0)
+    tagline = "Real-time GPU beauty for OBS Studio"
+    tagline_w = semi_bold.advance(tagline, tagline_size, 0.01)
 
-    text_w = max(word_w, kicker_w, sub_w)
-    group_w = icon_size + gap + text_w
-    icon_x = (w - group_w) / 2
+    group_w = icon_size + gap + max(text_w, tagline_w)
+    icon_x = (width - group_w) / 2
     tx = icon_x + icon_size + gap
-    icon_y = (h - icon_size) / 2
+    # centre the name + rule + tagline block on the canvas
+    baseline = (height + cap - 88) / 2
+    body, _ = wordmark(name_size, tx - nx0, baseline, WHITE, MUTED)
 
-    parts = [
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" '
-        f'viewBox="0 0 {w} {h}" role="img" aria-label="OBS Beauty Filter">',
+    svg = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
+        f'viewBox="0 0 {width} {height}" role="img" aria-label="OBS Beauty Filter">',
         DEFS,
-        f'<rect width="{w}" height="{h}" fill="url(#tile)"/>',
-        f'<rect width="{w}" height="{h}" fill="url(#bgGlowA)"/>',
-        f'<rect width="{w}" height="{h}" fill="url(#bgGlowB)"/>',
-        icon(icon_size, icon_x, icon_y),
-        manrope_b.body("OBS", kicker_size, tx + 2, 270, ROSE, 0.36)[0],
-        fraunces.body("Beauty", name_size, tx, 344, "url(#wgrad)", WORD_TRACK)[0],
-        fraunces.body(" Filter", name_size,
-                      tx + fraunces.width_units("Beauty", WORD_TRACK) * name_size / fraunces.upem,
-                      344, TEXT, WORD_TRACK)[0],
-        f'<rect x="{tx + 2:.1f}" y="372" width="74" height="4" rx="2" fill="url(#accent)"/>',
-        manrope_sb.body("Real-time GPU beauty for OBS Studio", sub_size, tx, 418,
-                        MUTED, 0.01)[0],
+        '<defs>'
+        '<radialGradient id="glowA" cx="4%" cy="-8%" r="80%">'
+        f'<stop offset="0" stop-color="#B14CF2" stop-opacity="0.34"/>'
+        '<stop offset="0.55" stop-color="#B14CF2" stop-opacity="0.08"/>'
+        '<stop offset="1" stop-color="#B14CF2" stop-opacity="0"/>'
+        "</radialGradient>"
+        '<radialGradient id="glowB" cx="108%" cy="118%" r="70%">'
+        f'<stop offset="0" stop-color="#FF9A62" stop-opacity="0.26"/>'
+        '<stop offset="0.6" stop-color="#FF9A62" stop-opacity="0.06"/>'
+        '<stop offset="1" stop-color="#FF9A62" stop-opacity="0"/>'
+        "</radialGradient>"
+        "</defs>",
+        f'<rect width="{width}" height="{height}" fill="url(#tile)"/>',
+        f'<rect width="{width}" height="{height}" fill="url(#glowA)"/>',
+        f'<rect width="{width}" height="{height}" fill="url(#glowB)"/>',
+        icon(icon_size, icon_x, (height - icon_size) / 2),
+        body,
+        f'<rect x="{tx - nx0:.1f}" y="{baseline + 34:.1f}" width="84" height="4" rx="2" '
+        'fill="#FF7AB8"/>',
+        semi_bold.draw(tagline, tagline_size, tx - nx0, baseline + 92, MUTED, 0.01),
         "</svg>",
     ]
-    return "\n".join(parts)
+    return "\n".join(svg)
 
 
 FILES = {
@@ -293,16 +310,16 @@ FILES = {
     "mark.svg": (
         '<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" '
         'viewBox="0 0 512 512" role="img" aria-label="OBS Beauty Filter">'
-        + DEFS + mark() + "</svg>"
+        + DEFS + flower(512) + "</svg>"
     ),
-    "logo-horizontal-dark.svg": horizontal(TEXT, LIGHT_MUTED, ROSE),
-    "logo-horizontal-light.svg": horizontal(LIGHT_TEXT, LIGHT_MUTED, ROSE, word_grad="wgradL"),
-    "logo-horizontal-mono-white.svg": horizontal("#FFFFFF", "#FFFFFF", "#FFFFFF", mono="#FFFFFF"),
-    "logo-horizontal-mono-black.svg": horizontal("#0B1020", "#0B1020", "#0B1020", mono="#0B1020"),
-    "logo-stacked-dark.svg": stacked(TEXT, LIGHT_MUTED, ROSE),
-    "logo-stacked-light.svg": stacked(LIGHT_TEXT, LIGHT_MUTED, ROSE, word_grad="wgradL"),
-    "logo-stacked-mono-white.svg": stacked("#FFFFFF", "#FFFFFF", "#FFFFFF", mono="#FFFFFF"),
-    "logo-stacked-mono-black.svg": stacked("#0B1020", "#0B1020", "#0B1020", mono="#0B1020"),
+    "logo-horizontal-dark.svg": horizontal(WHITE, MUTED),
+    "logo-horizontal-light.svg": horizontal(INK, MUTED_LIGHT),
+    "logo-horizontal-mono-white.svg": horizontal("#FFFFFF", "#FFFFFF", mono="#FFFFFF"),
+    "logo-horizontal-mono-black.svg": horizontal("#0B1020", "#0B1020", mono="#0B1020"),
+    "logo-stacked-dark.svg": stacked(WHITE, MUTED),
+    "logo-stacked-light.svg": stacked(INK, MUTED_LIGHT),
+    "logo-stacked-mono-white.svg": stacked("#FFFFFF", "#FFFFFF", mono="#FFFFFF"),
+    "logo-stacked-mono-black.svg": stacked("#0B1020", "#0B1020", mono="#0B1020"),
     "banner.svg": banner(),
 }
 
@@ -394,6 +411,7 @@ def _ico_frame(width, height, rgba):
 
 
 def write_ico(path, png_paths):
+    """Write a BMP-frame ICO; Inno Setup rejects PNG-compressed frames."""
     frames = []
     for png in png_paths:
         with open(png, "rb") as fh:

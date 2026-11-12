@@ -432,10 +432,11 @@ không gian màu đã kiểm thử.
 
 ## Bộ nhận diện
 
-Logo, icon và các lockup ngang/dọc nằm trong [`assets/brand`](assets/brand), kèm
-hướng dẫn dùng ngắn ([`assets/brand/README.md`](assets/brand/README.md)) về màu,
-khoảng trống, kích thước tối thiểu và các biến thể mono/sáng/tối. Bộ nhận diện
-**không** thuộc GPL — đọc hướng dẫn trước khi dùng lại.
+Logo hoa khẩu độ sáu cánh và tên đầy đủ "OBS Beauty Filter" trên một dòng nằm
+trong [`assets/brand`](assets/brand), kèm hướng dẫn dùng ngắn
+([`assets/brand/README.md`](assets/brand/README.md)) về màu, tỉ lệ, khoảng trống,
+kích thước tối thiểu và các biến thể mono/sáng/tối. Bộ nhận diện **không** thuộc
+GPL — đọc hướng dẫn trước khi dùng lại.
 
 ## Giấy phép
 

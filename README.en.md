@@ -435,9 +435,9 @@ platform and colour-space matrix.
 
 ## Brand assets
 
-Logo, app icon and horizontal/stacked lockups live in
+The six-petal aperture mark and the full product name on one line live in
 [`assets/brand`](assets/brand), together with a short usage guide
-([`assets/brand/README.md`](assets/brand/README.md)) covering colours,
+([`assets/brand/README.md`](assets/brand/README.md)) covering colours, layout,
 clearspace, minimum sizes and the mono/dark/light variants. The brand assets are
 not covered by the GPL — see that guide before reusing them.
 
