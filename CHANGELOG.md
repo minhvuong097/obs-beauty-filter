@@ -5,10 +5,20 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.6.0] - 2026-11-12
 
 ### Added
 
+- **Automatic light balance.** A new **Auto light balance** control in
+  **Detail & light** measures scene brightness from the existing 64 px analysis
+  readback (skin-weighted when a face is present) and lifts or lowers exposure
+  toward a neutral level. A soft highlight shoulder protects SDR highlights,
+  HDR sources are never clipped, and the measured gain is smoothed over several
+  frames so lighting changes fade instead of pumping. `0` turns it off, `0.35`
+  is the default and `1` is the strongest correction (gain capped at 2.5x).
+- **New property page layout.** Controls are grouped as *Skin smoothing*,
+  *Complexion*, *Detail & light*, *Face & eyes* and *Performance & preview*,
+  with short labels that stay aligned instead of long sentences.
 - **Brand identity.** A new mark — a six-petal aperture flower (pink, peach,
   gold, mint, blue, violet) on a deep-violet tile with an iris core and a white
   sparkle — paired with the full product name on a **single line**: `OBS` in
@@ -21,6 +31,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Installer branding.** The Windows setup now uses the app icon
   (`SetupIconFile`) and ships `obs-beauty-filter.ico` so the entry in **Apps &
   Features** and the uninstaller show the real logo.
+
+### Changed
+
+- Short, consistent property labels in English and Vietnamese. OBS uses a
+  property's description as the slider label, so the previous long help text
+  was truncated and pushed controls out of alignment; labels now fit on one
+  line and the controls line up in a single column.
+- Preset actions are labelled **Save preset**, **Delete preset** and
+  **Reset to defaults**.
+
+### Fixed
+
+- Changing a slider could appear to do nothing because the property page was
+  rebuilt on every modification callback. Manual edits now only mark the
+  preset as *Custom* and leave the page (and the slider handle) alone.
 
 ## [1.5.0] - 2026-11-11
 
@@ -140,6 +165,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - OBS 33+ plugin layout on Windows, legacy layout for OBS 32 and older.
 - Linux and Windows CI builds with packaged artifacts.
 
+[1.6.0]: https://github.com/minhvuong097/obs-beauty-filter/releases/tag/v1.6.0
 [1.5.0]: https://github.com/minhvuong097/obs-beauty-filter/releases/tag/v1.5.0
 [1.4.0]: https://github.com/minhvuong097/obs-beauty-filter/releases/tag/v1.4.0
 [1.3.0]: https://github.com/minhvuong097/obs-beauty-filter/releases/tag/v1.3.0

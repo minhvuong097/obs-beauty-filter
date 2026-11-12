@@ -2,7 +2,7 @@
 
 **[English](ARCHITECTURE.en.md) | Tiếng Việt**
 
-Tài liệu này mô tả luồng xử lý, công thức shader và các quyết định thiết kế của plugin **1.5.0** để ổn định trong pipeline filter của OBS.
+Tài liệu này mô tả luồng xử lý, công thức shader và các quyết định thiết kế của plugin **1.6.0** để ổn định trong pipeline filter của OBS.
 
 ## 1. Vòng đời filter và pipeline render
 
@@ -28,7 +28,7 @@ Mỗi frame, `beauty_render()` thực hiện:
 4. **Capture**: render target vào `src_texrender` bằng
    `gs_texrender_begin_with_color_space(..., gs_get_color_space())`. Dùng **output space** để OBS tự chuyển đổi/tonemap nguồn (kể cả scRGB) và tránh scale hai lần; dùng `obs_source_default_render()` cho input thông thường, hoặc `obs_source_video_render()` cho custom/async source.
 5. **MaskPass** (nếu cần mask): render mask nửa resolution vào `mask_texrender[mask_index]`, lấy history từ texture còn lại.
-6. **MaskAnalysis** (định kỳ): downsample mask xuống grid 64×N và readback nhỏ để cập nhật face box.
+6. **MaskAnalysis** (định kỳ): downsample mask xuống grid 64×N, ghi thêm luma vào kênh b, rồi readback nhỏ để cập nhật face box và cân bằng sáng tự động.
 7. **BlurBase**: render base bilateral độ phân giải thấp vào `base_texrender` (1/2–1/4 độ phân giải, RGBA16F).
 8. **Main pass**: chọn `DrawFast` / `DrawBalanced` / `DrawHigh`, set toàn bộ uniform rồi vẽ fullscreen quad, tái tạo chi tiết full-resolution trên base.
 9. Khôi phục blend state, framebuffer sRGB và linear sRGB.
@@ -155,7 +155,10 @@ Mục tiêu là plugin nhẹ, không model, không dependency. Một detector he
 
 - `MaskAnalysis` downsample raw mask xuống grid **64 × N** (N tỉ lệ theo aspect, kẹp 16..64) bằng 4×4 box filter (16 tap).
 - Grid được stage và map xuống CPU. Kích thước tối đa 64×64 RGBA = 16 KB.
-- Chỉ chạy khi `face_aware` bật, `face_manual` tắt, và `frame_counter % 6 == 0` → khoảng 5 lần/giây ở 30 fps.
+  Kênh `r` = raw skin mask, `b` = luma tuyến tính dùng cho cân bằng sáng.
+- Chạy mỗi `frame_counter % 6 == 0` → khoảng 5 lần/giây ở 30 fps, khi
+  `face_aware` bật và `face_manual` tắt (để cập nhật face box) hoặc khi
+  `light_balance > 0`.
 - Không bao giờ đọc full-resolution frame.
 
 ### 3.3. Connected component và face box
@@ -367,6 +370,34 @@ glow_src = max(base - 0.50, 0.0);
 result  += glow_src * (glow * (is_hdr ? 0.65 : 0.45) * mask);
 ```
 
+### 6.1 Cân bằng sáng tự động
+
+`PSMaskAnalysis` ghi thêm luma tuyến tính vào kênh **b** của grid 64×N (kênh
+**r** vẫn là skin mask), nên không cần thêm pass hay readback full-resolution.
+CPU đọc grid đó mỗi 6 frame:
+
+```c
+mean = sum(luma) / count;
+if (skin_coverage > 1% && skin_coverage < 90%)
+    mean = mean * 0.35 + skin_mean * 0.65;
+gain = clamp(0.20 / max(mean, 0.004), 0.50, 2.50);
+auto_gain += (gain - auto_gain) * 0.25;   /* làm mượt theo frame */
+```
+
+Trong `beauty_finish`, gain được trộn theo slider để không bao giờ vượt quá mức
+người dùng chọn, và shoulder chỉ bật khi đang nâng sáng (SDR):
+
+```hlsl
+float gain = lerp(1.0, auto_gain, saturate(light_balance));
+result *= gain;
+float3 over = max(result - 0.80, 0.0);
+result -= over * (0.55 * light_balance * saturate(gain - 1.0));
+```
+
+Ưu tiên vùng da giúp mặt không bị tối đi chỉ vì phía sau có cửa sổ sáng. Vì
+gain được đo từ ảnh đã qua tone-mapping của OBS, cùng một công thức áp dụng cho
+SDR 8-bit, SDR 16-bit và HDR; nguồn HDR không đi qua shoulder.
+
 ## 7. Alpha, color space và HDR
 
 - Texture OBS thường là premultiplied alpha. Helper `sample_linear()` vừa unpremultiply vừa quy đổi về linear tương đối SDR:
@@ -443,6 +474,7 @@ Hướng phát triển: preset, compute shader cho radius lớn, đo GPU time, v
 | `rosy` | double | 0..1 |
 | `clarity` | double | 0..1 |
 | `glow` | double | 0..1 |
+| `light_balance` | double | 0..1, mặc định 0.35; 0 = tắt |
 | `face_aware` | bool | bật face prior + zones |
 | `temporal_strength` | double | 0..1 |
 | `teeth_whiten` | double | 0..1 |

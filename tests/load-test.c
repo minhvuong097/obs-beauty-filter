@@ -463,7 +463,7 @@ int main(int argc, char **argv)
 		obs_properties_t *props = obs_source_properties(filter);
 		static const char *const required[] = {
 			"preset", "preset_name", "preset_save", "preset_delete",
-			"preset_reset",
+			"preset_reset", "light_balance",
 		};
 		if (!props)
 			return fail("filter properties");
@@ -843,6 +843,48 @@ int main(int argc, char **argv)
 		obs_source_release(texture);
 
 		/* ------------------------------------------------------------- */
+		/* Auto light balance: after the readback tick, a bright skin     */
+		/* frame must be pulled down when the control is at maximum.      */
+		/* ------------------------------------------------------------- */
+		obs_data_t *balance_settings = obs_data_create();
+		set_test_defaults(balance_settings);
+		set_neutral_processing(balance_settings);
+		obs_data_set_bool(balance_settings, "skin_detect", false);
+		obs_data_set_bool(balance_settings, "face_aware", false);
+		obs_data_set_bool(balance_settings, "anti_banding", false);
+		obs_data_set_double(balance_settings, "light_balance", 1.0);
+		obs_source_t *balance_filter =
+			make_filter("beauty-light-balance", balance_settings);
+		if (!balance_filter) {
+			obs_source_release(pattern);
+			obs_source_release(color);
+			return fail("light balance filter creation");
+		}
+
+		obs_source_filter_add(color, balance_filter);
+
+		uint8_t balanced[4] = {0};
+		for (int i = 0; i < 8; i++) {
+			if (!render_center(color, 1280, 720, balanced)) {
+				obs_source_release(pattern);
+				obs_source_release(color);
+				obs_source_release(balance_filter);
+				return fail("render light balance frame");
+			}
+		}
+		printf("light balance luma:            %d -> %d\n", luma8(original),
+		       luma8(balanced));
+		if (luma8(balanced) >= luma8(original) - 8) {
+			obs_source_release(pattern);
+			obs_source_release(color);
+			obs_source_release(balance_filter);
+			return fail("auto light balance did not reduce a bright frame");
+		}
+
+		obs_source_filter_remove(color, balance_filter);
+		obs_source_release(balance_filter);
+
+		/* ------------------------------------------------------------- */
 		/* HDR: Rec.709 extended must be processed, not bypassed          */
 		/* ------------------------------------------------------------- */
 		obs_data_t *pattern_hdr_settings = obs_data_create();
@@ -1005,7 +1047,7 @@ int main(int argc, char **argv)
 
 	printf("OK: module loaded, filter created, effect compiled");
 	if (argc >= 5)
-		printf(", filter rendered, mask/opacity/face zones/texture/HDR verified");
+		printf(", filter rendered, mask/opacity/face zones/texture/light balance/HDR verified");
 	printf("\n");
 
 	obs_shutdown();

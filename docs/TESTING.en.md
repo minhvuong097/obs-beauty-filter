@@ -270,10 +270,13 @@ On first use, OBS compiles all six techniques (`MaskPass`, `MaskAnalysis`, `Blur
 | 24 | Save a custom preset, restart OBS | Preset appears as `Custom: <name>` and restores every control |
 | 25 | Save over an existing name with different case | One entry remains, values are updated |
 | 26 | Delete the selected custom preset | Entry disappears and the selection falls back to `Custom` |
-| 27 | Reset all settings | Every control returns to the Default preset |
+| 27 | Reset to defaults | Every control returns to the Default preset |
 | 28 | Rename `data/beauty_filter.effect` temporarily | Filter passes the source through, shows the GPU error message, no black frame |
 | 29 | Hand-edit `custom-presets.json` with a missing key | Preset loads, missing value falls back to Default |
 | 30 | Run the `.exe` installer on a clean OBS 33 machine | Setup writes the DLL and `data\` under `%ProgramData%\obs-studio\plugins\obs-beauty-filter`, OBS lists **Beauty Filter**, and uninstalling removes only the plugin |
+| 31 | Drag the Amount slider and release | The value follows the pointer and does not snap back; the preset switches to `Custom` |
+| 32 | Light balance 0.35, cover the key light / turn it off | The image brightens gradually without pumping; turning the light back on restores the previous level |
+| 33 | Light balance 0 (off) | The image matches the filter with the feature disabled, independent of scene content |
 
 ## 8. Benchmark guide — Intel i5-1235U
 
@@ -382,7 +385,7 @@ Windows CI compiles `installer/obs-beauty-filter.iss` with Inno Setup 6 after
 packaging and then installs the setup silently into a temporary directory:
 
 ```powershell
-.\obs-beauty-filter-1.5.0-windows-x64-setup.exe /VERYSILENT /SUPPRESSMSGBOXES `
+.\obs-beauty-filter-1.6.0-windows-x64-setup.exe /VERYSILENT /SUPPRESSMSGBOXES `
   /NORESTART /SP- /DIR=C:\temp\beauty-installer-test /LOG=install.log
 ```
 

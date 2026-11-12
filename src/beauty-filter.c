@@ -28,10 +28,8 @@
 #define T_HDR_INFO              obs_module_text("HdrInfo")
 
 #define T_PRESET                obs_module_text("Preset")
-#define T_PRESET_DESCRIPTION    obs_module_text("Preset.Description")
 #define T_PRESET_CUSTOM         obs_module_text("Preset.custom")
 #define T_PRESET_NAME           obs_module_text("Preset.Name")
-#define T_PRESET_NAME_DESC      obs_module_text("Preset.Name.Description")
 #define T_PRESET_SAVE           obs_module_text("Preset.Save")
 #define T_PRESET_DELETE         obs_module_text("Preset.Delete")
 #define T_PRESET_RESET          obs_module_text("Preset.Reset")
@@ -61,6 +59,7 @@
 #define T_GROUP_DETAIL          obs_module_text("Group.Detail")
 #define T_CLARITY               obs_module_text("Detail.Clarity")
 #define T_GLOW                  obs_module_text("Detail.Glow")
+#define T_LIGHT_BALANCE         obs_module_text("Detail.LightBalance")
 
 #define T_GROUP_FACE            obs_module_text("Group.Face")
 #define T_FACE_AWARE            obs_module_text("Face.Enable")
@@ -87,6 +86,7 @@
 /* clang-format on */
 
 #define FACE_READBACK_INTERVAL 6
+#define LIGHT_READBACK_INTERVAL 6
 #define FACE_HOLD_UPDATES 5
 #define FACE_GRID_WIDTH 64
 #define FACE_GRID_MAX_HEIGHT 64
@@ -121,6 +121,8 @@ struct beauty_filter {
 	gs_eparam_t *p_rosy;
 	gs_eparam_t *p_clarity;
 	gs_eparam_t *p_glow;
+	gs_eparam_t *p_light_balance;
+	gs_eparam_t *p_auto_gain;
 	gs_eparam_t *p_opacity;
 	gs_eparam_t *p_mask_preview;
 	gs_eparam_t *p_split_view;
@@ -150,7 +152,13 @@ struct beauty_filter {
 	float rosy;
 	float clarity;
 	float glow;
+	float light_balance;
 	float opacity;
+
+	/* Measured exposure gain for the automatic light balance.  Smoothed
+	 * between analysis updates so the image follows the subject. */
+	float auto_gain;
+	bool auto_gain_valid;
 
 	float temporal_strength;
 	float teeth_whiten;
@@ -235,6 +243,8 @@ static void beauty_update(void *data, obs_data_t *settings)
 
 	filter->clarity = (float)obs_data_get_double(settings, S_CLARITY);
 	filter->glow = (float)obs_data_get_double(settings, S_GLOW);
+	filter->light_balance =
+		clamp_float((float)obs_data_get_double(settings, S_LIGHT_BALANCE), 0.0f, 1.0f);
 	filter->opacity = (float)obs_data_get_double(settings, S_OPACITY);
 
 	filter->temporal_strength =
@@ -451,14 +461,66 @@ static void beauty_update_auto_face(struct beauty_filter *filter, const uint8_t 
 	}
 }
 
-static void beauty_analyse_mask(struct beauty_filter *filter)
+/*
+ * Derive the exposure gain from the tiny analysis readback.  b = linear luma,
+ * r = raw skin mask.  When skin covers a sensible part of the frame the face
+ * dominates the measurement, so a bright window behind the subject does not
+ * darken the skin.
+ */
+static void beauty_update_light_balance(struct beauty_filter *filter, const uint8_t *pixels,
+					uint32_t linesize)
 {
-	gs_texture_t *mask_tex;
+	const float target = 0.20f;
+	const float rate = 0.25f;
+	double sum = 0.0;
+	double skin_sum = 0.0;
+	double skin_weight = 0.0;
+	double mean;
+	double gain;
+	uint32_t x, y;
+
+	for (y = 0; y < filter->analysis_height; y++) {
+		const uint8_t *row = pixels + (size_t)y * linesize;
+
+		for (x = 0; x < filter->analysis_width; x++) {
+			const uint8_t *px = row + x * 4;
+			const double luma = (double)px[2] / 255.0;
+			const double skin = (double)px[0] / 255.0;
+
+			sum += luma;
+			skin_sum += luma * skin;
+			skin_weight += skin;
+		}
+	}
+
+	const double count = (double)filter->analysis_width * (double)filter->analysis_height;
+	if (count < 1.0)
+		return;
+
+	mean = sum / count;
+	if (skin_weight > count * 0.01 && skin_weight < count * 0.90)
+		mean = mean * 0.35 + (skin_sum / skin_weight) * 0.65;
+
+	gain = (double)target / (mean > 0.004 ? mean : 0.004);
+	if (gain < 0.50)
+		gain = 0.50;
+	if (gain > 2.50)
+		gain = 2.50;
+
+	if (!filter->auto_gain_valid) {
+		filter->auto_gain = (float)gain;
+		filter->auto_gain_valid = true;
+	} else {
+		filter->auto_gain += (float)(gain - filter->auto_gain) * rate;
+	}
+}
+
+static void beauty_analyse_mask(struct beauty_filter *filter, gs_texture_t *mask_tex)
+{
 	struct vec2 analysis_texel;
 	uint8_t *pixels = NULL;
 	uint32_t linesize = 0;
 
-	mask_tex = gs_texrender_get_texture(filter->mask_texrender[filter->mask_index ^ 1]);
 	if (!mask_tex || !filter->analysis_texrender || !filter->analysis_stage)
 		return;
 
@@ -489,7 +551,10 @@ static void beauty_analyse_mask(struct beauty_filter *filter)
 	gs_stage_texture(filter->analysis_stage,
 			 gs_texrender_get_texture(filter->analysis_texrender));
 	if (gs_stagesurface_map(filter->analysis_stage, &pixels, &linesize)) {
-		beauty_update_auto_face(filter, pixels, linesize);
+		if (filter->face_aware && !filter->face_manual)
+			beauty_update_auto_face(filter, pixels, linesize);
+		if (filter->light_balance > 0.0001f)
+			beauty_update_light_balance(filter, pixels, linesize);
 		gs_stagesurface_unmap(filter->analysis_stage);
 	}
 
@@ -712,15 +777,6 @@ static void beauty_render(void *data, gs_effect_t *unused)
 			use_mask_tex = true;
 			filter->history_valid = true;
 			filter->mask_index ^= 1;
-
-			/* Refresh the face box a few times per second.  The
-			 * readback is tiny (<= 64x64 RGBA) and never touches the
-			 * full-resolution frame. */
-			filter->frame_counter++;
-			if (filter->face_aware && !filter->face_manual &&
-			    (filter->frame_counter % FACE_READBACK_INTERVAL) == 0) {
-				beauty_analyse_mask(filter);
-			}
 		} else {
 			mask_tex = filter->white_tex;
 			use_mask_tex = false;
@@ -728,6 +784,21 @@ static void beauty_render(void *data, gs_effect_t *unused)
 	} else {
 		mask_tex = filter->white_tex;
 		filter->history_valid = false;
+	}
+
+	/* The tiny readback drives the face box and the automatic light
+	 * balance.  It is <= 64x64 RGBA and never touches a full-resolution
+	 * frame, so it can run a few times per second on either path. */
+	filter->frame_counter++;
+	{
+		const bool face_tick =
+			use_mask_tex && filter->face_aware && !filter->face_manual &&
+			(filter->frame_counter % FACE_READBACK_INTERVAL) == 0;
+		const bool light_tick = filter->light_balance > 0.0001f &&
+					(filter->frame_counter % LIGHT_READBACK_INTERVAL) == 0;
+
+		if (face_tick || light_tick)
+			beauty_analyse_mask(filter, mask_tex);
 	}
 
 	/* 3. Low-resolution bilateral base for frequency separation.  This is
@@ -823,6 +894,11 @@ static void beauty_render(void *data, gs_effect_t *unused)
 		gs_effect_set_float(filter->p_clarity, filter->clarity);
 	if (filter->p_glow)
 		gs_effect_set_float(filter->p_glow, filter->glow);
+	if (filter->p_light_balance)
+		gs_effect_set_float(filter->p_light_balance, filter->light_balance);
+	if (filter->p_auto_gain)
+		gs_effect_set_float(filter->p_auto_gain,
+				    filter->auto_gain_valid ? filter->auto_gain : 1.0f);
 	if (filter->p_opacity)
 		gs_effect_set_float(filter->p_opacity, filter->opacity);
 	if (filter->p_mask_preview)
@@ -881,13 +957,6 @@ static bool beauty_is_visible(obs_properties_t *props, const char *name, bool vi
 	return true;
 }
 
-static void beauty_set_description(obs_properties_t *props, const char *name, const char *text)
-{
-	obs_property_t *property = obs_properties_get(props, name);
-	if (property)
-		obs_property_set_description(property, text);
-}
-
 static void beauty_update_visibility(obs_properties_t *props, bool skin_detect, bool face_aware,
 				     bool face_manual);
 
@@ -919,6 +988,7 @@ static void beauty_set_defaults_as_values(obs_data_t *settings)
 	obs_data_set_double(settings, S_FACE_CY, 0.45);
 	obs_data_set_double(settings, S_FACE_W, 0.32);
 	obs_data_set_double(settings, S_FACE_H, 0.42);
+	obs_data_set_double(settings, S_LIGHT_BALANCE, 0.35);
 	obs_data_set_bool(settings, S_SPLIT_VIEW, false);
 	obs_data_set_double(settings, S_OPACITY, 1.0);
 	obs_data_set_string(settings, S_PRESET, "default");
@@ -1051,7 +1121,12 @@ static bool setting_modified(obs_properties_t *props, obs_property_t *property,
 	beauty_set_status(obs_properties_get_param(props), NULL);
 	UNUSED_PARAMETER(property);
 
-	return beauty_mark_custom(settings);
+	/* OBS rebuilds the whole property page when this returns true.  Doing
+	 * that while a slider is being dragged makes the handle jump back and
+	 * look like the value cannot be changed, so only the stored preset id
+	 * is updated here. */
+	beauty_mark_custom(settings);
+	return false;
 }
 
 static obs_property_t *add_float_setting(obs_properties_t *group, const char *name,
@@ -1218,10 +1293,8 @@ static obs_properties_t *beauty_properties(void *data)
 		obs_property_list_add_string(p, label, value);
 	}
 	obs_property_set_modified_callback(p, preset_modified);
-	beauty_set_description(props, S_PRESET, T_PRESET_DESCRIPTION);
 
 	obs_properties_add_text(props, S_PRESET_NAME, T_PRESET_NAME, OBS_TEXT_DEFAULT);
-	beauty_set_description(props, S_PRESET_NAME, T_PRESET_NAME_DESC);
 	obs_properties_add_button(props, "preset_save", T_PRESET_SAVE, save_preset_clicked);
 	obs_properties_add_button(props, "preset_delete", T_PRESET_DELETE,
 				  delete_preset_clicked);
@@ -1242,15 +1315,7 @@ static obs_properties_t *beauty_properties(void *data)
 	p = obs_properties_add_bool(group, S_SKIN_DETECT, T_SKIN_DETECT);
 	obs_property_set_modified_callback(p, skin_detect_modified);
 	add_float_setting(group, S_SKIN_SENSITIVITY, T_SKIN_SENSITIVITY, 0.0, 1.0, 0.01);
-	obs_properties_add_bool(group, S_MASK_PREVIEW, T_MASK_PREVIEW);
-	beauty_set_description(group, S_AMOUNT,
-			       obs_module_text("Smoothing.Amount.Description"));
-	beauty_set_description(group, S_RADIUS,
-			       obs_module_text("Smoothing.Radius.Description"));
-	beauty_set_description(group, S_DETAIL,
-			       obs_module_text("Smoothing.Detail.Description"));
-	beauty_set_description(group, S_SKIN_SENSITIVITY,
-			       obs_module_text("Smoothing.SkinSensitivity.Description"));
+	add_bool_setting(group, S_MASK_PREVIEW, T_MASK_PREVIEW);
 	obs_properties_add_group(props, "smoothing_group", T_GROUP_SMOOTHING, OBS_GROUP_NORMAL,
 				 group);
 
@@ -1260,19 +1325,14 @@ static obs_properties_t *beauty_properties(void *data)
 	add_float_setting(group, S_WARMTH, T_WARMTH, -50.0, 50.0, 1.0);
 	add_float_setting(group, S_SATURATION, T_SATURATION, -50.0, 50.0, 1.0);
 	add_float_setting(group, S_ROSY, T_ROSY, 0.0, 1.0, 0.01);
-	beauty_set_description(group, S_BRIGHTNESS,
-			       obs_module_text("Complexion.Brightness.Description"));
-	beauty_set_description(group, S_WARMTH,
-			       obs_module_text("Complexion.Warmth.Description"));
 	obs_properties_add_group(props, "complexion_group", T_GROUP_COMPLEXION, OBS_GROUP_NORMAL,
 				 group);
 
-	/* --- Detail & glow -------------------------------------------------- */
+	/* --- Detail & light ------------------------------------------------- */
 	group = obs_properties_create();
 	add_float_setting(group, S_CLARITY, T_CLARITY, 0.0, 1.0, 0.01);
 	add_float_setting(group, S_GLOW, T_GLOW, 0.0, 1.0, 0.01);
-	beauty_set_description(group, S_CLARITY, obs_module_text("Detail.Clarity.Description"));
-	beauty_set_description(group, S_GLOW, obs_module_text("Detail.Glow.Description"));
+	add_float_setting(group, S_LIGHT_BALANCE, T_LIGHT_BALANCE, 0.0, 1.0, 0.01);
 	obs_properties_add_group(props, "detail_group", T_GROUP_DETAIL, OBS_GROUP_NORMAL, group);
 
 	/* --- Face & eyes ---------------------------------------------------- */
@@ -1282,16 +1342,13 @@ static obs_properties_t *beauty_properties(void *data)
 	add_float_setting(group, S_TEMPORAL, T_TEMPORAL, 0.0, 1.0, 0.01);
 	add_float_setting(group, S_TEETH, T_TEETH, 0.0, 1.0, 0.01);
 	add_float_setting(group, S_EYES, T_EYES, 0.0, 1.0, 0.01);
-	obs_properties_add_bool(group, S_ZONE_PREVIEW, T_ZONE_PREVIEW);
+	add_bool_setting(group, S_ZONE_PREVIEW, T_ZONE_PREVIEW);
 	p = obs_properties_add_bool(group, S_FACE_MANUAL, T_FACE_MANUAL);
 	obs_property_set_modified_callback(p, face_manual_modified);
-	obs_properties_add_float_slider(group, S_FACE_CX, T_FACE_CX, 0.0, 1.0, 0.005);
-	obs_properties_add_float_slider(group, S_FACE_CY, T_FACE_CY, 0.0, 1.0, 0.005);
-	obs_properties_add_float_slider(group, S_FACE_W, T_FACE_W, 0.05, 1.0, 0.005);
-	obs_properties_add_float_slider(group, S_FACE_H, T_FACE_H, 0.05, 1.0, 0.005);
-	beauty_set_description(group, S_FACE_AWARE, obs_module_text("Face.Enable.Description"));
-	beauty_set_description(group, S_TEETH, obs_module_text("Face.Teeth.Description"));
-	beauty_set_description(group, S_EYES, obs_module_text("Face.Eyes.Description"));
+	add_float_setting(group, S_FACE_CX, T_FACE_CX, 0.0, 1.0, 0.005);
+	add_float_setting(group, S_FACE_CY, T_FACE_CY, 0.0, 1.0, 0.005);
+	add_float_setting(group, S_FACE_W, T_FACE_W, 0.05, 1.0, 0.005);
+	add_float_setting(group, S_FACE_H, T_FACE_H, 0.05, 1.0, 0.005);
 	obs_properties_add_group(props, "face_group", T_GROUP_FACE, OBS_GROUP_NORMAL, group);
 
 	/* --- Performance & preview ----------------------------------------- */
@@ -1302,13 +1359,9 @@ static obs_properties_t *beauty_properties(void *data)
 	obs_property_list_add_string(p, T_QUALITY_BALANCED, "balanced");
 	obs_property_list_add_string(p, T_QUALITY_HIGH, "high");
 	obs_property_set_modified_callback(p, setting_modified);
-	obs_properties_add_bool(group, S_SPLIT_VIEW, T_SPLIT_VIEW);
-	obs_properties_add_float_slider(group, S_OPACITY, T_OPACITY, 0.0, 1.0, 0.01);
+	add_bool_setting(group, S_SPLIT_VIEW, T_SPLIT_VIEW);
+	add_float_setting(group, S_OPACITY, T_OPACITY, 0.0, 1.0, 0.01);
 	add_bool_setting(group, S_ANTI_BANDING, T_ANTI_BANDING);
-	beauty_set_description(group, S_QUALITY,
-			       obs_module_text("Advanced.Quality.Description"));
-	beauty_set_description(group, S_ANTI_BANDING,
-			       obs_module_text("Advanced.AntiBanding.Description"));
 	obs_properties_add_group(props, "advanced_group", T_GROUP_ADVANCED, OBS_GROUP_NORMAL,
 				 group);
 
@@ -1338,6 +1391,7 @@ static void beauty_defaults(obs_data_t *settings)
 
 	obs_data_set_default_double(settings, S_CLARITY, 0.10);
 	obs_data_set_default_double(settings, S_GLOW, 0.05);
+	obs_data_set_default_double(settings, S_LIGHT_BALANCE, 0.35);
 
 	obs_data_set_default_bool(settings, S_FACE_AWARE, true);
 	obs_data_set_default_double(settings, S_TEMPORAL, 0.60);
@@ -1401,6 +1455,10 @@ static void *beauty_create(obs_data_t *settings, obs_source_t *context)
 		filter->p_rosy = gs_effect_get_param_by_name(filter->effect, "rosy");
 		filter->p_clarity = gs_effect_get_param_by_name(filter->effect, "clarity");
 		filter->p_glow = gs_effect_get_param_by_name(filter->effect, "glow");
+		filter->p_light_balance =
+			gs_effect_get_param_by_name(filter->effect, "light_balance");
+		filter->p_auto_gain =
+			gs_effect_get_param_by_name(filter->effect, "auto_gain");
 		filter->p_opacity = gs_effect_get_param_by_name(filter->effect, "opacity");
 		filter->p_mask_preview =
 			gs_effect_get_param_by_name(filter->effect, "mask_preview");

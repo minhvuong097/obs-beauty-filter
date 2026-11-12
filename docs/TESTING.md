@@ -267,10 +267,13 @@ Khi thêm filter lần đầu, OBS sẽ compile cả 6 technique (`MaskPass`, `M
 | 24 | Lưu custom preset, khởi động lại OBS | Preset hiện là `Custom: <tên>` và khôi phục đủ mọi control |
 | 25 | Lưu đè tên đã có với hoa thường khác | Chỉ còn một mục, giá trị được cập nhật |
 | 26 | Xóa custom preset đang chọn | Mục biến mất, lựa chọn quay về `Custom` |
-| 27 | Reset toàn bộ | Mọi control trở về preset Default |
+| 27 | Đặt lại mặc định | Mọi control trở về preset Default |
 | 28 | Tạm đổi tên `data/beauty_filter.effect` | Filter cho nguồn đi qua, hiện thông báo lỗi GPU, không ra frame đen |
 | 29 | Sửa `custom-presets.json` thiếu một khóa | Preset vẫn load, giá trị thiếu fallback về Default |
 | 30 | Chạy bộ cài `.exe` trên máy OBS 33 sạch | Setup ghi DLL và `data\` vào `%ProgramData%\obs-studio\plugins\obs-beauty-filter`, OBS hiện **Beauty Filter**, gỡ cài chỉ xóa plugin |
+| 31 | Kéo slider Amount rồi thả | Giá trị bám theo con trỏ, không nhảy về vị trí cũ; preset chuyển sang `Tùy chỉnh` |
+| 32 | Cân bằng sáng 0.35, che sáng / tắt đèn | Ảnh sáng dần đều, không nhấp nháy; mở lại đèn thì hạ về mức cũ |
+| 33 | Cân bằng sáng 0 (tắt) | Ảnh giống hệt khi chưa bật tính năng, không phụ thuộc nội dung khung hình |
 
 ## 8. Hướng dẫn benchmark — Intel i5-1235U
 
@@ -375,7 +378,7 @@ CI Windows biên dịch `installer/obs-beauty-filter.iss` bằng Inno Setup 6 sa
 bước đóng gói, rồi cài silent vào thư mục tạm:
 
 ```powershell
-.\obs-beauty-filter-1.5.0-windows-x64-setup.exe /VERYSILENT /SUPPRESSMSGBOXES `
+.\obs-beauty-filter-1.6.0-windows-x64-setup.exe /VERYSILENT /SUPPRESSMSGBOXES `
   /NORESTART /SP- /DIR=C:\temp\beauty-installer-test /LOG=install.log
 ```
 

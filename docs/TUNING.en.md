@@ -12,15 +12,16 @@
 6. **Detail preservation**: raise if skin looks flat; lower if blemishes/texture remain.
 7. **Clarity**: add a little to keep eyes and hair sharp.
 8. **Complexion**: adjust brightness/warmth/rosy in small amounts.
-9. **Temporal mask stability**: raise if the mask flickers; lower if fast head turns produce ghosting.
-10. **Teeth whitening / Eye brightening**: enable last, at small values, and verify with **Show face zones**.
-11. **Split preview** to check, then turn it off before going live.
+9. **Auto light balance**: keep 0.35 for most scenes; raise it in very dark rooms or strong backlight.
+10. **Temporal mask stability**: raise if the mask flickers; lower if fast head turns produce ghosting.
+11. **Teeth whitening / Eye brightening**: enable last, at small values, and verify with **Show face zones**.
+12. **Split compare** to check, then turn it off before going live.
 
 ## 2. Suggested presets
 
-The filter panel starts with a **Starting preset** dropdown. Pick the entry closest to your camera and lighting, then fine-tune the controls below. Changing any creative control automatically switches the dropdown to **Custom (use current settings)**; the numbers in this section are the exact values each preset applies.
+The filter panel starts with a **Starting preset** dropdown. Pick the entry closest to your camera and lighting, then fine-tune the controls below. Changing any creative control marks the selection as **Custom (use current settings)**; the numbers in this section are the exact values each preset applies.
 
-**Default** restores the plugin defaults (Amount 0.35, Radius 6, Detail 0.35, sensitivity 0.50, Rosy 0.15, Clarity 0.10, Glow 0.05, temporal 0.60, Balanced quality, anti-banding on). Use it as a clean baseline before choosing a camera-specific preset.
+**Default** restores the plugin defaults (Amount 0.35, Radius 6, Detail 0.35, sensitivity 0.50, Rosy 0.15, Clarity 0.10, Glow 0.05, light balance 0.35, temporal 0.60, Balanced quality, anti-banding on). Use it as a clean baseline before choosing a camera-specific preset.
 
 ### Natural — 1080p webcam, indoor lighting
 
@@ -158,12 +159,12 @@ HDR has a wider brightness range, so Glow and Rosy can easily look excessive. St
 ### Saving your own preset
 
 1. Tune the filter until it matches your camera and lighting.
-2. Type a name in **Custom preset name**.
-3. Press **Save current settings as preset**. The preset appears in the
+2. Type a name in **Preset name**.
+3. Press **Save preset**. The preset appears in the
    dropdown as `Custom: <name>` and is selected immediately.
 4. To update it later, select it, change the controls, and press Save again.
    Names are case-insensitive: saving `My Look` over `my look` replaces it.
-5. Press **Delete this custom preset** to remove the selected preset. If it was
+5. Press **Delete preset** to remove the selected preset. If it was
    active, the selection falls back to Custom.
 
 Names must be 1–64 characters, cannot be empty or contain control characters,
@@ -177,13 +178,29 @@ directory (on Windows:
 The file is human-readable and safe to back up; a missing key falls back to the
 Default preset.
 
-**Reset all settings** restores the whole filter to the Default preset. It does
+**Reset to defaults** restores the whole filter to the Default preset. It does
 not delete custom presets.
 
 If the effect or a GPU texture cannot be created, the property page shows a red
 error message and the source passes through unchanged (no black frame). Check
 the OBS log for the exact allocation or shader error, then reopen the filter or
 restart OBS.
+
+### Automatic light balance
+
+**Auto light balance** lives in the **Detail & light** group. The filter measures
+average brightness on a 64 px grid (skin-weighted when a face is detected) and
+lifts or lowers exposure toward a neutral level. When lifting, a soft shoulder
+keeps SDR highlights from clipping; HDR sources are never clipped.
+
+- `0` — off; the source exposure is untouched.
+- `0.35` — default; a sensible correction for indoor webcams.
+- `0.7–1.0` — very dark or strongly backlit scenes; gain is capped at 2.5×.
+
+The measurement is smoothed over several frames, so walking into a brighter or
+darker area fades instead of jumping. The slider is independent from presets:
+switching presets keeps the balance level you set. If skin looks flat or shadows
+lose detail, lower the slider before raising **Brightness** in **Complexion**.
 
 ## 3. Tuning the face zones
 

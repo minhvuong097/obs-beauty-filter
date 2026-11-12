@@ -29,6 +29,7 @@
 
 #define S_CLARITY               "clarity"
 #define S_GLOW                  "glow"
+#define S_LIGHT_BALANCE         "light_balance"
 
 #define S_FACE_AWARE            "face_aware"
 #define S_TEMPORAL              "temporal_strength"

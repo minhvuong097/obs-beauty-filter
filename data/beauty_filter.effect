@@ -34,6 +34,8 @@ uniform float saturation;        /* -0.5..0.5, skin weighted            */
 uniform float rosy;              /* 0..1, skin weighted                 */
 uniform float clarity;           /* 0..1, non-skin detail               */
 uniform float glow;              /* 0..1, soft skin glow                */
+uniform float light_balance;     /* 0..1 auto light balance strength    */
+uniform float auto_gain;         /* measured exposure gain (linear)     */
 uniform float opacity;           /* 0..1, global mix                    */
 uniform float mask_preview;      /* 0/1                                 */
 uniform float split_view;        /* 0/1, left = original                */
@@ -267,7 +269,10 @@ float4 PSMaskAnalysis(VertOut vert_in) : TARGET
 	}
 
 	float m = sum * (1.0 / 16.0);
-	return float4(m, m, m, 1.0);
+	/* b carries the SDR-relative linear luma of the frame; the CPU averages
+	 * it to drive the automatic light balance. */
+	float luma = saturate(luminance(sample_linear(vert_in.uv)));
+	return float4(m, m, luma, 1.0);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -476,6 +481,21 @@ float4 beauty_finish(float2 uv, float4 src, float3 center, float3 base)
 
 	result += float3(0.080, 0.020, 0.035) * (rosy * mask *
 	          (0.25 + 0.75 * smoothstep(0.05, 0.60, luma)));
+
+	/* Automatic light balance.  auto_gain is measured on the CPU from a
+	 * 64-pixel-wide readback, then smoothed over several frames so the
+	 * exposure follows the subject instead of pumping.  The highlight
+	 * shoulder only engages while the gain is lifting a dark frame. */
+	float balance = saturate(light_balance);
+	if (balance > 0.0001) {
+		float gain = lerp(1.0, auto_gain, balance);
+		float3 lifted = result * gain;
+		if (is_hdr < 0.5) {
+			float3 over = max(lifted - 0.80, 0.0);
+			lifted -= over * (0.55 * balance * saturate(gain - 1.0));
+		}
+		result = lifted;
+	}
 
 	/* Soft glow only picks up highlights, so shadows stay clean. */
 	float3 glow_src = max(base - 0.50, 0.0);

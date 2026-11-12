@@ -643,6 +643,9 @@ static obs_source_t *make_filter(const char *name, const struct beauty_preset *p
 	obs_data_set_bool(settings, S_ZONE_PREVIEW, false);
 	obs_data_set_bool(settings, S_SPLIT_VIEW, false);
 	obs_data_set_double(settings, S_OPACITY, 1.0);
+	/* The automatic light balance depends on a GPU readback, so it is
+	 * disabled for the deterministic golden comparison. */
+	obs_data_set_double(settings, S_LIGHT_BALANCE, 0.0);
 	obs_data_set_bool(settings, S_FACE_MANUAL, false);
 
 	filter = obs_source_create("beauty_filter", name, settings, NULL);

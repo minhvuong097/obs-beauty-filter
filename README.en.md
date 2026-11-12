@@ -11,7 +11,7 @@
 [![Build](https://github.com/minhvuong097/obs-beauty-filter/actions/workflows/build.yml/badge.svg)](https://github.com/minhvuong097/obs-beauty-filter/actions/workflows/build.yml)
 [![Latest release](https://img.shields.io/github/v/release/minhvuong097/obs-beauty-filter?display_name=tag)](https://github.com/minhvuong097/obs-beauty-filter/releases/latest)
 
-A GPU beauty filter for **OBS Studio** on Windows and Linux (macOS can be built from source but is not tested). Version **1.5.0** runs entirely on the GPU, plugs into the standard OBS filter pipeline, uses no AI model, never reads a full-resolution frame back to the CPU, and has no third-party runtime dependency.
+A GPU beauty filter for **OBS Studio** on Windows and Linux (macOS can be built from source but is not tested). Version **1.6.0** runs entirely on the GPU, plugs into the standard OBS filter pipeline, uses no AI model, never reads a full-resolution frame back to the CPU, and has no third-party runtime dependency.
 
 Goal: natural-looking skin for livestreams/webcams **and high-resolution cameras** while preserving eyes, eyebrows, hair, pores and the face outline — with correct HDR handling.
 
@@ -26,11 +26,12 @@ Goal: natural-looking skin for livestreams/webcams **and high-resolution cameras
 - **Eye brightening**: lifts the sclera and gently raises the iris/pupil inside two eye ellipses.
 - **Detail reconstruction**: retains luma texture (pores) more than chroma (blotches) and adds clarity outside skin.
 - **Complexion controls**: exposure-like brightness, luma-preserving warmth, saturation and rosy tint, all skin-weighted.
+- **Automatic light balance**: measures a 64 px readback (skin-weighted when a face is present) and lifts or lowers exposure toward a neutral level, with a soft highlight shoulder — no more blown highlights or crushed shadows, while skin stays even. Slider 0 = off, 0.35 = default, 1 = strong.
 - **Soft glow** only on highlights, useful with ring lights and clean shadows.
 - **Anti-banding**: triangular dithering for 8-bit output prevents banding in smooth skin gradients.
 - **HDR-safe**: `GS_CS_709_EXTENDED`, `GS_CS_709_SCRGB` and `GS_CS_SRGB_16F` are processed in linear light; highlights above SDR white are preserved (no bypass, no clipping).
 - **Previews**: skin mask, split view and face/eye/mouth zones.
-- **Built-in starting presets**: Natural, Cinema, Studio, Soft, Beard, Dark skin, HDR and Default. Pick one, then fine-tune; any manual change switches the selection to **Custom**.
+- **Built-in starting presets**: Natural, Cinema, Studio, Soft, Beard, Dark skin, HDR and Default. Pick one, then fine-tune; any manual change marks the selection as **Custom**.
 - **Custom presets**: save, overwrite, reload and delete your own looks. They are stored as `custom-presets.json` in the OBS module config directory and survive scene-collection changes and restarts.
 - **Reset button**: return every control to the Default preset without removing the filter.
 - **Safe failure**: if the effect or a GPU texture cannot be created, the properties page shows an error and the source passes through unchanged instead of rendering black.
@@ -61,7 +62,7 @@ obs-beauty-filter/
 │       ├── en-US.ini
 │       └── vi-VN.ini
 ├── tests/
-│   ├── load-test.c          # load + render + mask/face/HDR integration test
+│   ├── load-test.c          # load + render + mask/face/light/HDR integration test
 │   ├── render-matrix-test.c # 8 presets x 4 resolutions + 16F golden test
 │   ├── preset-test.c        # built-in/custom preset unit test
 │   ├── face-region-test.c   # face-detector unit test
@@ -85,7 +86,7 @@ obs-beauty-filter/
 
 ### Option A — installer `.exe` (recommended)
 
-Download `obs-beauty-filter-1.5.0-windows-x64-setup.exe` from
+Download `obs-beauty-filter-1.6.0-windows-x64-setup.exe` from
 **[GitHub Releases](https://github.com/minhvuong097/obs-beauty-filter/releases/latest)**
 and run it. The installer:
 
@@ -116,7 +117,7 @@ your OBS scenes, profiles and custom presets untouched.
 
 ### Option B — prebuilt ZIP (manual install)
 
-- Windows x64: `obs-beauty-filter-1.5.0-windows-x64.zip`
+- Windows x64: `obs-beauty-filter-1.6.0-windows-x64.zip`
 - Linux x86_64: `obs-beauty-filter-linux-x86_64.tar.gz`
 - Each release includes `SHA256SUMS.txt` so you can verify the download.
 
@@ -255,8 +256,9 @@ set `INSTALL_LIBDIR=...` for Debian/Ubuntu multiarch).
    - **Skin detection** on, **Skin sensitivity** `0.50`
    - **Face-aware zones** on, **Temporal mask stability** `0.60`
    - **Rosy tint** `0.15`
+   - **Auto light balance** `0.35`
    - **Teeth whitening / Eye brightening** `0` (enable when needed)
-3. When the look is right, type a name under **Custom preset name** and press **Save current settings as preset**; it appears in the dropdown as `Custom: <name>`. **Reset all settings** returns everything to Default.
+3. When the look is right, type a name under **Preset name** and press **Save preset**; it appears in the dropdown as `Custom: <name>`. **Reset to defaults** returns everything to Default.
 4. Enable **Show skin mask** to inspect the skin mask. If skin-coloured walls/wood also turn white, keep **Face-aware zones** on and lower **Skin sensitivity**.
 5. Enable **Show face zones** to inspect the face box, eyes and mouth. If the box is wrong, enable **Manual face box** and adjust `Face center X/Y`, `Face width/height`.
 6. Raise **Teeth whitening** to `0.2–0.5` and **Eye brightening** to `0.1–0.3`. If surrounding skin brightens too, reduce these values.
@@ -280,6 +282,7 @@ set `INSTALL_LIBDIR=...` for Debian/Ubuntu multiarch).
 | Rosy tint | 0.15 | 0–1 | Natural rosy tint |
 | Clarity | 0.10 | 0–1 | Sharpens non-skin areas |
 | Soft glow | 0.05 | 0–1 | Soft skin glow |
+| Auto light balance | 0.35 | 0–1 | Lifts/lowers exposure from measured scene brightness; 0 = off, 1 = strongest |
 | Face-aware zones | On | On/Off | Enables face prior + teeth/eye zones |
 | Temporal mask stability | 0.60 | 0–1 | Blends mask with history; higher = more stable, less flicker |
 | Teeth whitening | 0 | 0–1 | Whitens teeth inside the mouth zone |
@@ -349,7 +352,7 @@ Output (alpha preserved, values > SDR white preserved on HDR)
 
 - **No longer a single pass**: the mask pass runs at half resolution, the analysis pass at 64×N, the base pass at 1/2–1/4 resolution, and the main pass at full resolution.
 - **Frequency separation**: the base pass blurs broad skin areas at reduced resolution with a 25-tap Vogel disk; the final pass restores full-resolution detail, weighting luma more than chroma. This preserves pores, reduces halos and avoids sparse kernels at 1440p/4K.
-- **No full-frame readback**: only the 64×N grid (at most 64×64 RGBA = 16 KB) is read back, and only when `Face-aware zones` is on, automatic detection is used, once every 6 frames.
+- **No full-frame readback**: only the 64×N grid (at most 64×64 RGBA = 16 KB) is read back, once every 6 frames, and only when the face box or **Auto light balance** needs it.
 - **Ping-pong mask textures** provide history for temporal stabilisation without per-frame allocation.
 - **The base is RGBA16F** even for SDR, avoiding linear 8-bit quantisation in shadows before the sRGB encode.
 - Radius is normalised to frame height (1080p reference), so one preset behaves similarly at 720p/1080p/4K.
@@ -402,7 +405,7 @@ xvfb-run -a ./build/beauty-render-matrix-test \
   ./build/obs-beauty-filter.so \
   ./build/rundir/share/obs/obs-plugins/obs-beauty-filter
 
-# Load + render + mask/face/HDR integration test
+# Load + render + mask/face/light/HDR integration test
 xvfb-run -a ./build/beauty-load-test \
   ./build/obs-beauty-filter.so \
   ./build/rundir/share/obs/obs-plugins/obs-beauty-filter \
@@ -420,10 +423,10 @@ Expected final lines:
 ```text
 OK: built-in and custom presets, lookup, apply, defaults and NULL handling verified
 OK: render matrix verified 4 resolutions x 8 presets, opaque alpha, 16F range and finite output
-OK: module loaded, filter created, effect compiled, filter rendered, mask/opacity/face zones/texture/HDR verified
+OK: module loaded, filter created, effect compiled, filter rendered, mask/opacity/face zones/texture/light balance/HDR verified
 ```
 
-The integration test covers: default filter output, skin mask, opacity 0, teeth/eye zones (with a manual face box), zone preview colours, frequency separation on a textured skin pattern (contrast drops at low Detail and returns at high Detail), Rec.709 extended HDR and scRGB HDR (values above 1.0 are preserved, actually processed, and not double-scaled). It also checks that the preset/save/delete/reset property controls exist. The render matrix runs all 8 presets at 360p, 720p, 1080p and 1440p (opt-in 4K), verifies opaque alpha and finite 16F output, and compares a sampled golden image on Linux. See [docs/TESTING.en.md](docs/TESTING.en.md) for the full test matrix and the i5-1235U benchmark guide.
+The integration test covers: default filter output, skin mask, opacity 0, teeth/eye zones (with a manual face box), zone preview colours, frequency separation on a textured skin pattern (contrast drops at low Detail and returns at high Detail), automatic light balance (a bright frame is pulled down after the readback tick), Rec.709 extended HDR and scRGB HDR (values above 1.0 are preserved, actually processed, and not double-scaled). It also checks that the preset/save/delete/reset property controls exist. The render matrix runs all 8 presets at 360p, 720p, 1080p and 1440p (opt-in 4K), verifies opaque alpha and finite 16F output, and compares a sampled golden image on Linux. See [docs/TESTING.en.md](docs/TESTING.en.md) for the full test matrix and the i5-1235U benchmark guide.
 
 > **Test status:** GitHub Actions builds and tests on both platforms. Linux (Alpine 3.21, OBS 30.2.3, OpenGL/Mesa llvmpipe) runs the full `beauty-face-region-test`, `beauty-preset-test`, `beauty-render-matrix-test` (with golden image) and `beauty-load-test` suite, then repeats the suite under ASan/UBSan. Windows x64 builds directly against OBS 33.0.1 source plus `obs-deps`, runs the same tests on the real D3D11 path (matrix invariants, module load + effect compilation), packages the new plugin layout, builds the `.exe` installer and silently installs/uninstalls it in a smoke test. A manual in-OBS render/HDR check on real hardware is still recommended; see [docs/TESTING.en.md](docs/TESTING.en.md) and the [compatibility matrix](docs/COMPATIBILITY.en.md).
 

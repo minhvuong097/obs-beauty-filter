@@ -6,7 +6,7 @@ cmake_minimum_required(VERSION 3.28...3.30)
 #   2. Standalone: point CMAKE_PREFIX_PATH at an OBS build/install tree that
 #      provides libobsConfig.cmake.
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
-  project(obs-beauty-filter VERSION 1.5.0 LANGUAGES C)
+  project(obs-beauty-filter VERSION 1.6.0 LANGUAGES C)
   set(BEAUTY_FILTER_STANDALONE ON)
   find_package(libobs REQUIRED)
 else()

@@ -2,7 +2,7 @@
 
 **English | [Tiếng Việt](ARCHITECTURE.md)**
 
-This document describes the processing flow, shader maths and design decisions of plugin **1.5.0** that keep it stable inside OBS' filter pipeline.
+This document describes the processing flow, shader maths and design decisions of plugin **1.6.0** that keep it stable inside OBS' filter pipeline.
 
 ## 1. Filter lifecycle and render pipeline
 
@@ -28,7 +28,7 @@ Each frame, `beauty_render()`:
 4. **Capture**: renders the target into `src_texrender` with
    `gs_texrender_begin_with_color_space(..., gs_get_color_space())`. Using the **output space** lets OBS perform source conversion/tonemapping (including scRGB) and avoids double scaling; it uses `obs_source_default_render()` for ordinary inputs and `obs_source_video_render()` for custom/async sources.
 5. **MaskPass** (when a mask is needed): renders a half-resolution mask into `mask_texrender[mask_index]`, sampling history from the other texture.
-6. **MaskAnalysis** (periodic): downsamples the mask to a 64×N grid and performs a small readback to update the face box.
+6. **MaskAnalysis** (periodic): downsamples the mask to a 64×N grid, adds luma in the b channel, then performs a small readback to update the face box and the automatic light balance.
 7. **BlurBase**: renders the low-resolution bilateral base into `base_texrender` (1/2–1/4 resolution, RGBA16F).
 8. **Main pass**: selects `DrawFast` / `DrawBalanced` / `DrawHigh`, sets all uniforms and draws a fullscreen quad, reconstructing full-resolution detail on top of the base.
 9. Restores blend state, framebuffer sRGB and linear sRGB.
@@ -155,7 +155,11 @@ The goal is a lightweight plugin with no model and no dependency. A heuristic de
 
 - `MaskAnalysis` downsamples the raw mask to a **64 × N** grid (N proportional to aspect, clamped 16..64) with a 4×4 box filter (16 taps).
 - The grid is staged and mapped to the CPU. Maximum size is 64×64 RGBA = 16 KB.
-- It only runs when `face_aware` is on, `face_manual` is off, and `frame_counter % 6 == 0` → about 5 times per second at 30 fps.
+  Channel `r` is the raw skin mask; channel `b` is linear luma for the light
+  balance.
+- Runs when `frame_counter % 6 == 0` → about 5 times per second at 30 fps,
+  either when `face_aware` is on with `face_manual` off (face box update) or
+  when `light_balance > 0`.
 - The full-resolution frame is never read back.
 
 ### 3.3. Connected components and face box
@@ -367,6 +371,35 @@ glow_src = max(base - 0.50, 0.0);
 result  += glow_src * (glow * (is_hdr ? 0.65 : 0.45) * mask);
 ```
 
+### 6.1 Automatic light balance
+
+`PSMaskAnalysis` also writes linear luma into the **b** channel of the 64×N grid
+(the **r** channel stays the raw skin mask), so no extra pass or full-resolution
+readback is needed. The CPU reads that grid every 6 frames:
+
+```c
+mean = sum(luma) / count;
+if (skin_coverage > 1% && skin_coverage < 90%)
+    mean = mean * 0.35 + skin_mean * 0.65;
+gain = clamp(0.20 / max(mean, 0.004), 0.50, 2.50);
+auto_gain += (gain - auto_gain) * 0.25;   /* frame smoothing */
+```
+
+In `beauty_finish` the gain is blended by the slider so it never exceeds the
+level the user chose, and the shoulder only engages while lifting (SDR):
+
+```hlsl
+float gain = lerp(1.0, auto_gain, saturate(light_balance));
+result *= gain;
+float3 over = max(result - 0.80, 0.0);
+result -= over * (0.55 * light_balance * saturate(gain - 1.0));
+```
+
+Skin weighting keeps the face from getting darker just because a bright window
+sits behind the subject. Because the gain is measured after OBS tone-mapping,
+the same formula covers 8-bit SDR, 16-bit SDR and HDR; HDR sources skip the
+shoulder.
+
 ## 7. Alpha, colour space and HDR
 
 - OBS textures are usually premultiplied alpha. The `sample_linear()` helper both unpremultiplies and converts to SDR-relative linear:
@@ -443,6 +476,7 @@ Future direction: presets, compute shaders for large radii, GPU timing, and opti
 | `rosy` | double | 0..1 |
 | `clarity` | double | 0..1 |
 | `glow` | double | 0..1 |
+| `light_balance` | double | 0..1, default 0.35; 0 = off |
 | `face_aware` | bool | enables face prior + zones |
 | `temporal_strength` | double | 0..1 |
 | `teeth_whiten` | double | 0..1 |

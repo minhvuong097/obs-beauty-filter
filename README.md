@@ -11,7 +11,7 @@
 [![Build](https://github.com/minhvuong097/obs-beauty-filter/actions/workflows/build.yml/badge.svg)](https://github.com/minhvuong097/obs-beauty-filter/actions/workflows/build.yml)
 [![Latest release](https://img.shields.io/github/v/release/minhvuong097/obs-beauty-filter?display_name=tag)](https://github.com/minhvuong097/obs-beauty-filter/releases/latest)
 
-Plugin bộ lọc làm đẹp cho **OBS Studio** trên Windows và Linux (macOS có thể build từ source nhưng chưa được kiểm thử). Phiên bản **1.5.0** chạy hoàn toàn trên GPU, hòa vào pipeline filter tiêu chuẩn của OBS, không cần model AI, không đọc ngược frame full-resolution về CPU và không phụ thuộc runtime bên thứ ba.
+Plugin bộ lọc làm đẹp cho **OBS Studio** trên Windows và Linux (macOS có thể build từ source nhưng chưa được kiểm thử). Phiên bản **1.6.0** chạy hoàn toàn trên GPU, hòa vào pipeline filter tiêu chuẩn của OBS, không cần model AI, không đọc ngược frame full-resolution về CPU và không phụ thuộc runtime bên thứ ba.
 
 Mục tiêu: làn da mịn tự nhiên cho livestream/webcam **và camera độ phân giải cao** mà vẫn giữ chi tiết mắt, lông mày, tóc, lỗ chân lông và viền khuôn mặt; đồng thời xử lý đúng nguồn HDR.
 
@@ -26,13 +26,14 @@ Mục tiêu: làn da mịn tự nhiên cho livestream/webcam **và camera độ 
 - **Eye brightening**: làm sáng lòng trắng và nâng nhẹ iris/pupil trong hai ellipse mắt.
 - **Giữ chi tiết**: tách high-frequency, ưu tiên giữ luma (lỗ chân lông) hơn chroma (mảng đỏ), làm nét vùng không phải da.
 - **Tinh chỉnh sắc tố da**: sáng kiểu phơi sáng, ấm giữ luma, bão hòa, sắc hồng — cân theo skin mask.
+- **Cân bằng sáng tự động**: đo độ sáng khung hình trên grid 64 px (ưu tiên vùng da) rồi nâng hoặc hạ phơi sáng về mức trung tính, kèm shoulder giữ highlight — hết cháy sáng hoặc tối om mà da vẫn đều màu. Slider 0 = tắt, 0.35 = mặc định, 1 = mạnh.
 - **Soft glow**: ánh sáng mềm chỉ trên highlight, vùng tối vẫn sạch.
 - **Chống dải màu**: triangular dithering cho ngõ ra 8-bit, tránh banding khi da mịn trên nền gradient.
 - **HDR-safe**: xử lý `GS_CS_709_EXTENDED`, `GS_CS_709_SCRGB` và `GS_CS_SRGB_16F` trong linear light, giữ highlight > mức trắng SDR (không bypass, không clip).
 - **Preview**: skin mask, split view và face/eye/mouth zones.
-- **Preset khởi đầu**: Natural, Cinema, Studio, Soft, Beard, Dark skin, HDR và Default. Chọn preset rồi tinh chỉnh; mọi thay đổi tay sẽ tự chuyển về **Tùy chỉnh**.
+- **Preset khởi đầu**: Natural, Cinema, Studio, Soft, Beard, Dark skin, HDR và Default. Chọn preset rồi tinh chỉnh; mọi thay đổi tay sẽ được đánh dấu là **Tùy chỉnh**.
 - **Preset tùy chỉnh**: lưu, ghi đè, tải lại và xóa phong cách của bạn. Dữ liệu nằm trong `custom-presets.json` ở thư mục cấu hình module OBS, tồn tại qua thay đổi scene collection và khởi động lại.
-- **Nút Reset**: đưa toàn bộ thông số về preset Default mà không cần xóa và thêm lại filter.
+- **Đặt lại mặc định**: đưa toàn bộ thông số về preset Default mà không cần xóa và thêm lại filter.
 - **Lỗi an toàn**: nếu effect hoặc texture GPU không tạo được, trang thuộc tính hiện thông báo lỗi và nguồn đi qua nguyên vẹn thay vì ra frame đen.
 - **3 mức hiệu năng**: Fast / Balanced / High.
 - **Hỗ trợ alpha**, SDR 8-bit và SDR 16-bit.
@@ -61,7 +62,7 @@ obs-beauty-filter/
 │       ├── en-US.ini
 │       └── vi-VN.ini
 ├── tests/
-│   ├── load-test.c          # load + render + mask/face/HDR integration test
+│   ├── load-test.c          # load + render + mask/face/light/HDR integration test
 │   ├── render-matrix-test.c # 8 preset x 4 độ phân giải + golden 16F
 │   ├── preset-test.c        # unit test preset có sẵn và tùy chỉnh
 │   ├── face-region-test.c   # unit test cho face detector
@@ -85,7 +86,7 @@ obs-beauty-filter/
 
 ### Cách A — bộ cài `.exe` (khuyến nghị)
 
-Tải `obs-beauty-filter-1.5.0-windows-x64-setup.exe` tại
+Tải `obs-beauty-filter-1.6.0-windows-x64-setup.exe` tại
 **[GitHub Releases](https://github.com/minhvuong097/obs-beauty-filter/releases/latest)**
 rồi chạy. Bộ cài sẽ:
 
@@ -116,7 +117,7 @@ hay custom preset của OBS.
 
 ### Cách B — gói ZIP build sẵn (cài thủ công)
 
-- Windows x64: `obs-beauty-filter-1.5.0-windows-x64.zip`
+- Windows x64: `obs-beauty-filter-1.6.0-windows-x64.zip`
 - Linux x86_64: `obs-beauty-filter-linux-x86_64.tar.gz`
 - Mỗi release có kèm `SHA256SUMS.txt` để kiểm tra tệp tải về.
 
@@ -252,8 +253,9 @@ Hoặc `./scripts/build-linux.sh` rồi `sudo cmake --install build` (mặc đ�
    - **Skin detection** bật, **Skin sensitivity** `0.50`
    - **Face-aware zones** bật, **Temporal mask stability** `0.60`
    - **Rosy tint** `0.15`
+   - **Cân bằng sáng tự động** `0.35`
    - **Teeth whitening / Eye brightening** `0` (bật khi cần)
-3. Khi đã vừa ý, nhập tên vào **Tên preset tùy chỉnh** và bấm **Lưu thông số hiện tại thành preset**; preset xuất hiện trong menu dưới dạng `Tùy chỉnh: <tên>`. **Đặt lại toàn bộ về mặc định** đưa mọi thông số về Default.
+3. Khi đã vừa ý, nhập tên vào **Tên preset** và bấm **Lưu preset**; preset xuất hiện trong menu dưới dạng `Tùy chỉnh: <tên>`. **Đặt lại mặc định** đưa mọi thông số về Default.
 4. Bật **Show skin mask** để kiểm tra mask da. Nếu tường/gỗ màu da cũng trắng, giữ **Face-aware zones** bật và giảm **Skin sensitivity**.
 5. Bật **Show face zones** để kiểm tra khung mặt, hai mắt và miệng. Nếu khung sai, bật **Manual face box** rồi chỉnh `Face center X/Y`, `Face width/height`.
 6. Tăng **Teeth whitening** `0.2–0.5` và **Eye brightening** `0.1–0.3`. Nếu vùng da quanh mắt/miệng bị sáng theo, giảm hai thông số này.
@@ -277,6 +279,7 @@ Hoặc `./scripts/build-linux.sh` rồi `sudo cmake --install build` (mặc đ�
 | Rosy tint | 0.15 | 0–1 | Sắc hồng tự nhiên |
 | Clarity | 0.10 | 0–1 | Làm nét vùng không phải da |
 | Soft glow | 0.05 | 0–1 | Ánh sáng mềm |
+| Cân bằng sáng tự động | 0.35 | 0–1 | Nâng/hạ phơi sáng theo độ sáng đo được; 0 = tắt, 1 = mạnh nhất |
 | Face-aware zones | On | On/Off | Bật face prior + teeth/eye zones |
 | Temporal mask stability | 0.60 | 0–1 | Trộn mask với history; cao = ổn định hơn, ít nhấp nháy hơn |
 | Teeth whitening | 0 | 0–1 | Làm trắng răng trong vùng miệng |
@@ -346,7 +349,7 @@ Output (giữ alpha, giữ giá trị > SDR white trên HDR)
 
 - **Không còn một pass duy nhất**: mask pass chạy ở nửa resolution, analysis pass ở 64×N, base pass ở 1/2–1/4 resolution, main pass ở full resolution.
 - **Frequency separation**: base pass làm mờ mảng da lớn ở độ phân giải thấp với 25 mẫu Vogel disk; pass cuối lấy lại chi tiết full-resolution, ưu tiên luma hơn chroma. Cách này giữ lỗ chân lông, giảm halo và tránh kernel quá thưa ở 1440p/4K.
-- **Không readback full frame**: chỉ đọc grid 64×N (tối đa 64×64 RGBA = 16 KB) và chỉ khi `Face-aware zones` bật, không dùng manual box, mỗi 6 frame.
+- **Không readback full frame**: chỉ đọc grid 64×N (tối đa 64×64 RGBA = 16 KB) mỗi 6 frame, và chỉ khi cần face box hoặc đang bật **Cân bằng sáng tự động**.
 - **Ping-pong mask texture** cung cấp history cho temporal stabilisation mà không cấp phát mỗi frame.
 - **Base texture RGBA16F** ngay cả với SDR để tránh lượng tử hoá linear 8-bit trong vùng tối trước khi encode sRGB.
 - Bán kính được chuẩn hóa theo chiều cao frame (1080p là mốc), giúp cùng một bộ thông số cho kết quả tương đương ở 720p/1080p/4K.
@@ -399,7 +402,7 @@ xvfb-run -a ./build/beauty-render-matrix-test \
   ./build/obs-beauty-filter.so \
   ./build/rundir/share/obs/obs-plugins/obs-beauty-filter
 
-# Load + render + mask/face/HDR integration test
+# Load + render + mask/face/light/HDR integration test
 xvfb-run -a ./build/beauty-load-test \
   ./build/obs-beauty-filter.so \
   ./build/rundir/share/obs/obs-plugins/obs-beauty-filter \
@@ -417,10 +420,10 @@ Kỳ vọng các dòng cuối:
 ```text
 OK: built-in and custom presets, lookup, apply, defaults and NULL handling verified
 OK: render matrix verified 4 resolutions x 8 presets, opaque alpha, 16F range and finite output
-OK: module loaded, filter created, effect compiled, filter rendered, mask/opacity/face zones/texture/HDR verified
+OK: module loaded, filter created, effect compiled, filter rendered, mask/opacity/face zones/texture/light balance/HDR verified
 ```
 
-Test integration kiểm tra: filter mặc định, skin mask, opacity 0, teeth/eye zones (có mặt thủ công), zone preview, **frequency separation trên pattern da có texture** (contrast giảm khi Detail thấp và quay lại khi Detail cao), HDR Rec.709 extended và scRGB (giữ giá trị > 1, thực sự được xử lý và không bị scale hai lần), và các control preset/lưu/xóa/reset có tồn tại. Render matrix chạy cả 8 preset ở 360p, 720p, 1080p và 1440p (4K tùy chọn), kiểm tra alpha đục, ngõ ra 16F hữu hạn và so golden image dạng lấy mẫu trên Linux. Không được có lỗi shader trong log. Xem [docs/TESTING.md](docs/TESTING.md) cho test matrix đầy đủ và hướng dẫn benchmark i5-1235U.
+Test integration kiểm tra: filter mặc định, skin mask, opacity 0, teeth/eye zones (có mặt thủ công), zone preview, **frequency separation trên pattern da có texture** (contrast giảm khi Detail thấp và quay lại khi Detail cao), **cân bằng sáng tự động** (khung sáng bị hạ xuống sau readback tick), HDR Rec.709 extended và scRGB (giữ giá trị > 1, thực sự được xử lý và không bị scale hai lần), và các control preset/lưu/xóa/reset có tồn tại. Render matrix chạy cả 8 preset ở 360p, 720p, 1080p và 1440p (4K tùy chọn), kiểm tra alpha đục, ngõ ra 16F hữu hạn và so golden image dạng lấy mẫu trên Linux. Không được có lỗi shader trong log. Xem [docs/TESTING.md](docs/TESTING.md) cho test matrix đầy đủ và hướng dẫn benchmark i5-1235U.
 
 > **Trạng thái kiểm thử:** GitHub Actions build và chạy test tự động trên hai nền tảng. Linux (Alpine 3.21, OBS 30.2.3, OpenGL/Mesa llvmpipe) chạy đầy đủ `beauty-face-region-test`, `beauty-preset-test`, `beauty-render-matrix-test` (kèm golden image) và `beauty-load-test` (render, mask, texture, HDR), sau đó lặp lại dưới ASan/UBSan. Windows x64 build trực tiếp với source OBS 33.0.1 + `obs-deps`, chạy cùng bộ test trên đường D3D11 thật (render matrix invariant, load module + compile effect), rồi đóng gói theo layout plugin mới, tạo bộ cài `.exe` và chạy smoke test cài/gỡ silent. Vẫn nên xác nhận render/HDR thủ công trong OBS trên phần cứng thật; xem [docs/TESTING.md](docs/TESTING.md) và [ma trận tương thích](docs/COMPATIBILITY.md).
 

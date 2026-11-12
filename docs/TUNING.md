@@ -12,15 +12,16 @@
 6. **Detail preservation**: tăng nếu da bệt; giảm nếu vẫn còn mụn/texture.
 7. **Clarity**: tăng nhẹ để mắt/tóc nét.
 8. **Complexion**: chỉnh sáng/ấm/hồng ở mức nhỏ.
-9. **Temporal mask stability**: tăng nếu mask nhấp nháy; giảm nếu thấy bóng mờ khi đầu quay nhanh.
-10. **Teeth whitening / Eye brightening**: bật sau cùng, ở mức nhỏ, và kiểm tra bằng **Show face zones**.
-11. **Split preview** để kiểm tra, rồi tắt trước khi lên sóng.
+9. **Cân bằng sáng tự động**: để 0.35 cho hầu hết cảnh, tăng khi phòng quá tối hoặc ngược sáng mạnh.
+10. **Temporal mask stability**: tăng nếu mask nhấp nháy; giảm nếu thấy bóng mờ khi đầu quay nhanh.
+11. **Teeth whitening / Eye brightening**: bật sau cùng, ở mức nhỏ, và kiểm tra bằng **Hiện vùng mặt**.
+12. **So sánh trái/phải** để kiểm tra, rồi tắt trước khi lên sóng.
 
 ## 2. Preset gợi ý
 
-Bảng điều khiển bắt đầu bằng menu **Preset khởi đầu**. Chọn mục gần với camera và ánh sáng của bạn, sau đó tinh chỉnh các nút bên dưới. Chỉnh bất kỳ thông số sáng tạo nào sẽ tự chuyển menu về **Tùy chỉnh (giữ thông số hiện tại)**; các con số trong mục này là giá trị chính xác mà mỗi preset áp dụng.
+Bảng điều khiển bắt đầu bằng menu **Preset khởi đầu**. Chọn mục gần với camera và ánh sáng của bạn, sau đó tinh chỉnh các nút bên dưới. Chỉnh bất kỳ thông số sáng tạo nào sẽ đánh dấu lựa chọn là **Tùy chỉnh (giữ thông số hiện tại)**; các con số trong mục này là giá trị chính xác mà mỗi preset áp dụng.
 
-**Mặc định** khôi phục thiết lập gốc của plugin (Amount 0.35, Radius 6, Detail 0.35, sensitivity 0.50, Rosy 0.15, Clarity 0.10, Glow 0.05, temporal 0.60, chất lượng Balanced, bật chống dải màu). Dùng preset này làm mốc sạch trước khi chọn preset theo camera.
+**Mặc định** khôi phục thiết lập gốc của plugin (Amount 0.35, Radius 6, Detail 0.35, sensitivity 0.50, Rosy 0.15, Clarity 0.10, Glow 0.05, cân bằng sáng 0.35, temporal 0.60, chất lượng Balanced, bật chống dải màu). Dùng preset này làm mốc sạch trước khi chọn preset theo camera.
 
 ### Natural — webcam 1080p, đèn trong nhà
 
@@ -158,12 +159,12 @@ HDR có dải sáng rộng hơn, nên Glow và Rosy dễ trông quá tay. Bắt 
 ### Lưu preset của riêng bạn
 
 1. Tinh chỉnh filter cho khớp camera và ánh sáng.
-2. Nhập tên vào **Tên preset tùy chỉnh**.
-3. Bấm **Lưu thông số hiện tại thành preset**. Preset xuất hiện trong menu dưới
+2. Nhập tên vào **Tên preset**.
+3. Bấm **Lưu preset**. Preset xuất hiện trong menu dưới
    dạng `Tùy chỉnh: <tên>` và được chọn ngay.
 4. Muốn cập nhật, chọn preset, chỉnh thông số rồi bấm Lưu lần nữa. Tên không
    phân biệt hoa thường: lưu `My Look` đè lên `my look` sẽ thay thế mục cũ.
-5. Bấm **Xóa preset tùy chỉnh này** để xóa preset đang chọn. Nếu preset đó đang
+5. Bấm **Xóa preset** để xóa preset đang chọn. Nếu preset đó đang
    dùng, lựa chọn quay về Tùy chỉnh.
 
 Tên phải dài 1–64 ký tự, không rỗng, không chứa ký tự điều khiển và không được
@@ -177,12 +178,28 @@ OBS (trên Windows:
 File dạng JSON dễ đọc và có thể backup; khóa nào thiếu sẽ fallback về preset
 Default.
 
-**Đặt lại toàn bộ về mặc định** khôi phục mọi thông số về preset Default, không
+**Đặt lại mặc định** khôi phục mọi thông số về preset Default, không
 xóa preset tùy chỉnh.
 
 Nếu effect hoặc texture GPU không tạo được, trang thuộc tính hiện thông báo lỗi
 màu đỏ và nguồn đi qua nguyên vẹn (không ra frame đen). Xem log OBS để biết lỗi
 cấp phát hoặc shader cụ thể, rồi mở lại filter hoặc khởi động lại OBS.
+
+### Cân bằng sáng tự động
+
+**Cân bằng sáng tự động** nằm trong nhóm **Chi tiết & ánh sáng**. Filter đo độ
+sáng trung bình trên một grid 64 px (ưu tiên vùng da khi nhận diện được mặt) rồi
+nâng hoặc hạ phơi sáng về mức trung tính. Khi nâng sáng, một shoulder mềm giữ
+highlight SDR khỏi cháy; nguồn HDR không bị clip.
+
+- `0` — tắt hoàn toàn, giữ nguyên phơi sáng nguồn.
+- `0.35` — mặc định, xử lý vừa phải cho webcam trong nhà.
+- `0.7–1.0` — cảnh rất tối hoặc ngược sáng mạnh; gain tối đa 2.5×.
+
+Giá trị đo được làm mượt qua nhiều frame nên khi bạn đi vào vùng sáng/tối, hình
+sáng dần chứ không nhảy. Slider này độc lập với preset: đổi preset không ghi đè
+mức cân bằng sáng bạn đã đặt. Nếu da bị bệt hoặc mất chi tiết vùng tối, hạ slider
+xuống trước khi tăng **Độ sáng** trong nhóm **Sắc tố da**.
 
 ## 3. Tinh chỉnh face zones
 
