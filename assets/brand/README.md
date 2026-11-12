@@ -15,7 +15,7 @@ doubles as a camera iris, paired with the full product name on **one line**.
 assets/brand/
 ├── svg/                              # source of truth, text converted to paths
 │   ├── icon.svg                      # app icon, 512×512 tile
-│   ├── mark.svg                      # mark only, same artwork
+│   ├── mark.svg                      # flower only, no tile
 │   ├── logo-horizontal-{dark,light}.svg
 │   ├── logo-horizontal-mono-{white,black}.svg
 │   ├── logo-stacked-{dark,light}.svg
@@ -24,8 +24,8 @@ assets/brand/
 └── png/                              # convenience exports of the SVGs
     ├── icon-{512,256,128,64,48,32,16}.png
     ├── icon.ico                      # 16–256 px, used by the Windows installer
-    ├── logo-horizontal-*.png
-    ├── logo-stacked-*.png
+    ├── logo-horizontal-{dark,light,mono-white,mono-black}.png
+    ├── logo-stacked-{dark,light}.png
     └── banner.png / social-preview.png
 ```
 
