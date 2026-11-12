@@ -6,7 +6,7 @@
   </picture>
 </p>
 
-<p align="center"><a href="README.en.md">English</a> | <strong>Tiếng Việt</strong></p>
+[English](README.en.md) | **Tiếng Việt**
 
 [![Build](https://github.com/minhvuong097/obs-beauty-filter/actions/workflows/build.yml/badge.svg)](https://github.com/minhvuong097/obs-beauty-filter/actions/workflows/build.yml)
 [![Latest release](https://img.shields.io/github/v/release/minhvuong097/obs-beauty-filter?display_name=tag)](https://github.com/minhvuong097/obs-beauty-filter/releases/latest)
