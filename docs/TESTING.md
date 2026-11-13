@@ -243,6 +243,8 @@ Nếu chạy trên backend trả về bottom-up (một số driver/backend có t
 Mở **Help → Log Files → View Current Log** và tìm:
 
 - `Loading module: obs-beauty-filter` — module được load.
+- `[obs-beauty-filter] version 1.8.0 loaded (GPL-2.0-or-later)` — đúng phiên bản
+  đang chạy; dòng này cũng hiện ở cuối trang thuộc tính, dùng khi báo lỗi.
 - `Failed to load '...beauty_filter.effect'` — **không** được xuất hiện.
 - `Compiler warnings/errors for ...beauty_filter.effect` — **không** được xuất hiện.
 - `Source ID 'beauty_filter' not found` — **không** được xuất hiện sau khi thêm filter.
@@ -294,6 +296,8 @@ Khi thêm filter lần đầu, OBS sẽ compile cả 6 technique (`MaskPass`, `M
 | 32 | Cân bằng sáng 0.35, che sáng / tắt đèn | Ảnh sáng dần đều, không nhấp nháy; mở lại đèn thì hạ về mức cũ |
 | 33 | Cân bằng sáng 0 (tắt) | Ảnh giống hệt khi chưa bật tính năng, không phụ thuộc nội dung khung hình |
 | 34 | Rê chuột lên từng control trong trang thuộc tính | Tooltip hiện câu hướng dẫn bằng ngôn ngữ UI; không thấy key `Tooltip.*` thô |
+| 35 | Cuộn xuống cuối trang thuộc tính | Dòng `obs-beauty-filter <phiên bản> · GPL-2.0-or-later` khớp với dòng version trong log |
+| 36 | Bật/tắt đèn hoặc đi vào vùng tối khi Amount > 0 | Hình sáng/tối lại trong khoảng 10 frame; không giật khung do readback đồng bộ |
 
 ## 8. Hướng dẫn benchmark — Intel i5-1235U
 
@@ -398,7 +402,7 @@ CI Windows biên dịch `installer/obs-beauty-filter.iss` bằng Inno Setup 6 sa
 bước đóng gói, rồi cài silent vào thư mục tạm:
 
 ```powershell
-.\obs-beauty-filter-1.7.0-windows-x64-setup.exe /VERYSILENT /SUPPRESSMSGBOXES `
+.\obs-beauty-filter-1.8.0-windows-x64-setup.exe /VERYSILENT /SUPPRESSMSGBOXES `
   /NORESTART /SP- /DIR=C:\temp\beauty-installer-test /LOG=install.log
 ```
 

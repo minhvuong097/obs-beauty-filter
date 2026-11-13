@@ -5,6 +5,39 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.8.0] - 2026-11-13
+
+### Added
+
+- **Build identity in OBS.** The module now logs
+  `[obs-beauty-filter] version 1.8.0 loaded (GPL-2.0-or-later)` and shows the
+  same line at the bottom of the properties page, so a bug report can name the
+  exact build. The version comes from `BEAUTY_FILTER_VERSION` in
+  `CMakeLists.txt`; in-tree builds no longer inherit OBS' own version.
+- **`SECURITY.md`** documents the supported versions, GitHub private
+  vulnerability reporting, scope, and the checksum steps to verify a download.
+- **`CONTRIBUTING.md`** collects the build/test commands, style rules, the
+  tooltip/localisation workflow, the version-bump policy and the asset licence
+  rules.
+
+### Changed
+
+- **The analysis readback is asynchronous.** The 64×N analysis grid is now
+  staged on the frame that produces it and mapped on the next rendered frame,
+  instead of mapping a copy queued in the same frame. One frame of latency is
+  irrelevant for a face box or exposure measurement, and the render pass no
+  longer waits for the GPU copy — the usual cause of stutter on a heavy scene.
+  The bright/dark light-balance regression values are unchanged (161 → 117 and
+  69 → 105).
+- **Roadmap states what is paid.** Authenticode signing, macOS notarization and
+  cloud ML inference are explicitly out of scope because they require a paid
+  subscription; releases rely on public CI plus `SHA256SUMS.txt` instead.
+
+### Fixed
+
+- **The version in the demo captions** is read from `BEAUTY_FILTER_VERSION`
+  rather than the `project()` line, which now expands a CMake variable.
+
 ## [1.7.0] - 2026-11-13
 
 ### Added
@@ -210,6 +243,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - OBS 33+ plugin layout on Windows, legacy layout for OBS 32 and older.
 - Linux and Windows CI builds with packaged artifacts.
 
+[1.8.0]: https://github.com/minhvuong097/obs-beauty-filter/releases/tag/v1.8.0
 [1.7.0]: https://github.com/minhvuong097/obs-beauty-filter/releases/tag/v1.7.0
 [1.6.0]: https://github.com/minhvuong097/obs-beauty-filter/releases/tag/v1.6.0
 [1.5.0]: https://github.com/minhvuong097/obs-beauty-filter/releases/tag/v1.5.0

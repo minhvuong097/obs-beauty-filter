@@ -23,6 +23,10 @@
 #include <stdio.h>
 #include <string.h>
 
+#ifndef BEAUTY_VERSION
+#define BEAUTY_VERSION "dev"
+#endif
+
 /* clang-format off */
 
 #define T_HDR_INFO              obs_module_text("HdrInfo")
@@ -186,6 +190,10 @@ struct beauty_filter {
 	gs_texrender_t *analysis_texrender;
 	gs_texrender_t *base_texrender;
 	gs_stagesurf_t *analysis_stage;
+	/* The staged copy is mapped on the next rendered frame instead of the
+	 * frame that submitted it, so Map never waits on a copy that was just
+	 * queued. */
+	bool analysis_stage_pending;
 	gs_texture_t *white_tex;
 
 	enum gs_color_space space;
@@ -292,6 +300,7 @@ static void beauty_release_resources(struct beauty_filter *filter)
 	filter->analysis_texrender = NULL;
 	filter->base_texrender = NULL;
 	filter->analysis_stage = NULL;
+	filter->analysis_stage_pending = false;
 	filter->white_tex = NULL;
 	filter->base_width = 0;
 	filter->base_height = 0;
@@ -540,11 +549,30 @@ static void beauty_update_light_balance(struct beauty_filter *filter, const uint
 	}
 }
 
+static void beauty_consume_analysis(struct beauty_filter *filter)
+{
+	uint8_t *pixels = NULL;
+	uint32_t linesize = 0;
+
+	if (!filter->analysis_stage || !filter->analysis_stage_pending)
+		return;
+
+	/* Clear the flag first: a failed map must not retry the same copy
+	 * forever, and the next analysis tick stages a fresh one anyway. */
+	filter->analysis_stage_pending = false;
+	if (!gs_stagesurface_map(filter->analysis_stage, &pixels, &linesize))
+		return;
+
+	if (filter->face_aware && !filter->face_manual)
+		beauty_update_auto_face(filter, pixels, linesize);
+	if (filter->light_balance > 0.0001f)
+		beauty_update_light_balance(filter, pixels, linesize);
+	gs_stagesurface_unmap(filter->analysis_stage);
+}
+
 static void beauty_analyse_mask(struct beauty_filter *filter, gs_texture_t *mask_tex)
 {
 	struct vec2 analysis_texel;
-	uint8_t *pixels = NULL;
-	uint32_t linesize = 0;
 
 	if (!mask_tex || !filter->analysis_texrender || !filter->analysis_stage)
 		return;
@@ -573,15 +601,12 @@ static void beauty_analyse_mask(struct beauty_filter *filter, gs_texture_t *mask
 			      filter->analysis_height, mask_tex);
 	gs_texrender_end(filter->analysis_texrender);
 
+	/* Queue the copy only.  beauty_consume_analysis() maps it on the next
+	 * rendered frame, when the GPU has had a frame to finish the copy, so
+	 * the CPU does not stall inside the render pass. */
 	gs_stage_texture(filter->analysis_stage,
 			 gs_texrender_get_texture(filter->analysis_texrender));
-	if (gs_stagesurface_map(filter->analysis_stage, &pixels, &linesize)) {
-		if (filter->face_aware && !filter->face_manual)
-			beauty_update_auto_face(filter, pixels, linesize);
-		if (filter->light_balance > 0.0001f)
-			beauty_update_light_balance(filter, pixels, linesize);
-		gs_stagesurface_unmap(filter->analysis_stage);
-	}
+	filter->analysis_stage_pending = true;
 
 	gs_enable_framebuffer_srgb(previous_fb);
 }
@@ -662,6 +687,10 @@ static void beauty_render(void *data, gs_effect_t *unused)
 		obs_source_skip_video_filter(filter->context);
 		return;
 	}
+
+	/* Consume the analysis staged on the previous frame before submitting
+	 * new GPU work, so the Map call never waits on a fresh copy. */
+	beauty_consume_analysis(filter);
 
 	/* 1. Capture the source into a texture we control. */
 	gs_texrender_reset(filter->src_texrender);
@@ -1455,6 +1484,15 @@ static obs_properties_t *beauty_properties(void *data)
 	beauty_update_visibility(props, filter ? filter->skin_detect : true,
 				 filter ? filter->face_aware : true,
 				 filter ? filter->face_manual : false);
+
+	/* Same identity as the log line, for when the user cannot find the log. */
+	{
+		char build_info[96];
+
+		snprintf(build_info, sizeof(build_info),
+			 "obs-beauty-filter %s · GPL-2.0-or-later", BEAUTY_VERSION);
+		obs_properties_add_text(props, "build_info", build_info, OBS_TEXT_INFO);
+	}
 
 	add_tooltips(props);
 

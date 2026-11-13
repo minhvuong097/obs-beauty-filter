@@ -2,7 +2,7 @@
 
 **[English](ARCHITECTURE.en.md) | Tiếng Việt**
 
-Tài liệu này mô tả luồng xử lý, công thức shader và các quyết định thiết kế của plugin **1.7.0** để ổn định trong pipeline filter của OBS.
+Tài liệu này mô tả luồng xử lý, công thức shader và các quyết định thiết kế của plugin **1.8.0** để ổn định trong pipeline filter của OBS.
 
 ## 1. Vòng đời filter và pipeline render
 
@@ -28,7 +28,7 @@ Mỗi frame, `beauty_render()` thực hiện:
 4. **Capture**: render target vào `src_texrender` bằng
    `gs_texrender_begin_with_color_space(..., gs_get_color_space())`. Dùng **output space** để OBS tự chuyển đổi/tonemap nguồn (kể cả scRGB) và tránh scale hai lần; dùng `obs_source_default_render()` cho input thông thường, hoặc `obs_source_video_render()` cho custom/async source.
 5. **MaskPass** (nếu cần mask): render mask nửa resolution vào `mask_texrender[mask_index]`, lấy history từ texture còn lại.
-6. **MaskAnalysis** (định kỳ): lấy trung bình mask và kênh luma (b) vào grid 64×N, rồi readback nhỏ để cập nhật face box và cân bằng sáng tự động.
+6. **MaskAnalysis** (định kỳ): lấy trung bình mask và kênh luma (b) vào grid 64×N, stage lại rồi map ở frame kế tiếp để cập nhật face box và cân bằng sáng tự động.
 7. **BlurBase**: render base bilateral độ phân giải thấp vào `base_texrender` (1/2–1/4 độ phân giải, RGBA16F).
 8. **Main pass**: chọn `DrawFast` / `DrawBalanced` / `DrawHigh`, set toàn bộ uniform rồi vẽ fullscreen quad, tái tạo chi tiết full-resolution trên base.
 9. Khôi phục blend state, framebuffer sRGB và linear sRGB.
@@ -155,12 +155,17 @@ Mục tiêu là plugin nhẹ, không model, không dependency. Một detector he
 
 - `PSMask` ghi `r` = raw skin mask, `g` = mask đã ổn định và `b` = luma tuyến tính của texel nguồn.
 - `MaskAnalysis` downsample `r` và `b` xuống grid **64 × N** (N tỉ lệ theo aspect, kẹp 16..64) bằng 4×4 box filter (16 tap); kênh `g` đã ổn định không cần xuống CPU.
-- Grid được stage và map xuống CPU. Kích thước tối đa 64×64 RGBA = 16 KB.
+- Grid được stage xuống một staging surface rồi **map ở frame kế tiếp**, nên `Map` không phải chờ bản copy vừa đưa vào hàng đợi GPU. Kích thước tối đa 64×64 RGBA = 16 KB.
   Kênh `r` = raw skin mask, `b` = luma tuyến tính dùng cho cân bằng sáng.
 - Chạy mỗi `frame_counter % 6 == 0` → khoảng 5 lần/giây ở 30 fps, khi
   `face_aware` bật và `face_manual` tắt (để cập nhật face box) hoặc khi
   `light_balance > 0`.
 - Không bao giờ đọc full-resolution frame.
+
+> Ghi chú thiết kế: bản copy sang staging surface được đưa vào hàng đợi ở frame
+> phân tích và chỉ map ở frame sau. Trễ một frame (~33 ms ở 30 fps) không đáng
+> kể với face box hay cân bằng sáng, nhưng tránh được việc CPU chờ GPU ngay
+> trong pass render — nguyên nhân gây giật khung khi scene nặng.
 
 ### 3.3. Connected component và face box
 

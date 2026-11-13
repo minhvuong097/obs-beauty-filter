@@ -1,7 +1,7 @@
 ; Inno Setup 6 installer for the OBS Beauty Filter Windows plugin.
 ;
 ; Build from the repository root:
-;   ISCC.exe /DPluginVersion=1.7.0 installer\obs-beauty-filter.iss
+;   ISCC.exe /DPluginVersion=1.8.0 installer\obs-beauty-filter.iss
 ;
 ; The script installs the OBS Studio 33+ plugin layout:
 ;   %ProgramData%\obs-studio\plugins\obs-beauty-filter\obs-beauty-filter.dll
@@ -10,7 +10,7 @@
 ; instead, matching OBS' portable plugin resolver.
 
 #ifndef PluginVersion
-  #define PluginVersion "1.7.0"
+  #define PluginVersion "1.8.0"
 #endif
 #ifndef PluginPackageDir
   #define PluginPackageDir "..\package\obs-beauty-filter"

@@ -14,7 +14,7 @@ and gifski assembles the GIF.
 | `before-after.jpg` | 1024×683 camera frame, original vs. filter at Amount 0.62, Light balance 0.45 |
 | `skin-detail.png` | 100% crop at 200% zoom, same region both sides: pore and hair detail is kept while the skin evens out |
 | `amount-slider.gif` | Ping-pong sweep of **Amount** from 0.00 to 0.90 with the other controls fixed |
-| `obs-panel.png` | Real OBS 30.2 "Filters" dialog with the plugin property page open (Xvfb + openbox, llvmpipe) |
+| `obs-panel.png` | Real OBS 30.2 "Filters" dialog with the property page open and the build line at the bottom (Xvfb + openbox, llvmpipe) |
 | `source-photo.jpg` | Unmodified CC0 input used by the renderer |
 
 `amount-slider.gif` and both comparison stills use the plugin defaults for
@@ -78,7 +78,7 @@ ImageMagick thêm nhãn và gifski ghép GIF.
 | `before-after.jpg` | Khung 1024×683: ảnh gốc vs. filter với Amount 0.62, Light balance 0.45 |
 | `skin-detail.png` | Crop 100% phóng 200%, cùng vùng hai bên: giữ chi tiết lỗ chân lông và tóc trong khi da phẳng màu hơn |
 | `amount-slider.gif` | Quét **Amount** 0.00 → 0.90 rồi chạy ngược, các thông số khác giữ nguyên |
-| `obs-panel.png` | Hộp thoại "Filters" thật của OBS 30.2 với trang thuộc tính plugin (Xvfb + openbox, llvmpipe) |
+| `obs-panel.png` | Hộp thoại "Filters" thật của OBS 30.2, trang thuộc tính mở tới cuối với dòng phiên bản (Xvfb + openbox, llvmpipe) |
 | `source-photo.jpg` | Ảnh CC0 gốc, không chỉnh sửa |
 
 Tạo lại bằng `tools/demo/build-assets.sh` (cần ImageMagick 7 và gifski, thiếu

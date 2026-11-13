@@ -257,7 +257,7 @@ if (-not (Test-Path $InstalledDll)) {
 }
 
 $VersionMatch = Select-String -Path (Join-Path $RootDir "CMakeLists.txt") `
-  -Pattern 'project\(obs-beauty-filter VERSION ([0-9]+\.[0-9]+\.[0-9]+)'
+  -Pattern 'set\(BEAUTY_FILTER_VERSION "([0-9]+\.[0-9]+\.[0-9]+)"\)'
 if (-not $VersionMatch) { throw "Cannot determine plugin version" }
 $PluginVersion = $VersionMatch.Matches[0].Groups[1].Value
 

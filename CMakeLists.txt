@@ -5,8 +5,10 @@ cmake_minimum_required(VERSION 3.28...3.30)
 #      add_core_module(obs-beauty-filter) to plugins/CMakeLists.txt.
 #   2. Standalone: point CMAKE_PREFIX_PATH at an OBS build/install tree that
 #      provides libobsConfig.cmake.
+set(BEAUTY_FILTER_VERSION "1.8.0")
+
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
-  project(obs-beauty-filter VERSION 1.7.0 LANGUAGES C)
+  project(obs-beauty-filter VERSION ${BEAUTY_FILTER_VERSION} LANGUAGES C)
   set(BEAUTY_FILTER_STANDALONE ON)
   find_package(libobs REQUIRED)
 else()
@@ -108,6 +110,12 @@ target_sources(
 
 target_link_libraries(${TARGET_NAME} PRIVATE OBS::libobs)
 target_compile_features(${TARGET_NAME} PRIVATE c_std_99)
+
+# The plugin reports this in the OBS log and in the property page, so a user
+# filing a bug can tell which build they are running.  It is deliberately set
+# here instead of using PROJECT_VERSION: in-tree builds inherit OBS' version.
+target_compile_definitions(${TARGET_NAME} PRIVATE
+  BEAUTY_VERSION="${BEAUTY_FILTER_VERSION}")
 
 if(MSVC)
   target_compile_options(${TARGET_NAME} PRIVATE /W3 /utf-8)

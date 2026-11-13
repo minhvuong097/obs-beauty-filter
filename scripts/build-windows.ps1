@@ -73,7 +73,7 @@ if ($Package -or $Installer) {
   if ($LASTEXITCODE -ne 0) { throw "Package staging failed" }
 
   $versionMatch = Select-String -Path (Join-Path $RootDir "CMakeLists.txt") `
-    -Pattern 'project\(obs-beauty-filter VERSION ([0-9]+\.[0-9]+\.[0-9]+)'
+    -Pattern 'set\(BEAUTY_FILTER_VERSION "([0-9]+\.[0-9]+\.[0-9]+)"\)'
   if (-not $versionMatch) { throw "Cannot determine plugin version from CMakeLists.txt" }
   $version = $versionMatch.Matches[0].Groups[1].Value
 

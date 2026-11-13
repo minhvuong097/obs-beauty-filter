@@ -39,7 +39,7 @@ plugin_data=${BEAUTY_PLUGIN_DATA:-$build_dir/rundir/share/obs/obs-plugins/obs-be
 image_plugin=${IMAGE_SOURCE_PLUGIN:-/usr/lib/obs-plugins/image-source.so}
 image_data=${IMAGE_SOURCE_DATA:-/usr/share/obs/obs-plugins/image-source}
 renderer=$build_dir/beauty-demo-render
-version=$(sed -n 's/.*project(obs-beauty-filter VERSION \([0-9.]*\) LANGUAGES C).*/\1/p' \
+version=$(sed -n 's/.*set(BEAUTY_FILTER_VERSION "\([0-9.]*\)").*/\1/p' \
 	"$root/CMakeLists.txt")
 version=${version:-dev}
 
@@ -180,7 +180,9 @@ fi
 # --------------------------------------------------------------------------
 
 if [ -n "${OBS_PANEL:-}" ]; then
-	magick "$OBS_PANEL" -depth 8 -strip "$out_dir/obs-panel.png"
+	# 256 colours keeps the screenshot around 100 KB without visible loss on
+	# the flat Qt theme.
+	magick "$OBS_PANEL" -colors 256 -depth 8 -strip "$out_dir/obs-panel.png"
 fi
 
 echo

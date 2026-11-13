@@ -11,7 +11,7 @@
 [![Build](https://github.com/minhvuong097/obs-beauty-filter/actions/workflows/build.yml/badge.svg)](https://github.com/minhvuong097/obs-beauty-filter/actions/workflows/build.yml)
 [![Latest release](https://img.shields.io/github/v/release/minhvuong097/obs-beauty-filter?display_name=tag)](https://github.com/minhvuong097/obs-beauty-filter/releases/latest)
 
-A GPU beauty filter for **OBS Studio** on Windows and Linux (macOS can be built from source but is not tested). Version **1.7.0** runs entirely on the GPU, plugs into the standard OBS filter pipeline, uses no AI model, never reads a full-resolution frame back to the CPU, and has no third-party runtime dependency.
+A GPU beauty filter for **OBS Studio** on Windows and Linux (macOS can be built from source but is not tested). Version **1.8.0** runs entirely on the GPU, plugs into the standard OBS filter pipeline, uses no AI model, never reads a full-resolution frame back to the CPU, and has no third-party runtime dependency.
 
 Goal: natural-looking skin for livestreams/webcams **and high-resolution cameras** while preserving eyes, eyebrows, hair, pores and the face outline — with correct HDR handling.
 
@@ -64,6 +64,8 @@ steps are in [`assets/demo/README.md`](assets/demo/README.md).
 - **Alpha support**, SDR 8-bit and SDR 16-bit.
 - **Bilingual UI**: English and Vietnamese.
 - **Full tooltips**: short labels keep the controls aligned, and the one-line guidance for every control appears in a tooltip (the **?** icon).
+- **Asynchronous readback**: the 64 px analysis grid is mapped on the next frame, so it never blocks the render pass; heavy scenes no longer stutter while the CPU waits for the GPU.
+- **Version inside OBS**: the log and the bottom of the properties page name the exact build, which makes bug reports unambiguous.
 
 ## Project layout
 
@@ -71,6 +73,8 @@ steps are in [`assets/demo/README.md`](assets/demo/README.md).
 obs-beauty-filter/
 ├── CMakeLists.txt
 ├── CHANGELOG.md
+├── CONTRIBUTING.md          # build/test/style/release conventions
+├── SECURITY.md              # vulnerability reports and checksum verification
 ├── src/
 │   ├── beauty-filter.c      # OBS filter + properties + multi-pass renderer
 │   ├── beauty-filter.h
@@ -116,7 +120,7 @@ obs-beauty-filter/
 
 ### Option A — installer `.exe` (recommended)
 
-Download `obs-beauty-filter-1.7.0-windows-x64-setup.exe` from
+Download `obs-beauty-filter-1.8.0-windows-x64-setup.exe` from
 **[GitHub Releases](https://github.com/minhvuong097/obs-beauty-filter/releases/latest)**
 and run it. The installer:
 
@@ -147,7 +151,7 @@ your OBS scenes, profiles and custom presets untouched.
 
 ### Option B — prebuilt ZIP (manual install)
 
-- Windows x64: `obs-beauty-filter-1.7.0-windows-x64.zip`
+- Windows x64: `obs-beauty-filter-1.8.0-windows-x64.zip`
 - Linux x86_64: `obs-beauty-filter-linux-x86_64.tar.gz`
 - Each release includes `SHA256SUMS.txt` so you can verify the download.
 
@@ -360,7 +364,7 @@ Source texture
    │      └─ face prior (face + neck ellipse)
    │      Output: R = raw mask, G = stabilised mask
    │
-   ├─► MaskAnalysis (64×N)  ──► small CPU readback (every 6 frames)
+   ├─► MaskAnalysis (64×N)  ──► small CPU readback, mapped next frame (every 6 frames)
    │                              └─► face-region.c: connected component
    │                                  + upper band → face box
    │
@@ -382,7 +386,7 @@ Output (alpha preserved, values > SDR white preserved on HDR)
 
 - **No longer a single pass**: the mask pass runs at half resolution, the analysis pass at 64×N, the base pass at 1/2–1/4 resolution, and the main pass at full resolution.
 - **Frequency separation**: the base pass blurs broad skin areas at reduced resolution with a 25-tap Vogel disk; the final pass restores full-resolution detail, weighting luma more than chroma. This preserves pores, reduces halos and avoids sparse kernels at 1440p/4K.
-- **No full-frame readback**: only the 64×N grid (at most 64×64 RGBA = 16 KB) is read back, once every 6 frames, and only when the face box or **Auto light balance** needs it.
+- **No full-frame readback**: only the 64×N grid (at most 64×64 RGBA = 16 KB) is read back once every 6 frames and mapped on the following frame so it never stalls the GPU; it runs only when the face box or **Auto light balance** needs it.
 - **Ping-pong mask textures** provide history for temporal stabilisation without per-frame allocation.
 - **The base is RGBA16F** even for SDR, avoiding linear 8-bit quantisation in shadows before the sRGB encode.
 - Radius is normalised to frame height (1080p reference), so one preset behaves similarly at 720p/1080p/4K.
@@ -400,7 +404,7 @@ The dominant cost is the full-resolution fragment shader, plus a half-resolution
 | High | 1/2 res | Close-ups, discrete GPU, 1440p/4K — recommended for high-end cameras |
 
 - `MaskPass` runs at half resolution with 8 coherence + 4 gradient samples; much cheaper than full resolution.
-- `MaskAnalysis` runs only every 6 frames when automatic face-aware detection is on.
+- `MaskAnalysis` runs only every 6 frames when automatic face-aware detection or automatic light balance is on, and its staging copy is mapped on the next frame, so it never stalls the render pass.
 - `BlurBase` is always cheaper than a full-resolution bilateral at the same radius because it touches 1/4–1/16 of the pixels.
 - Disable **Face-aware zones** when you do not use teeth/eye controls to skip the mask pass when `Skin detection` is also off.
 - If frame rate drops: lower Quality first, then Radius, then disable Glow.
@@ -413,7 +417,7 @@ The dominant cost is the full-resolution fragment shader, plus a half-resolution
 - No noise reduction.
 - HDR is processed but not tone-mapped; the filter preserves the source dynamic range.
 - Results depend on skin tone and lighting; test with multiple skin tones before production use.
-- The Windows D3D11 path must be built and tested on a Windows machine before a production release.
+- Windows CI exercises the D3D11 path on every commit, but real GPU/driver combinations still vary; confirm rendering and HDR on the target machine before production use.
 
 ## Roadmap
 
@@ -421,6 +425,21 @@ The dominant cost is the full-resolution fragment shader, plus a half-resolution
 2. Optional lightweight ML landmarks/segmentation (ONNX/MediaPipe) for multi-face and occlusion.
 3. Landmark-driven automatic face boxes instead of the upper-band heuristic.
 4. Optional GPU timing diagnostics that avoid the synchronous timer reads used by `gs_timer`.
+
+### Not planned (requires a paid service)
+
+The project uses free services only: GitHub Actions, Alpine/Windows runners and
+GitHub Releases. These items are **not** planned because they need a paid
+subscription:
+
+- **Authenticode signing for the Windows installer** — needs a yearly
+  code-signing certificate. Releases ship `SHA256SUMS.txt` instead, built by
+  public CI, with verification steps in [SECURITY.md](SECURITY.md).
+- **macOS notarization** — needs a paid Apple Developer Program membership.
+  macOS can still be built from source; downloaded builds trigger a Gatekeeper
+  warning.
+- **Cloud ML inference** — a local ONNX/MediaPipe model stays free and remains
+  on the roadmap; a per-request paid service does not.
 
 ## Testing
 

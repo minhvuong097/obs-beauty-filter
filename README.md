@@ -11,7 +11,7 @@
 [![Build](https://github.com/minhvuong097/obs-beauty-filter/actions/workflows/build.yml/badge.svg)](https://github.com/minhvuong097/obs-beauty-filter/actions/workflows/build.yml)
 [![Latest release](https://img.shields.io/github/v/release/minhvuong097/obs-beauty-filter?display_name=tag)](https://github.com/minhvuong097/obs-beauty-filter/releases/latest)
 
-Plugin bộ lọc làm đẹp cho **OBS Studio** trên Windows và Linux (macOS có thể build từ source nhưng chưa được kiểm thử). Phiên bản **1.7.0** chạy hoàn toàn trên GPU, hòa vào pipeline filter tiêu chuẩn của OBS, không cần model AI, không đọc ngược frame full-resolution về CPU và không phụ thuộc runtime bên thứ ba.
+Plugin bộ lọc làm đẹp cho **OBS Studio** trên Windows và Linux (macOS có thể build từ source nhưng chưa được kiểm thử). Phiên bản **1.8.0** chạy hoàn toàn trên GPU, hòa vào pipeline filter tiêu chuẩn của OBS, không cần model AI, không đọc ngược frame full-resolution về CPU và không phụ thuộc runtime bên thứ ba.
 
 Mục tiêu: làn da mịn tự nhiên cho livestream/webcam **và camera độ phân giải cao** mà vẫn giữ chi tiết mắt, lông mày, tóc, lỗ chân lông và viền khuôn mặt; đồng thời xử lý đúng nguồn HDR.
 
@@ -64,6 +64,8 @@ của jonas.svidras; ghi công, miễn trừ và cách tạo lại nằm trong
 - **Hỗ trợ alpha**, SDR 8-bit và SDR 16-bit.
 - **Song ngữ**: English và Tiếng Việt.
 - **Tooltip đầy đủ**: nhãn ngắn giữ các control thẳng cột, còn hướng dẫn một câu hiện trong tooltip (biểu tượng **?**) cho từng control.
+- **Readback bất đồng bộ**: grid phân tích 64 px được map ở frame kế tiếp, không chặn pass render; scene nặng không còn giật vì CPU chờ GPU.
+- **Phiên bản trong OBS**: log và cuối trang thuộc tính ghi rõ bản build, tiện đối chiếu khi báo lỗi.
 
 ## Cấu trúc project
 
@@ -71,6 +73,8 @@ của jonas.svidras; ghi công, miễn trừ và cách tạo lại nằm trong
 obs-beauty-filter/
 ├── CHANGELOG.md
 ├── CMakeLists.txt
+├── CONTRIBUTING.md          # quy ước build/test/style/phát hành
+├── SECURITY.md              # báo lỗi bảo mật, xác minh checksum
 ├── src/
 │   ├── beauty-filter.c      # OBS filter + properties + multi-pass render
 │   ├── beauty-filter.h
@@ -116,7 +120,7 @@ obs-beauty-filter/
 
 ### Cách A — bộ cài `.exe` (khuyến nghị)
 
-Tải `obs-beauty-filter-1.7.0-windows-x64-setup.exe` tại
+Tải `obs-beauty-filter-1.8.0-windows-x64-setup.exe` tại
 **[GitHub Releases](https://github.com/minhvuong097/obs-beauty-filter/releases/latest)**
 rồi chạy. Bộ cài sẽ:
 
@@ -147,7 +151,7 @@ hay custom preset của OBS.
 
 ### Cách B — gói ZIP build sẵn (cài thủ công)
 
-- Windows x64: `obs-beauty-filter-1.7.0-windows-x64.zip`
+- Windows x64: `obs-beauty-filter-1.8.0-windows-x64.zip`
 - Linux x86_64: `obs-beauty-filter-linux-x86_64.tar.gz`
 - Mỗi release có kèm `SHA256SUMS.txt` để kiểm tra tệp tải về.
 
@@ -357,7 +361,7 @@ Source texture
    │      └─ face prior (ellipse mặt + cổ)
    │      Output: R = raw mask, G = stabilized mask
    │
-   ├─► MaskAnalysis (64×N)  ──► CPU readback nhỏ (mỗi 6 frame)
+   ├─► MaskAnalysis (64×N)  ──► CPU readback nhỏ, map ở frame sau (mỗi 6 frame)
    │                              └─► face-region.c: connected component
    │                                  + upper-band → face box
    │
@@ -379,7 +383,7 @@ Output (giữ alpha, giữ giá trị > SDR white trên HDR)
 
 - **Không còn một pass duy nhất**: mask pass chạy ở nửa resolution, analysis pass ở 64×N, base pass ở 1/2–1/4 resolution, main pass ở full resolution.
 - **Frequency separation**: base pass làm mờ mảng da lớn ở độ phân giải thấp với 25 mẫu Vogel disk; pass cuối lấy lại chi tiết full-resolution, ưu tiên luma hơn chroma. Cách này giữ lỗ chân lông, giảm halo và tránh kernel quá thưa ở 1440p/4K.
-- **Không readback full frame**: chỉ đọc grid 64×N (tối đa 64×64 RGBA = 16 KB) mỗi 6 frame, và chỉ khi cần face box hoặc đang bật **Cân bằng sáng tự động**.
+- **Không readback full frame**: chỉ đọc grid 64×N (tối đa 64×64 RGBA = 16 KB) mỗi 6 frame, map ở frame kế tiếp để không chặn GPU, và chỉ khi cần face box hoặc đang bật **Cân bằng sáng tự động**.
 - **Ping-pong mask texture** cung cấp history cho temporal stabilisation mà không cấp phát mỗi frame.
 - **Base texture RGBA16F** ngay cả với SDR để tránh lượng tử hoá linear 8-bit trong vùng tối trước khi encode sRGB.
 - Bán kính được chuẩn hóa theo chiều cao frame (1080p là mốc), giúp cùng một bộ thông số cho kết quả tương đương ở 720p/1080p/4K.
@@ -397,7 +401,7 @@ Chi phí chính là fragment shader full-resolution, cộng thêm mask pass nử
 | High | 1/2 res | Close-up, GPU rời, 1440p/4K — khuyến nghị cho camera cao cấp |
 
 - `MaskPass` chạy ở nửa resolution với 8 mẫu coherence + 4 mẫu gradient; rẻ hơn nhiều so với full-res.
-- `MaskAnalysis` chỉ chạy mỗi 6 frame khi face-aware auto bật.
+- `MaskAnalysis` chỉ chạy mỗi 6 frame khi face-aware auto hoặc cân bằng sáng tự động bật; bản copy sang staging surface được map ở frame sau nên không chặn pass render.
 - `BlurBase` luôn rẻ hơn một bilateral full-res cùng bán kính vì chỉ chạy trên 1/4–1/16 số pixel.
 - Tắt **Face-aware zones** nếu không dùng teeth/eye để bỏ mask pass khi `Skin detection` cũng tắt.
 - Nếu tụt frame: hạ Quality trước, sau đó giảm Radius, tắt Glow.
@@ -410,7 +414,7 @@ Chi phí chính là fragment shader full-resolution, cộng thêm mask pass nử
 - Không khử noise.
 - HDR được xử lý nhưng không tone-map; filter giữ nguyên dải động của nguồn.
 - Kết quả phụ thuộc tông da và điều kiện ánh sáng; nên test với nhiều tông da trước khi dùng cho production.
-- Đường D3D11 trên Windows cần được build/test trực tiếp trên máy Windows trước khi phát hành production.
+- Đường D3D11 trên Windows được CI build và chạy test mỗi commit, nhưng tổ hợp GPU/driver thực tế vẫn khác nhau; nên xác nhận render/HDR trên máy đích trước khi dùng production.
 
 ## Roadmap
 
@@ -418,6 +422,14 @@ Chi phí chính là fragment shader full-resolution, cộng thêm mask pass nử
 2. Tuỳ chọn ML landmark/segmentation nhẹ (ONNX/MediaPipe) cho multi-face và occlusion.
 3. Tự động chọn face box bằng landmark thay vì upper-band heuristic.
 4. Chẩn đoán thời gian GPU tuỳ chọn, tránh kiểu đọc timer đồng bộ của `gs_timer`.
+
+### Không nằm trong kế hoạch (cần trả phí)
+
+Dự án chỉ dùng dịch vụ miễn phí: GitHub Actions, runner Alpine/Windows và phát hành qua GitHub Releases. Các hạng mục sau cần trả phí nên **không** thực hiện:
+
+- **Ký số Authenticode cho bộ cài Windows** — cần chứng chỉ code-signing trả phí hằng năm. Thay vào đó mỗi bản phát hành có `SHA256SUMS.txt`, artifact do CI công khai tạo, và hướng dẫn kiểm tra trước khi chạy (xem [SECURITY.md](SECURITY.md)).
+- **Notarize cho macOS** — cần Apple Developer Program trả phí. macOS vẫn build từ source được; bản tải về sẽ bị Gatekeeper cảnh báo.
+- **Suy luận ML trên cloud** — model ONNX/MediaPipe chạy cục bộ vẫn miễn phí và vẫn ở roadmap; dịch vụ trả tiền theo request thì không.
 
 ## Kiểm thử
 

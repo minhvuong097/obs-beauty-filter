@@ -248,6 +248,9 @@ If a backend returns bottom-up rows (some drivers/backends may), the `pattern ey
 Open **Help → Log Files → View Current Log** and look for:
 
 - `Loading module: obs-beauty-filter` — module loaded.
+- `[obs-beauty-filter] version 1.8.0 loaded (GPL-2.0-or-later)` — the build
+  actually running; the same line is shown at the bottom of the properties page,
+  so mention it in a bug report.
 - `Failed to load '...beauty_filter.effect'` — must **not** appear.
 - `Compiler warnings/errors for ...beauty_filter.effect` — must **not** appear.
 - `Source ID 'beauty_filter' not found` — must **not** appear after adding the filter.
@@ -299,6 +302,8 @@ On first use, OBS compiles all six techniques (`MaskPass`, `MaskAnalysis`, `Blur
 | 32 | Light balance 0.35, cover the key light / turn it off | The image brightens gradually without pumping; turning the light back on restores the previous level |
 | 33 | Light balance 0 (off) | The image matches the filter with the feature disabled, independent of scene content |
 | 34 | Hover any control in the property page | A tooltip shows the one-line guidance in the UI language; no raw `Tooltip.*` key appears |
+| 35 | Scroll to the bottom of the property page | `obs-beauty-filter <version> · GPL-2.0-or-later` matches the version line in the log |
+| 36 | Switch a lamp off or walk into a dark area with Amount > 0 | The image settles within about 10 frames; no stutter from a synchronous readback |
 
 ## 8. Benchmark guide — Intel i5-1235U
 
@@ -407,7 +412,7 @@ Windows CI compiles `installer/obs-beauty-filter.iss` with Inno Setup 6 after
 packaging and then installs the setup silently into a temporary directory:
 
 ```powershell
-.\obs-beauty-filter-1.7.0-windows-x64-setup.exe /VERYSILENT /SUPPRESSMSGBOXES `
+.\obs-beauty-filter-1.8.0-windows-x64-setup.exe /VERYSILENT /SUPPRESSMSGBOXES `
   /NORESTART /SP- /DIR=C:\temp\beauty-installer-test /LOG=install.log
 ```
 

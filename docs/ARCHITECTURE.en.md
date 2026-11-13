@@ -28,7 +28,7 @@ Each frame, `beauty_render()`:
 4. **Capture**: renders the target into `src_texrender` with
    `gs_texrender_begin_with_color_space(..., gs_get_color_space())`. Using the **output space** lets OBS perform source conversion/tonemapping (including scRGB) and avoids double scaling; it uses `obs_source_default_render()` for ordinary inputs and `obs_source_video_render()` for custom/async sources.
 5. **MaskPass** (when a mask is needed): renders a half-resolution mask into `mask_texrender[mask_index]`, sampling history from the other texture.
-6. **MaskAnalysis** (periodic): averages the mask and the luma (b) channel into a 64×N grid, then performs a small readback to update the face box and the automatic light balance.
+6. **MaskAnalysis** (periodic): averages the mask and the luma (b) channel into a 64×N grid, stages it, and maps it on the next frame to update the face box and the automatic light balance.
 7. **BlurBase**: renders the low-resolution bilateral base into `base_texrender` (1/2–1/4 resolution, RGBA16F).
 8. **Main pass**: selects `DrawFast` / `DrawBalanced` / `DrawHigh`, sets all uniforms and draws a fullscreen quad, reconstructing full-resolution detail on top of the base.
 9. Restores blend state, framebuffer sRGB and linear sRGB.
@@ -155,13 +155,21 @@ The goal is a lightweight plugin with no model and no dependency. A heuristic de
 
 - `PSMask` writes `r` = raw skin mask, `g` = stabilised mask and `b` = linear luma of the source texel.
 - `MaskAnalysis` downsamples `r` and `b` to a **64 × N** grid (N proportional to aspect, clamped 16..64) with a 4×4 box filter (16 taps); the stabilised `g` channel is not needed on the CPU.
-- The grid is staged and mapped to the CPU. Maximum size is 64×64 RGBA = 16 KB.
+- The grid is staged into a staging surface and **mapped on the next rendered
+  frame**, so `Map` never waits on the copy queued in the current frame. Maximum
+  size is 64×64 RGBA = 16 KB.
   Channel `r` is the raw skin mask; channel `b` is linear luma for the light
   balance.
 - Runs when `frame_counter % 6 == 0` → about 5 times per second at 30 fps,
   either when `face_aware` is on with `face_manual` off (face box update) or
   when `light_balance > 0`.
 - The full-resolution frame is never read back.
+
+> Design note: the copy into the staging surface is queued on the analysis
+> frame and mapped on the following frame. One frame of latency (~33 ms at
+> 30 fps) is irrelevant for a face box or exposure measurement, and it avoids
+> making the CPU wait for the GPU in the middle of the render pass — the usual
+> source of stutter on a heavy scene.
 
 ### 3.3. Connected components and face box
 
@@ -378,7 +386,7 @@ result  += glow_src * (glow * (is_hdr ? 0.65 : 0.45) * mask);
 mask (`r` = raw skin mask, `g` = stabilised mask). `PSMaskAnalysis` then only
 averages `r` and `b` over its 4×4 footprint into the 64×N grid, so the
 measurement costs no extra pass and no full-resolution readback. The CPU reads
-that grid every 6 frames:
+that grid every 6 frames, one frame after it was staged:
 
 ```c
 frame_mean = sum(luma) / count;
