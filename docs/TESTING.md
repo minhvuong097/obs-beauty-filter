@@ -122,7 +122,9 @@ scRGB pixel after filter:       4.227 0.457 0.500 1.000
 texture stripe contrast before: 10 (161 vs 151)
 texture stripe contrast after:  1 (157 vs 156)
 texture stripe contrast detail: 8 (160 vs 152)
-OK: module loaded, filter created, effect compiled, filter rendered, mask/opacity/face zones/texture/HDR verified
+light balance luma:            161 -> 117
+light balance dark luma:       69 -> 105
+OK: module loaded, filter created, effect compiled, filter rendered, mask/opacity/face zones/texture/light balance/HDR verified
 ```
 
 Test kiểm tra:
@@ -144,8 +146,25 @@ Test kiểm tra:
 9. **HDR scRGB**: pattern báo `GS_CS_709_SCRGB` và vẽ cùng giá trị `(4.0, 0.4, 0.4)`:
    - `R > 1.5` và `R > before + 0.05` như trên.
    - `R < before * 1.5` → phát hiện lỗi scale (hdr_scale thiếu/thừa; lỗi cũ cho ra ~15 thay vì ~4.4).
+10. **Cân bằng sáng tự động**: khung da sáng phải tối lại (luma 161 → 117) và
+    khung da tối phải sáng lên (69 → 105) với `light_balance = 1`, không bật skin
+    detection và face tracking. Ca tối có mặt vì lỗi ở đường đo luma làm giá trị
+    đọc ra 0, gain bị kẹp 2.5× và ảnh bị bổi sáng thay vì được nâng.
 
 Nếu ra `0,0,0,0`, filter creation fail, hoặc sai lệch màu lớn, xem log shader bên dưới.
+
+### Chẩn đoán cân bằng sáng
+
+Đặt `BEAUTY_DEBUG_LIGHT=1` để in một dòng mỗi lần phân tích:
+
+```text
+[light] frame=0.408 skin=0.292 cov=17.6% mean=0.309 target=0.30 gain=0.970
+```
+
+`frame`/`skin` là trung bình tuyến tính, `cov` là độ phủ da quyết định nhánh
+(2–90% dùng target 0.30 ưu tiên da, còn lại 0.18), `mean` là giá trị thực sự được
+kéo về target và `gain` là giá trị đã kẹp trước khi làm mượt. Nếu `frame` cứ bằng
+0 trong khi ảnh không hề đen, kênh luma đang không được ghi hoặc đọc đúng.
 
 ### Windows
 
@@ -274,6 +293,7 @@ Khi thêm filter lần đầu, OBS sẽ compile cả 6 technique (`MaskPass`, `M
 | 31 | Kéo slider Amount rồi thả | Giá trị bám theo con trỏ, không nhảy về vị trí cũ; preset chuyển sang `Tùy chỉnh` |
 | 32 | Cân bằng sáng 0.35, che sáng / tắt đèn | Ảnh sáng dần đều, không nhấp nháy; mở lại đèn thì hạ về mức cũ |
 | 33 | Cân bằng sáng 0 (tắt) | Ảnh giống hệt khi chưa bật tính năng, không phụ thuộc nội dung khung hình |
+| 34 | Rê chuột lên từng control trong trang thuộc tính | Tooltip hiện câu hướng dẫn bằng ngôn ngữ UI; không thấy key `Tooltip.*` thô |
 
 ## 8. Hướng dẫn benchmark — Intel i5-1235U
 
@@ -378,7 +398,7 @@ CI Windows biên dịch `installer/obs-beauty-filter.iss` bằng Inno Setup 6 sa
 bước đóng gói, rồi cài silent vào thư mục tạm:
 
 ```powershell
-.\obs-beauty-filter-1.6.0-windows-x64-setup.exe /VERYSILENT /SUPPRESSMSGBOXES `
+.\obs-beauty-filter-1.7.0-windows-x64-setup.exe /VERYSILENT /SUPPRESSMSGBOXES `
   /NORESTART /SP- /DIR=C:\temp\beauty-installer-test /LOG=install.log
 ```
 

@@ -124,7 +124,9 @@ scRGB pixel after filter:       4.227 0.457 0.500 1.000
 texture stripe contrast before: 10 (161 vs 151)
 texture stripe contrast after:  1 (157 vs 156)
 texture stripe contrast detail: 8 (160 vs 152)
-OK: module loaded, filter created, effect compiled, filter rendered, mask/opacity/face zones/texture/HDR verified
+light balance luma:            161 -> 117
+light balance dark luma:       69 -> 105
+OK: module loaded, filter created, effect compiled, filter rendered, mask/opacity/face zones/texture/light balance/HDR verified
 ```
 
 The test checks:
@@ -146,8 +148,27 @@ The test checks:
 9. **HDR scRGB**: the pattern reports `GS_CS_709_SCRGB` and draws the same `(4.0, 0.4, 0.4)`:
    - `R > 1.5` and `R > before + 0.05` as above.
    - `R < before * 1.5` → catches an incorrect HDR scale (missing/extra `hdr_scale`; the old bug produced ~15 instead of ~4.4).
+10. **Auto light balance**: a bright skin frame must darken (luma 161 → 117) and a
+    dark skin frame must brighten (69 → 105) with `light_balance = 1`, no skin
+    detection and no face tracking. The dark case exists because a regression in
+    the luma path makes the measurement read 0, which pins the gain to the 2.5×
+    clamp and washes the image out instead of lifting it.
 
 If you get `0,0,0,0`, filter creation fails, or colours are far off, check the shader log below.
+
+### Light balance diagnostics
+
+Set `BEAUTY_DEBUG_LIGHT=1` to print one line on every analysis tick:
+
+```text
+[light] frame=0.408 skin=0.292 cov=17.6% mean=0.309 target=0.30 gain=0.970
+```
+
+`frame` and `skin` are linear means, `cov` is the skin coverage that selects the
+branch (2–90% uses the skin-weighted target 0.30, otherwise 0.18), `mean` is the
+value actually steered to the target and `gain` is the clamped measurement before
+the adaptive ramp. If `frame` stays 0 while the frame is clearly not black, the
+luma channel is not being written or read correctly.
 
 ### Windows
 
@@ -277,6 +298,7 @@ On first use, OBS compiles all six techniques (`MaskPass`, `MaskAnalysis`, `Blur
 | 31 | Drag the Amount slider and release | The value follows the pointer and does not snap back; the preset switches to `Custom` |
 | 32 | Light balance 0.35, cover the key light / turn it off | The image brightens gradually without pumping; turning the light back on restores the previous level |
 | 33 | Light balance 0 (off) | The image matches the filter with the feature disabled, independent of scene content |
+| 34 | Hover any control in the property page | A tooltip shows the one-line guidance in the UI language; no raw `Tooltip.*` key appears |
 
 ## 8. Benchmark guide — Intel i5-1235U
 
@@ -385,7 +407,7 @@ Windows CI compiles `installer/obs-beauty-filter.iss` with Inno Setup 6 after
 packaging and then installs the setup silently into a temporary directory:
 
 ```powershell
-.\obs-beauty-filter-1.6.0-windows-x64-setup.exe /VERYSILENT /SUPPRESSMSGBOXES `
+.\obs-beauty-filter-1.7.0-windows-x64-setup.exe /VERYSILENT /SUPPRESSMSGBOXES `
   /NORESTART /SP- /DIR=C:\temp\beauty-installer-test /LOG=install.log
 ```
 

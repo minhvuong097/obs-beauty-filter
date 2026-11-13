@@ -188,19 +188,29 @@ restart OBS.
 
 ### Automatic light balance
 
-**Auto light balance** lives in the **Detail & light** group. The filter measures
-average brightness on a 64 px grid (skin-weighted when a face is detected) and
-lifts or lowers exposure toward a neutral level. When lifting, a soft shoulder
-keeps SDR highlights from clipping; HDR sources are never clipped.
+**Auto light balance** lives in the **Detail & light** group. Every 6 frames the
+filter measures brightness on a 64 px grid and picks one of two branches:
+
+- **Skin covers 2–90% of the frame** — exposure follows the skin:
+  `0.85 × skin brightness + 0.15 × frame brightness`, target 0.30. A bright
+  window behind the subject no longer darkens the face, and skin tones even out.
+- **Otherwise** (little or no skin) — whole-frame brightness with target 0.18,
+  so a dark room without a clear subject is still lifted.
+
+Gain is clamped to 0.5–2.5× and then smoothed adaptively: small errors move 0.25
+per tick so the image does not breathe, while large errors (a lamp switching on
+or off, walking into a dark room) take an extra 0.45 and settle within a few
+frames. When lifting, a soft shoulder keeps SDR highlights from clipping; HDR
+sources are never clipped.
 
 - `0` — off; the source exposure is untouched.
 - `0.35` — default; a sensible correction for indoor webcams.
 - `0.7–1.0` — very dark or strongly backlit scenes; gain is capped at 2.5×.
 
-The measurement is smoothed over several frames, so walking into a brighter or
-darker area fades instead of jumping. The slider is independent from presets:
-switching presets keeps the balance level you set. If skin looks flat or shadows
-lose detail, lower the slider before raising **Brightness** in **Complexion**.
+The slider is independent from presets: switching presets keeps the balance
+level you set. If skin looks flat or shadows lose detail, lower the slider
+before raising **Brightness** in **Complexion**. To see the actual numbers, run
+OBS with `BEAUTY_DEBUG_LIGHT=1` (see `docs/TESTING.md`).
 
 ## 3. Tuning the face zones
 

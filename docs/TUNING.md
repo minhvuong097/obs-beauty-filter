@@ -187,19 +187,28 @@ cấp phát hoặc shader cụ thể, rồi mở lại filter hoặc khởi đ�
 
 ### Cân bằng sáng tự động
 
-**Cân bằng sáng tự động** nằm trong nhóm **Chi tiết & ánh sáng**. Filter đo độ
-sáng trung bình trên một grid 64 px (ưu tiên vùng da khi nhận diện được mặt) rồi
-nâng hoặc hạ phơi sáng về mức trung tính. Khi nâng sáng, một shoulder mềm giữ
+**Cân bằng sáng tự động** nằm trong nhóm **Chi tiết & ánh sáng**. Mỗi 6 frame
+filter đo độ sáng trên grid 64 px và chọn một trong hai cách tính:
+
+- **Da chiếm 2–90% khung** — phơi sáng bám theo da:
+  `0.85 × độ sáng da + 0.15 × độ sáng toàn khung`, target 0.30. Cửa sổ sáng phía
+  sau không còn làm tối mặt, và da luôn đều màu.
+- **Còn lại** (ít hoặc quá nhiều da) — dùng độ sáng toàn khung với target 0.18,
+  nhờ vậy phòng tối không có chủ thể rõ vẫn được nâng sáng.
+
+Gain bị kẹp trong 0.5–2.5×, sau đó làm mượt có thích nghi: sai lệch nhỏ đi từng
+bước 0.25 để ảnh không "thở", sai lệch lớn (vừa bật/tắt đèn, bước vào phòng tối)
+đi thêm 0.45 nên bám kịp trong vài frame. Khi nâng sáng, một shoulder mềm giữ
 highlight SDR khỏi cháy; nguồn HDR không bị clip.
 
 - `0` — tắt hoàn toàn, giữ nguyên phơi sáng nguồn.
 - `0.35` — mặc định, xử lý vừa phải cho webcam trong nhà.
 - `0.7–1.0` — cảnh rất tối hoặc ngược sáng mạnh; gain tối đa 2.5×.
 
-Giá trị đo được làm mượt qua nhiều frame nên khi bạn đi vào vùng sáng/tối, hình
-sáng dần chứ không nhảy. Slider này độc lập với preset: đổi preset không ghi đè
-mức cân bằng sáng bạn đã đặt. Nếu da bị bệt hoặc mất chi tiết vùng tối, hạ slider
-xuống trước khi tăng **Độ sáng** trong nhóm **Sắc tố da**.
+Slider này độc lập với preset: đổi preset không ghi đè mức cân bằng sáng bạn đã
+đặt. Nếu da bị bệt hoặc mất chi tiết vùng tối, hạ slider xuống trước khi tăng
+**Độ sáng** trong nhóm **Sắc tố da**. Cần xem số đo thật thì chạy OBS với biến
+môi trường `BEAUTY_DEBUG_LIGHT=1` (xem `docs/TESTING.md`).
 
 ## 3. Tinh chỉnh face zones
 

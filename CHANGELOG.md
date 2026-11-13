@@ -5,6 +5,51 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.7.0] - 2026-11-13
+
+### Added
+
+- **Demo images and GIF made with the plugin itself.** The README now shows a
+  before/after still, a 100% crop at 200% zoom, a ping-pong GIF of the
+  **Amount** slider and a real OBS properties screenshot. Every pixel comes from
+  `tools/demo/render-demo.c`, a small offline renderer that starts a headless
+  libobs graphics context, loads the built plugin and an `image_source`, and
+  reads the processed frames back; ImageMagick and gifski only add captions.
+  Build it with `-DBEAUTY_BUILD_DEMO_TOOLS=ON` and regenerate the set with
+  `tools/demo/build-assets.sh`. The CC0 source photo, its credit and the
+  regeneration steps live in [`assets/demo/README.md`](assets/demo/README.md).
+- **Hover tooltips on every control.** OBS uses a property's description as the
+  label, so the 1.6.0 layout shortened labels to keep the column aligned. The
+  guidance is back as `long_description` (29 keys in English and Vietnamese),
+  which OBS renders as a tooltip / help icon. Missing locale keys are skipped
+  instead of displaying the raw key.
+- **Dark-frame regression test.** `beauty-load-test` now also renders a dark
+  skin tone through the light balance and requires the luma to rise, alongside
+  the existing bright-frame check.
+- **`BEAUTY_DEBUG_LIGHT=1`** prints the measured frame mean, skin mean, skin
+  coverage, target and gain on the first analysis tick. It is off by default and
+  only exists for field diagnostics.
+
+### Fixed
+
+- **Automatic light balance measured a luma of zero**, so the gain was pinned to
+  the 2.5x clamp and bright frames were washed out. The analysis pass sampled
+  the source through a uniform that reads back as 0 on the Mesa OpenGL driver,
+  and it also only ran when skin detection or face tracking was on. Luma is now
+  written into the **b** channel by the mask pass (where the sampled source is
+  already bound), the analysis pass only averages it, and the mask pass runs
+  whenever light balance is enabled. Verified on a real frame: gain converges to
+  0.97 instead of 2.5, average luma 0.573 -> 0.571, a bright test frame goes
+  161 -> 117 and a dark one 69 -> 105.
+- **Wrong exposure target for portraits and dark scenes.** The measurement now
+  uses two branches: when skin covers 2-90% of the frame the face sets the
+  exposure (`0.85 * skin_mean + 0.15 * frame_mean`, target 0.30), otherwise the
+  whole frame is used (target 0.18). A bright window behind the subject no
+  longer darkens the face, and scenes without a clear subject are still lifted.
+- **Slow recovery after a lighting change.** The gain ramp keeps its 0.25 rate
+  for small corrections but adds 0.45 when the error exceeds 0.75, so walking
+  into a dark room settles in a few frames instead of several seconds.
+
 ## [1.6.0] - 2026-11-12
 
 ### Added
@@ -165,6 +210,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - OBS 33+ plugin layout on Windows, legacy layout for OBS 32 and older.
 - Linux and Windows CI builds with packaged artifacts.
 
+[1.7.0]: https://github.com/minhvuong097/obs-beauty-filter/releases/tag/v1.7.0
 [1.6.0]: https://github.com/minhvuong097/obs-beauty-filter/releases/tag/v1.6.0
 [1.5.0]: https://github.com/minhvuong097/obs-beauty-filter/releases/tag/v1.5.0
 [1.4.0]: https://github.com/minhvuong097/obs-beauty-filter/releases/tag/v1.4.0

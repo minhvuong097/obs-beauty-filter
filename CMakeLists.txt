@@ -6,7 +6,7 @@ cmake_minimum_required(VERSION 3.28...3.30)
 #   2. Standalone: point CMAKE_PREFIX_PATH at an OBS build/install tree that
 #      provides libobsConfig.cmake.
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
-  project(obs-beauty-filter VERSION 1.6.0 LANGUAGES C)
+  project(obs-beauty-filter VERSION 1.7.0 LANGUAGES C)
   set(BEAUTY_FILTER_STANDALONE ON)
   find_package(libobs REQUIRED)
 else()
@@ -129,6 +129,21 @@ if(COMMAND set_target_properties_obs)
   # target_install_resources() for in-tree builds.
   set_target_properties_obs(${TARGET_NAME} PROPERTIES FOLDER plugins PREFIX "")
   set(BEAUTY_OBS_HELPERS TRUE)
+endif()
+
+# Offline renderer used by tools/demo/build-assets.sh to regenerate the README
+# before/after and slider GIF from the real plugin.  It is not needed to build
+# or package the plugin, so it stays off by default.
+option(BEAUTY_BUILD_DEMO_TOOLS "Build the offline demo renderer" OFF)
+if(BEAUTY_BUILD_DEMO_TOOLS)
+  add_executable(beauty-demo-render tools/demo/render-demo.c)
+  target_link_libraries(beauty-demo-render PRIVATE OBS::libobs)
+  target_compile_features(beauty-demo-render PRIVATE c_std_99)
+  if(MSVC)
+    target_compile_options(beauty-demo-render PRIVATE /W3 /utf-8)
+  else()
+    target_compile_options(beauty-demo-render PRIVATE -Wall -Wextra)
+  endif()
 endif()
 
 option(BEAUTY_BUILD_TESTS "Build the standalone tests" OFF)

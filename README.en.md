@@ -11,9 +11,34 @@
 [![Build](https://github.com/minhvuong097/obs-beauty-filter/actions/workflows/build.yml/badge.svg)](https://github.com/minhvuong097/obs-beauty-filter/actions/workflows/build.yml)
 [![Latest release](https://img.shields.io/github/v/release/minhvuong097/obs-beauty-filter?display_name=tag)](https://github.com/minhvuong097/obs-beauty-filter/releases/latest)
 
-A GPU beauty filter for **OBS Studio** on Windows and Linux (macOS can be built from source but is not tested). Version **1.6.0** runs entirely on the GPU, plugs into the standard OBS filter pipeline, uses no AI model, never reads a full-resolution frame back to the CPU, and has no third-party runtime dependency.
+A GPU beauty filter for **OBS Studio** on Windows and Linux (macOS can be built from source but is not tested). Version **1.7.0** runs entirely on the GPU, plugs into the standard OBS filter pipeline, uses no AI model, never reads a full-resolution frame back to the CPU, and has no third-party runtime dependency.
 
 Goal: natural-looking skin for livestreams/webcams **and high-resolution cameras** while preserving eyes, eyebrows, hair, pores and the face outline — with correct HDR handling.
+
+## Demo
+
+<img src="assets/demo/before-after.jpg" alt="Original frame and the same frame through the Beauty Filter">
+
+This is **real plugin output**, not a mock-up: a 1024×683 frame rendered through
+headless libobs with Amount 0.62, Radius 9 px, Detail 0.40, Light balance 0.45,
+Rosy 0.12 and Clarity 0.08.
+
+<p align="center">
+  <img src="assets/demo/amount-slider.gif" alt="Amount swept from 0.00 to 0.90" width="640">
+</p>
+
+100% crop at 200% zoom — pores, eyebrows and hair survive, only the skin itself
+gets flatter:
+
+<img src="assets/demo/skin-detail.png" alt="Close-up of skin before and after filtering">
+
+<p align="center">
+  <img src="assets/demo/obs-panel.png" alt="Beauty Filter property page inside OBS" width="740">
+</p>
+
+The **?** icon next to each label is the tooltip with the full guidance (EN/VI).
+The source photo is CC0 by jonas.svidras; credit, disclaimer and regeneration
+steps are in [`assets/demo/README.md`](assets/demo/README.md).
 
 ## Features
 
@@ -38,6 +63,7 @@ Goal: natural-looking skin for livestreams/webcams **and high-resolution cameras
 - **Three performance levels**: Fast / Balanced / High.
 - **Alpha support**, SDR 8-bit and SDR 16-bit.
 - **Bilingual UI**: English and Vietnamese.
+- **Full tooltips**: short labels keep the controls aligned, and the one-line guidance for every control appears in a tooltip (the **?** icon).
 
 ## Project layout
 
@@ -75,8 +101,12 @@ obs-beauty-filter/
 │   └── COMPATIBILITY.md     # + COMPATIBILITY.en.md
 ├── installer/
 │   └── obs-beauty-filter.iss # Inno Setup source for the Windows installer
-├── assets/brand/             # logo, icon, lockups, banner
-├── tools/brand/gen.py        # regenerates the brand kit
+├── assets/
+│   ├── brand/                # logo, icon, lockups, banner
+│   └── demo/                 # README stills/GIF, CC0 source, credit
+├── tools/
+│   ├── brand/gen.py          # regenerates the brand kit
+│   └── demo/                 # offline renderer + build-assets.sh
 └── scripts/
     ├── build-linux.sh
     └── build-windows.ps1
@@ -86,7 +116,7 @@ obs-beauty-filter/
 
 ### Option A — installer `.exe` (recommended)
 
-Download `obs-beauty-filter-1.6.0-windows-x64-setup.exe` from
+Download `obs-beauty-filter-1.7.0-windows-x64-setup.exe` from
 **[GitHub Releases](https://github.com/minhvuong097/obs-beauty-filter/releases/latest)**
 and run it. The installer:
 
@@ -117,7 +147,7 @@ your OBS scenes, profiles and custom presets untouched.
 
 ### Option B — prebuilt ZIP (manual install)
 
-- Windows x64: `obs-beauty-filter-1.6.0-windows-x64.zip`
+- Windows x64: `obs-beauty-filter-1.7.0-windows-x64.zip`
 - Linux x86_64: `obs-beauty-filter-linux-x86_64.tar.gz`
 - Each release includes `SHA256SUMS.txt` so you can verify the download.
 

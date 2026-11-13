@@ -42,7 +42,7 @@ body:
     attributes:
       label: Plugin version
       description: From the release tag, the installer filename or the ZIP filename.
-      placeholder: "1.6.0"
+      placeholder: "1.7.0"
     validations:
       required: true
 

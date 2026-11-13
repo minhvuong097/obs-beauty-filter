@@ -28,7 +28,7 @@ Each frame, `beauty_render()`:
 4. **Capture**: renders the target into `src_texrender` with
    `gs_texrender_begin_with_color_space(..., gs_get_color_space())`. Using the **output space** lets OBS perform source conversion/tonemapping (including scRGB) and avoids double scaling; it uses `obs_source_default_render()` for ordinary inputs and `obs_source_video_render()` for custom/async sources.
 5. **MaskPass** (when a mask is needed): renders a half-resolution mask into `mask_texrender[mask_index]`, sampling history from the other texture.
-6. **MaskAnalysis** (periodic): downsamples the mask to a 64×N grid, adds luma in the b channel, then performs a small readback to update the face box and the automatic light balance.
+6. **MaskAnalysis** (periodic): averages the mask and the luma (b) channel into a 64×N grid, then performs a small readback to update the face box and the automatic light balance.
 7. **BlurBase**: renders the low-resolution bilateral base into `base_texrender` (1/2–1/4 resolution, RGBA16F).
 8. **Main pass**: selects `DrawFast` / `DrawBalanced` / `DrawHigh`, sets all uniforms and draws a fullscreen quad, reconstructing full-resolution detail on top of the base.
 9. Restores blend state, framebuffer sRGB and linear sRGB.
@@ -153,7 +153,8 @@ The goal is a lightweight plugin with no model and no dependency. A heuristic de
 
 ### 3.2. Grid and readback
 
-- `MaskAnalysis` downsamples the raw mask to a **64 × N** grid (N proportional to aspect, clamped 16..64) with a 4×4 box filter (16 taps).
+- `PSMask` writes `r` = raw skin mask, `g` = stabilised mask and `b` = linear luma of the source texel.
+- `MaskAnalysis` downsamples `r` and `b` to a **64 × N** grid (N proportional to aspect, clamped 16..64) with a 4×4 box filter (16 taps); the stabilised `g` channel is not needed on the CPU.
 - The grid is staged and mapped to the CPU. Maximum size is 64×64 RGBA = 16 KB.
   Channel `r` is the raw skin mask; channel `b` is linear luma for the light
   balance.
@@ -373,17 +374,38 @@ result  += glow_src * (glow * (is_hdr ? 0.65 : 0.45) * mask);
 
 ### 6.1 Automatic light balance
 
-`PSMaskAnalysis` also writes linear luma into the **b** channel of the 64×N grid
-(the **r** channel stays the raw skin mask), so no extra pass or full-resolution
-readback is needed. The CPU reads that grid every 6 frames:
+`PSMask` writes the linear luma of every texel into the **b** channel of the
+mask (`r` = raw skin mask, `g` = stabilised mask). `PSMaskAnalysis` then only
+averages `r` and `b` over its 4×4 footprint into the 64×N grid, so the
+measurement costs no extra pass and no full-resolution readback. The CPU reads
+that grid every 6 frames:
 
 ```c
-mean = sum(luma) / count;
-if (skin_coverage > 1% && skin_coverage < 90%)
-    mean = mean * 0.35 + skin_mean * 0.65;
-gain = clamp(0.20 / max(mean, 0.004), 0.50, 2.50);
-auto_gain += (gain - auto_gain) * 0.25;   /* frame smoothing */
+frame_mean = sum(luma) / count;
+target = 0.18;
+if (skin_coverage > 2% && skin_coverage < 90%) {
+    /* a portrait is exposed for the face, not for the window behind it */
+    mean   = 0.85 * skin_mean + 0.15 * frame_mean;
+    target = 0.30;
+}
+gain = clamp(target / max(mean, 0.004), 0.50, 2.50);
+
+step = 0.25 + (fabs(gain - auto_gain) > 0.75 ? 0.45 : 0.0);
+auto_gain += (gain - auto_gain) * step;   /* adaptive frame smoothing */
 ```
+
+Skin sits above middle grey in a well-exposed portrait, hence the higher target
+in the skin-weighted branch; scenes without a clear subject fall back to a
+plain 0.18 mid-grey target so dark rooms are lifted too. The adaptive step
+converges in a few frames after a real lighting change (walking into a dark
+room, a lamp switching off) while small corrections stay slow so the image does
+not breathe.
+
+> Design note: the luma rides in the mask pass because uniform floats
+> (`opacity`, `hdr_scale`) read back as 0 inside the `MaskAnalysis` technique on
+> the Mesa driver used for the offline renderer, while literals and texture
+> samples work. Keeping the measurement in the pass that already binds the
+> mask texture avoids relying on per-pass uniform state.
 
 In `beauty_finish` the gain is blended by the slider so it never exceeds the
 level the user chose, and the shoulder only engages while lifting (SDR):

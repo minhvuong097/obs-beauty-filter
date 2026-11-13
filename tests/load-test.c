@@ -881,6 +881,53 @@ int main(int argc, char **argv)
 			return fail("auto light balance did not reduce a bright frame");
 		}
 
+		/* A dark frame must be lifted just as reliably: the measurement
+		 * rides in the mask pass now, and a regression there would make
+		 * the gain collapse to the 2.5x clamp or to zero. */
+		obs_data_t *dark_settings = obs_data_create();
+		obs_data_set_int(dark_settings, "width", 1280);
+		obs_data_set_int(dark_settings, "height", 720);
+		obs_data_set_int(dark_settings, "color", 0xFF30405A); /* dark skin */
+		obs_source_t *dark =
+			obs_source_create("color_source", "beauty-dark-test", dark_settings, NULL);
+		obs_data_release(dark_settings);
+		if (!source_valid(dark)) {
+			obs_source_release(color);
+			obs_source_release(balance_filter);
+			return fail("dark color source creation");
+		}
+
+		uint8_t dark_before[4] = {0};
+		if (!render_center(dark, 1280, 720, dark_before)) {
+			obs_source_release(dark);
+			obs_source_release(color);
+			obs_source_release(balance_filter);
+			return fail("render dark frame");
+		}
+
+		obs_source_filter_add(dark, balance_filter);
+
+		uint8_t dark_after[4] = {0};
+		for (int i = 0; i < 30; i++) {
+			if (!render_center(dark, 1280, 720, dark_after)) {
+				obs_source_release(dark);
+				obs_source_release(color);
+				obs_source_release(balance_filter);
+				return fail("render dark balanced frame");
+			}
+		}
+		printf("light balance dark luma:       %d -> %d\n", luma8(dark_before),
+		       luma8(dark_after));
+		if (luma8(dark_after) <= luma8(dark_before) + 12) {
+			obs_source_release(dark);
+			obs_source_release(color);
+			obs_source_release(balance_filter);
+			return fail("auto light balance did not lift a dark frame");
+		}
+
+		obs_source_filter_remove(dark, balance_filter);
+		obs_source_release(dark);
+
 		obs_source_filter_remove(color, balance_filter);
 		obs_source_release(balance_filter);
 

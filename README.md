@@ -11,9 +11,34 @@
 [![Build](https://github.com/minhvuong097/obs-beauty-filter/actions/workflows/build.yml/badge.svg)](https://github.com/minhvuong097/obs-beauty-filter/actions/workflows/build.yml)
 [![Latest release](https://img.shields.io/github/v/release/minhvuong097/obs-beauty-filter?display_name=tag)](https://github.com/minhvuong097/obs-beauty-filter/releases/latest)
 
-Plugin bộ lọc làm đẹp cho **OBS Studio** trên Windows và Linux (macOS có thể build từ source nhưng chưa được kiểm thử). Phiên bản **1.6.0** chạy hoàn toàn trên GPU, hòa vào pipeline filter tiêu chuẩn của OBS, không cần model AI, không đọc ngược frame full-resolution về CPU và không phụ thuộc runtime bên thứ ba.
+Plugin bộ lọc làm đẹp cho **OBS Studio** trên Windows và Linux (macOS có thể build từ source nhưng chưa được kiểm thử). Phiên bản **1.7.0** chạy hoàn toàn trên GPU, hòa vào pipeline filter tiêu chuẩn của OBS, không cần model AI, không đọc ngược frame full-resolution về CPU và không phụ thuộc runtime bên thứ ba.
 
 Mục tiêu: làn da mịn tự nhiên cho livestream/webcam **và camera độ phân giải cao** mà vẫn giữ chi tiết mắt, lông mày, tóc, lỗ chân lông và viền khuôn mặt; đồng thời xử lý đúng nguồn HDR.
+
+## Demo
+
+<img src="assets/demo/before-after.jpg" alt="Ảnh gốc và ảnh sau khi qua Beauty Filter">
+
+Đây là **kết quả thật của plugin**, không phải mock-up: khung 1024×683 được render
+qua libobs headless với Amount 0.62, Radius 9 px, Detail 0.40, Light balance 0.45,
+Rosy 0.12 và Clarity 0.08.
+
+<p align="center">
+  <img src="assets/demo/amount-slider.gif" alt="Quét Amount từ 0.00 đến 0.90" width="640">
+</p>
+
+Crop 100% phóng 200% — lỗ chân lông, lông mày và tóc vẫn còn, chỉ mảng da phẳng
+màu hơn:
+
+<img src="assets/demo/skin-detail.png" alt="Crop cận da trước và sau khi lọc">
+
+<p align="center">
+  <img src="assets/demo/obs-panel.png" alt="Trang thuộc tính Beauty Filter trong OBS" width="740">
+</p>
+
+Biểu tượng **?** cạnh mỗi nhãn là tooltip hướng dẫn (EN/VI). Ảnh gốc là ảnh CC0
+của jonas.svidras; ghi công, miễn trừ và cách tạo lại nằm trong
+[`assets/demo/README.md`](assets/demo/README.md).
 
 ## Tính năng
 
@@ -38,6 +63,7 @@ Mục tiêu: làn da mịn tự nhiên cho livestream/webcam **và camera độ 
 - **3 mức hiệu năng**: Fast / Balanced / High.
 - **Hỗ trợ alpha**, SDR 8-bit và SDR 16-bit.
 - **Song ngữ**: English và Tiếng Việt.
+- **Tooltip đầy đủ**: nhãn ngắn giữ các control thẳng cột, còn hướng dẫn một câu hiện trong tooltip (biểu tượng **?**) cho từng control.
 
 ## Cấu trúc project
 
@@ -75,8 +101,12 @@ obs-beauty-filter/
 │   └── COMPATIBILITY.md     # + COMPATIBILITY.en.md
 ├── installer/
 │   └── obs-beauty-filter.iss # script Inno Setup cho bộ cài Windows
-├── assets/brand/             # logo, icon, lockup, banner
-├── tools/brand/gen.py        # sinh lại bộ nhận diện
+├── assets/
+│   ├── brand/                # logo, icon, lockup, banner
+│   └── demo/                 # ảnh/GIF demo, ảnh gốc CC0, credit
+├── tools/
+│   ├── brand/gen.py          # sinh lại bộ nhận diện
+│   └── demo/                 # renderer offline + build-assets.sh
 └── scripts/
     ├── build-linux.sh
     └── build-windows.ps1
@@ -86,7 +116,7 @@ obs-beauty-filter/
 
 ### Cách A — bộ cài `.exe` (khuyến nghị)
 
-Tải `obs-beauty-filter-1.6.0-windows-x64-setup.exe` tại
+Tải `obs-beauty-filter-1.7.0-windows-x64-setup.exe` tại
 **[GitHub Releases](https://github.com/minhvuong097/obs-beauty-filter/releases/latest)**
 rồi chạy. Bộ cài sẽ:
 
@@ -117,7 +147,7 @@ hay custom preset của OBS.
 
 ### Cách B — gói ZIP build sẵn (cài thủ công)
 
-- Windows x64: `obs-beauty-filter-1.6.0-windows-x64.zip`
+- Windows x64: `obs-beauty-filter-1.7.0-windows-x64.zip`
 - Linux x86_64: `obs-beauty-filter-linux-x86_64.tar.gz`
 - Mỗi release có kèm `SHA256SUMS.txt` để kiểm tra tệp tải về.
 

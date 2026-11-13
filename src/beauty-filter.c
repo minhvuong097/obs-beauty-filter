@@ -470,12 +470,13 @@ static void beauty_update_auto_face(struct beauty_filter *filter, const uint8_t 
 static void beauty_update_light_balance(struct beauty_filter *filter, const uint8_t *pixels,
 					uint32_t linesize)
 {
-	const float target = 0.20f;
 	const float rate = 0.25f;
 	double sum = 0.0;
 	double skin_sum = 0.0;
 	double skin_weight = 0.0;
+	double frame_mean;
 	double mean;
+	double target;
 	double gain;
 	uint32_t x, y;
 
@@ -498,10 +499,27 @@ static void beauty_update_light_balance(struct beauty_filter *filter, const uint
 		return;
 
 	mean = sum / count;
-	if (skin_weight > count * 0.01 && skin_weight < count * 0.90)
-		mean = mean * 0.35 + (skin_sum / skin_weight) * 0.65;
+	frame_mean = mean;
+	target = 0.18;
+	if (skin_weight > count * 0.02 && skin_weight < count * 0.90) {
+		const double skin_mean = skin_sum / skin_weight;
 
-	gain = (double)target / (mean > 0.004 ? mean : 0.004);
+		/* When skin is a meaningful part of the frame the face sets the
+		 * exposure, so a bright window behind the subject cannot darken
+		 * it.  Skin sits above middle grey in a well-exposed portrait,
+		 * hence the higher target for this branch. */
+		mean = skin_mean * 0.85 + frame_mean * 0.15;
+		target = 0.30;
+	}
+
+	if (getenv("BEAUTY_DEBUG_LIGHT"))
+		fprintf(stderr, "[light] frame=%.3f skin=%.3f cov=%.1f%% mean=%.3f "
+				"target=%.2f gain=%.3f\n",
+			frame_mean, skin_weight > 0.0 ? skin_sum / skin_weight : 0.0,
+			100.0 * skin_weight / count, mean, target,
+			target / (mean > 0.004 ? mean : 0.004));
+
+	gain = target / (mean > 0.004 ? mean : 0.004);
 	if (gain < 0.50)
 		gain = 0.50;
 	if (gain > 2.50)
@@ -511,7 +529,14 @@ static void beauty_update_light_balance(struct beauty_filter *filter, const uint
 		filter->auto_gain = (float)gain;
 		filter->auto_gain_valid = true;
 	} else {
-		filter->auto_gain += (float)(gain - filter->auto_gain) * rate;
+		/* Converge quickly after a real lighting change (walking into a
+		 * dark room, a lamp switching off) but keep small corrections
+		 * slow so the image does not breathe. */
+		double diff = gain - filter->auto_gain;
+		double step = rate + 0.45 * (fabs(diff) > 0.75 ? 1.0 : 0.0);
+		double blend = step > 1.0 ? 1.0 : step;
+
+		filter->auto_gain += (float)(diff * blend);
 	}
 }
 
@@ -694,8 +719,12 @@ static void beauty_render(void *data, gs_effect_t *unused)
 	if (filter->p_hdr_scale)
 		gs_effect_set_float(filter->p_hdr_scale, hdr_scale);
 
+	/* The mask pass also carries the luma used by the light balance, so it
+	 * has to run whenever that control is on, even with skin detection
+	 * disabled. */
 	need_mask = filter->skin_detect || filter->face_aware ||
-		    filter->teeth_whiten > 0.0001f || filter->eye_brighten > 0.0001f;
+		    filter->teeth_whiten > 0.0001f || filter->eye_brighten > 0.0001f ||
+		    filter->light_balance > 0.0001f;
 
 	/* 2. Skin mask + temporal stabilisation (half resolution). */
 	if (need_mask) {
@@ -1250,6 +1279,63 @@ static bool face_manual_modified(obs_properties_t *props, obs_property_t *proper
 	return true;
 }
 
+/*
+ * OBS renders a property's description as the control label, so the labels
+ * above are deliberately short.  The guidance lives in long_description,
+ * which OBS shows as a hover tooltip / help icon.  Missing locale keys are
+ * skipped instead of showing the raw key.
+ */
+static void add_tooltips(obs_properties_t *props)
+{
+	static const struct {
+		const char *property;
+		const char *key;
+	} tips[] = {
+		{S_PRESET, "Tooltip.Preset"},
+		{S_PRESET_NAME, "Tooltip.PresetName"},
+		{S_AMOUNT, "Tooltip.Amount"},
+		{S_RADIUS, "Tooltip.Radius"},
+		{S_DETAIL, "Tooltip.Detail"},
+		{S_SKIN_DETECT, "Tooltip.SkinDetect"},
+		{S_SKIN_SENSITIVITY, "Tooltip.SkinSensitivity"},
+		{S_MASK_PREVIEW, "Tooltip.MaskPreview"},
+		{S_BRIGHTNESS, "Tooltip.Brightness"},
+		{S_WARMTH, "Tooltip.Warmth"},
+		{S_SATURATION, "Tooltip.Saturation"},
+		{S_ROSY, "Tooltip.Rosy"},
+		{S_CLARITY, "Tooltip.Clarity"},
+		{S_GLOW, "Tooltip.Glow"},
+		{S_LIGHT_BALANCE, "Tooltip.LightBalance"},
+		{S_FACE_AWARE, "Tooltip.FaceEnable"},
+		{S_TEMPORAL, "Tooltip.Temporal"},
+		{S_TEETH, "Tooltip.Teeth"},
+		{S_EYES, "Tooltip.Eyes"},
+		{S_ZONE_PREVIEW, "Tooltip.ZonePreview"},
+		{S_FACE_MANUAL, "Tooltip.FaceManual"},
+		{S_FACE_CX, "Tooltip.FaceCenterX"},
+		{S_FACE_CY, "Tooltip.FaceCenterY"},
+		{S_FACE_W, "Tooltip.FaceWidth"},
+		{S_FACE_H, "Tooltip.FaceHeight"},
+		{S_QUALITY, "Tooltip.Quality"},
+		{S_SPLIT_VIEW, "Tooltip.SplitView"},
+		{S_OPACITY, "Tooltip.Opacity"},
+		{S_ANTI_BANDING, "Tooltip.AntiBanding"},
+	};
+	size_t i;
+
+	for (i = 0; i < OBS_COUNTOF(tips); i++) {
+		const char *text = obs_module_text(tips[i].key);
+		obs_property_t *property;
+
+		if (!text || strcmp(text, tips[i].key) == 0)
+			continue;
+
+		property = obs_properties_get(props, tips[i].property);
+		if (property)
+			obs_property_set_long_description(property, text);
+	}
+}
+
 static obs_properties_t *beauty_properties(void *data)
 {
 	struct beauty_filter *filter = data;
@@ -1369,6 +1455,8 @@ static obs_properties_t *beauty_properties(void *data)
 	beauty_update_visibility(props, filter ? filter->skin_detect : true,
 				 filter ? filter->face_aware : true,
 				 filter ? filter->face_manual : false);
+
+	add_tooltips(props);
 
 	return props;
 }

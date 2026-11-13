@@ -245,7 +245,13 @@ float4 PSMask(VertOut vert_in) : TARGET
 	stabilized *= lerp(1.0, prior, 0.90 * saturate(face_valid * face_aware));
 	stabilized = saturate(stabilized);
 
-	return float4(raw, stabilized, 0.0, 1.0);
+	/* b carries the SDR-relative linear luma of the frame.  The tiny
+	 * analysis pass below averages it for the automatic light balance, so
+	 * the measurement rides along with the mask instead of costing a
+	 * separate full-resolution sample. */
+	float luma = saturate(luminance(center));
+
+	return float4(raw, stabilized, luma, 1.0);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -254,7 +260,8 @@ float4 PSMask(VertOut vert_in) : TARGET
 
 float4 PSMaskAnalysis(VertOut vert_in) : TARGET
 {
-	float sum = 0.0;
+	float sum_mask = 0.0;
+	float sum_luma = 0.0;
 	int i;
 	int j;
 
@@ -264,14 +271,14 @@ float4 PSMaskAnalysis(VertOut vert_in) : TARGET
 			 * does not accept C-style casts in constructors. */
 			float2 offset = (float2(float(i), float(j)) - 1.5) *
 			                analysis_texel * 0.25;
-			sum += mask_tex.Sample(data_sampler, vert_in.uv + offset).r;
+			float4 texel = mask_tex.Sample(data_sampler, vert_in.uv + offset);
+			sum_mask += texel.r;
+			sum_luma += texel.b;
 		}
 	}
 
-	float m = sum * (1.0 / 16.0);
-	/* b carries the SDR-relative linear luma of the frame; the CPU averages
-	 * it to drive the automatic light balance. */
-	float luma = saturate(luminance(sample_linear(vert_in.uv)));
+	float m = sum_mask * (1.0 / 16.0);
+	float luma = sum_luma * (1.0 / 16.0);
 	return float4(m, m, luma, 1.0);
 }
 
