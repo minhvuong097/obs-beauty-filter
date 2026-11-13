@@ -4,8 +4,8 @@ The stills and the GIF in this folder are **real output of the plugin**, not
 mock-ups. Each frame is rendered by `tools/demo/render-demo.c`, which starts a
 headless libobs graphics context, loads the built plugin and an
 `image_source`, feeds it the photo below and reads the processed frame back.
-The same renderer is the only source of pixels; ImageMagick and ffmpeg only
-add the captions and assemble the GIF.
+The same renderer is the only source of pixels; ImageMagick adds the captions
+and gifski assembles the GIF.
 
 ## Files
 
@@ -37,9 +37,9 @@ IMAGE_SOURCE_DATA=/usr/share/obs/obs-plugins/image-source \
 `build-assets.sh` needs ImageMagick 7 and gifski (it falls back to ffmpeg's
 `palettegen`/`paletteuse` when gifski is missing); on a headless machine it runs
 the renderer under `xvfb-run` automatically. The version in the "After" caption
-is read from `CMakeLists.txt`, so the images never advertise a stale release. `obs-panel.png` needs a real OBS
-window, so the script only replaces it when `OBS_PANEL=/path/to/shot.png` is
-set.
+is read from `CMakeLists.txt`, so the images never advertise a stale release.
+`obs-panel.png` needs a real OBS window, so the script only replaces it when
+`OBS_PANEL=/path/to/shot.png` is set.
 
 The rendered frames are genuine filter output on whatever GPU the renderer
 picks. On a headless CI box that is Mesa llvmpipe, which matches the OpenGL
@@ -71,7 +71,7 @@ may be reused to describe this project, the photo stays CC0.
 Ảnh và GIF trong thư mục này là **kết quả thật của plugin**, không phải mock-up.
 Từng khung hình do `tools/demo/render-demo.c` render qua libobs headless, nạp
 plugin đã build cùng `image_source`, đưa ảnh gốc vào rồi đọc lại khung đã xử lý.
-ImageMagick và ffmpeg chỉ thêm nhãn và ghép GIF.
+ImageMagick thêm nhãn và gifski ghép GIF.
 
 | Tệp | Nội dung |
 |---|---|
@@ -83,8 +83,9 @@ ImageMagick và ffmpeg chỉ thêm nhãn và ghép GIF.
 
 Tạo lại bằng `tools/demo/build-assets.sh` (cần ImageMagick 7 và gifski, thiếu
 gifski thì dùng ffmpeg; máy không có màn hình thì script tự chạy qua `xvfb-run`).
-Số phiên bản trên nhãn "After" đọc từ `CMakeLists.txt` nên ảnh không bị lỗi thời. `obs-panel.png` cần cửa sổ OBS
-thật nên chỉ được thay khi đặt `OBS_PANEL=/đường/dẫn/ảnh.png`.
+Số phiên bản trên nhãn "After" đọc từ `CMakeLists.txt` nên ảnh không bị lỗi
+thời. `obs-panel.png` cần cửa sổ OBS thật nên chỉ được thay khi đặt
+`OBS_PANEL=/đường/dẫn/ảnh.png`.
 
 **Ghi công:** `source-photo.jpg` là ảnh **"Autumn Girl"** của
 [jonas.svidras](https://www.flickr.com/photos/140330936@N02/40961572442),
