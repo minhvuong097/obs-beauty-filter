@@ -21,7 +21,7 @@ jobs:
     timeout-minutes: 60
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Build and test in Alpine container
         run: |
@@ -35,7 +35,7 @@ jobs:
         run: sha256sum obs-beauty-filter-linux-x86_64.tar.gz
 
       - name: Upload Linux artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: obs-beauty-filter-linux-x86_64
           path: obs-beauty-filter-linux-x86_64.tar.gz
@@ -48,7 +48,7 @@ jobs:
     timeout-minutes: 120
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Build, test and package
         shell: pwsh
@@ -65,7 +65,7 @@ jobs:
             ForEach-Object { "{0}  {1}" -f $_.Hash.ToLowerInvariant(), (Split-Path -Leaf $_.Path) }
 
       - name: Upload Windows artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: obs-beauty-filter-windows-x64
           path: |
