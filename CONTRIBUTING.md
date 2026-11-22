@@ -29,9 +29,13 @@ Manual CMake is fine too:
 
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-      -DBEAUTY_BUILD_TESTS=ON -DBEAUTY_BUILD_DEMO_TOOLS=ON
+      -DBEAUTY_BUILD_TESTS=ON -DBEAUTY_WERROR=ON \
+      -DBEAUTY_BUILD_DEMO_TOOLS=ON
 cmake --build build -j"$(nproc)"
 ```
+
+Or use the checked-in presets: `cmake --preset dev` then
+`cmake --build --preset dev`. The `release` and `sanitize` presets mirror CI.
 
 You need OBS headers plus `libobsConfig.cmake` from a build or install tree. On
 Alpine the CI recipe in `.github/scripts/build-linux-ci.sh` installs everything.
@@ -57,14 +61,31 @@ xvfb-run -a ./build/beauty-load-test \
 comparison (leave it unset on other GPUs/platforms). Expected output and the
 manual checklist are in [docs/TESTING.md](docs/TESTING.md).
 
+Before pushing, also run the two gates that Linux CI enforces:
+
+```bash
+cmake --build build --target format-check
+# or: clang-format --dry-run --Werror src/*.c src/*.h tests/*.c
+```
+
+On a visual change, regenerate and review `tests/golden/render-matrix.txt`;
+never edit it by hand. The new controls default to `0`, so adding one should
+not change the golden file.
+
 If your change touches the shader, rendering or the property page, also confirm
 it in a real OBS window; CI only proves that the effect compiles and that the
 invariants hold.
 
 ## Code style
 
-- C99, 8-column tabs, wrapped at 100 columns, K&R braces. Follow the surrounding
-  code; there is no automatic formatter gate.
+- C99, 8-column tabs, wrapped at 100 columns, K&R braces. `.clang-format` is
+  authoritative: run `cmake --build build --target format` (or
+  `clang-format -i src/*.c src/*.h tests/*.c`) instead of hand-aligning. Linux
+  CI fails when `format-check` would change a file. Table-like initialisers can
+  be fenced with `// clang-format off/on`.
+- Build with `-DBEAUTY_WERROR=ON`; the extra warnings (`-Wshadow`,
+  `-Wstrict-prototypes`, `-Wmissing-prototypes`, `-Wpointer-arith`,
+  `-Wcast-qual`) are part of the contract.
 - No C++ in the plugin. The offline demo tooling may stay simple C as well.
 - Keep GPU work on the render thread; never read a full-resolution frame back.
 - Readbacks must stay asynchronous: stage on one frame, map on the next (see
@@ -80,18 +101,26 @@ invariants hold.
   to notice than a compile error.
 - Vietnamese and English documentation are kept in parallel files
   (`README.md`/`README.en.md`, `docs/*.md`/`docs/*.en.md`). Update both.
+- A new control needs a key in `src/beauty-settings.h`, a property in
+  `beauty_properties()`, a default in `beauty_defaults()`, a uniform in
+  `beauty_check_effect_params()`, both locale files and the README parameter
+  table. The load test asserts that every key exists in the property page.
+- If a new key must be saved in custom presets, bump
+  `BEAUTY_CUSTOM_SCHEMA_VERSION` and keep the old schema readable (missing keys
+  fall back to the Default preset).
 
 ## Versioning and releases
 
-- Semantic versioning; each release bumps the **minor** part: 1.8.0 → 1.9.0.
+- Semantic versioning; each release bumps the **minor** part: 1.9.0 → 1.10.0.
 - `BEAUTY_FILTER_VERSION` in `CMakeLists.txt` is the single source of truth; the
   demo captions read it automatically. Also bump `installer/obs-beauty-filter.iss`,
   the README download names and `CHANGELOG.md` in the same commit.
-- The release notes are taken from the `CHANGELOG.md` entry and published in
-  **both languages, Vietnamese first then English** (the README default is
-  Vietnamese). The artifacts must come from the CI run on the tag.
-  `SHA256SUMS.txt` is generated from the downloaded artifacts and verified again
-  after the release is published.
+- Pushing a `v*` tag runs the full build and test matrix; the `release` job
+  then publishes every artifact plus `SHA256SUMS.txt` through `gh release
+  create`. Do not upload binaries by hand. The body starts from GitHub's
+  generated notes: edit it after publishing so it matches the `CHANGELOG.md`
+  entry in **both languages, Vietnamese first then English** (the README
+  default is Vietnamese).
 
 ## Assets
 

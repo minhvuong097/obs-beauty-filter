@@ -125,8 +125,7 @@ static bool component_to_face(const uint8_t *data, uint32_t linesize, uint32_t w
 	const float aspect_conf = 0.55f + 0.45f * smoothstepf(0.12f, 0.45f, aspect);
 	const float center_conf = 1.0f - 0.70f * fabsf(face_cx - 0.5f);
 	const float upper_conf = 1.0f - 0.35f * clampf(face_cy, 0.0f, 1.0f);
-	const float score = (float)c->area * density_conf * aspect_conf * center_conf *
-			    upper_conf;
+	const float score = (float)c->area * density_conf * aspect_conf * center_conf * upper_conf;
 
 	if (score <= 0.0f)
 		return false;
@@ -142,8 +141,8 @@ static bool component_to_face(const uint8_t *data, uint32_t linesize, uint32_t w
 }
 
 struct beauty_face_region beauty_face_region_detect(const uint8_t *data, uint32_t linesize,
-						     uint32_t width, uint32_t height,
-						     uint8_t threshold)
+						    uint32_t width, uint32_t height,
+						    uint8_t threshold)
 {
 	struct beauty_face_region best = {0};
 	struct beauty_face_region candidate;
@@ -153,8 +152,7 @@ struct beauty_face_region beauty_face_region_detect(const uint8_t *data, uint32_
 	uint32_t x;
 	uint32_t y;
 
-	if (!data || width < 8 || height < 8 || width > FACE_GRID_MAX ||
-	    height > FACE_GRID_MAX)
+	if (!data || width < 8 || height < 8 || width > FACE_GRID_MAX || height > FACE_GRID_MAX)
 		return best;
 	if (width * height > FACE_GRID_CELLS)
 		return best;
@@ -211,8 +209,8 @@ struct beauty_face_region beauty_face_region_detect(const uint8_t *data, uint32_
 					ni = (uint32_t)ny * width + (uint32_t)nx;
 					if (visited[ni])
 						continue;
-					if (mask_at(data, linesize, (uint32_t)nx,
-						    (uint32_t)ny) < threshold)
+					if (mask_at(data, linesize, (uint32_t)nx, (uint32_t)ny) <
+					    threshold)
 						continue;
 					visited[ni] = 1;
 					stack[stack_size++] = (int)ni;
@@ -223,8 +221,8 @@ struct beauty_face_region beauty_face_region_detect(const uint8_t *data, uint32_
 			if (comp.area < 8)
 				continue;
 
-			if (component_to_face(data, linesize, width, height, &comp,
-					      threshold, &candidate, &score) &&
+			if (component_to_face(data, linesize, width, height, &comp, threshold,
+					      &candidate, &score) &&
 			    score > best_score) {
 				best = candidate;
 				best_score = score;

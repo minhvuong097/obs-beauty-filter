@@ -11,7 +11,7 @@
 [![Build](https://github.com/minhvuong097/obs-beauty-filter/actions/workflows/build.yml/badge.svg)](https://github.com/minhvuong097/obs-beauty-filter/actions/workflows/build.yml)
 [![Latest release](https://img.shields.io/github/v/release/minhvuong097/obs-beauty-filter?display_name=tag)](https://github.com/minhvuong097/obs-beauty-filter/releases/latest)
 
-Plugin bộ lọc làm đẹp cho **OBS Studio** trên Windows và Linux (macOS có thể build từ source nhưng chưa được kiểm thử). Phiên bản **1.8.0** chạy hoàn toàn trên GPU, hòa vào pipeline filter tiêu chuẩn của OBS, không cần model AI, không đọc ngược frame full-resolution về CPU và không phụ thuộc runtime bên thứ ba.
+Plugin bộ lọc làm đẹp cho **OBS Studio** trên Windows và Linux (macOS có thể build từ source nhưng chưa được kiểm thử). Phiên bản **1.9.0** chạy hoàn toàn trên GPU, hòa vào pipeline filter tiêu chuẩn của OBS, không cần model AI, không đọc ngược frame full-resolution về CPU và không phụ thuộc runtime bên thứ ba.
 
 Mục tiêu: làn da mịn tự nhiên cho livestream/webcam **và camera độ phân giải cao** mà vẫn giữ chi tiết mắt, lông mày, tóc, lỗ chân lông và viền khuôn mặt; đồng thời xử lý đúng nguồn HDR.
 
@@ -49,13 +49,15 @@ của jonas.svidras; ghi công, miễn trừ và cách tạo lại nằm trong
 - **Face prior**: giảm nhận nhầm tường/gỗ/quần áo màu da bằng ellipse mặt + cổ.
 - **Teeth whitening**: làm trắng vùng răng trong ellipse miệng, chỉ trên pixel sáng, ít bão hòa và trung tính.
 - **Eye brightening**: làm sáng lòng trắng và nâng nhẹ iris/pupil trong hai ellipse mắt.
+- **Đều màu da**: chỉ lấy trung bình kênh chroma trên vùng lân cận rộng, làm phẳng mảng đỏ và vết loang màu nhưng vẫn giữ texture luma (lỗ chân lông); da vốn đã đều thì gần như không đổi.
+- **Giảm quầng mắt**: hai vùng mềm dưới mắt nâng bóng tối và trung hòa màu, trọng số theo độ tối để mí dưới vẫn giữ được form.
 - **Giữ chi tiết**: tách high-frequency, ưu tiên giữ luma (lỗ chân lông) hơn chroma (mảng đỏ), làm nét vùng không phải da.
 - **Tinh chỉnh sắc tố da**: sáng kiểu phơi sáng, ấm giữ luma, bão hòa, sắc hồng — cân theo skin mask.
 - **Cân bằng sáng tự động**: đo độ sáng khung hình trên grid 64 px (ưu tiên vùng da) rồi nâng hoặc hạ phơi sáng về mức trung tính, kèm shoulder giữ highlight — hết cháy sáng hoặc tối om mà da vẫn đều màu. Slider 0 = tắt, 0.35 = mặc định, 1 = mạnh.
 - **Soft glow**: ánh sáng mềm chỉ trên highlight, vùng tối vẫn sạch.
 - **Chống dải màu**: triangular dithering cho ngõ ra 8-bit, tránh banding khi da mịn trên nền gradient.
 - **HDR-safe**: xử lý `GS_CS_709_EXTENDED`, `GS_CS_709_SCRGB` và `GS_CS_SRGB_16F` trong linear light, giữ highlight > mức trắng SDR (không bypass, không clip).
-- **Preview**: skin mask, split view và face/eye/mouth zones.
+- **Preview**: skin mask, split view và face/eye/mouth/under-eye zones.
 - **Preset khởi đầu**: Natural, Cinema, Studio, Soft, Beard, Dark skin, HDR và Default. Chọn preset rồi tinh chỉnh; mọi thay đổi tay sẽ được đánh dấu là **Tùy chỉnh**.
 - **Preset tùy chỉnh**: lưu, ghi đè, tải lại và xóa phong cách của bạn. Dữ liệu nằm trong `custom-presets.json` ở thư mục cấu hình module OBS, tồn tại qua thay đổi scene collection và khởi động lại.
 - **Đặt lại mặc định**: đưa toàn bộ thông số về preset Default mà không cần xóa và thêm lại filter.
@@ -120,7 +122,7 @@ obs-beauty-filter/
 
 ### Cách A — bộ cài `.exe` (khuyến nghị)
 
-Tải `obs-beauty-filter-1.8.0-windows-x64-setup.exe` tại
+Tải `obs-beauty-filter-1.9.0-windows-x64-setup.exe` tại
 **[GitHub Releases](https://github.com/minhvuong097/obs-beauty-filter/releases/latest)**
 rồi chạy. Bộ cài sẽ:
 
@@ -151,7 +153,7 @@ hay custom preset của OBS.
 
 ### Cách B — gói ZIP build sẵn (cài thủ công)
 
-- Windows x64: `obs-beauty-filter-1.8.0-windows-x64.zip`
+- Windows x64: `obs-beauty-filter-1.9.0-windows-x64.zip`
 - Linux x86_64: `obs-beauty-filter-linux-x86_64.tar.gz`
 - Mỗi release có kèm `SHA256SUMS.txt` để kiểm tra tệp tải về.
 
@@ -311,6 +313,7 @@ Hoặc `./scripts/build-linux.sh` rồi `sudo cmake --install build` (mặc đ�
 | Warmth | 0 | -50..50 | Ấm/ngả vàng da |
 | Saturation | 0 | -50..50 | Bão hòa màu da |
 | Rosy tint | 0.15 | 0–1 | Sắc hồng tự nhiên |
+| Đều màu da | 0 | 0–1 | Làm phẳng mảng đỏ/loang màu bằng cách chỉ làm mịn chroma; giữ texture luma |
 | Clarity | 0.10 | 0–1 | Làm nét vùng không phải da |
 | Soft glow | 0.05 | 0–1 | Ánh sáng mềm |
 | Cân bằng sáng tự động | 0.35 | 0–1 | Nâng/hạ phơi sáng theo độ sáng đo được; 0 = tắt, 1 = mạnh nhất |
@@ -318,7 +321,8 @@ Hoặc `./scripts/build-linux.sh` rồi `sudo cmake --install build` (mặc đ�
 | Temporal mask stability | 0.60 | 0–1 | Trộn mask với history; cao = ổn định hơn, ít nhấp nháy hơn |
 | Teeth whitening | 0 | 0–1 | Làm trắng răng trong vùng miệng |
 | Eye brightening | 0 | 0–1 | Làm sáng mắt trong vùng mắt |
-| Show face zones | Off | On/Off | Hiện face prior (xanh), mắt (xanh dương), miệng (vàng) |
+| Giảm quầng mắt | 0 | 0–1 | Nâng và trung hòa bóng dưới mắt; cần bật face zones |
+| Show face zones | Off | On/Off | Hiện face prior (xanh), mắt (xanh dương), quầng mắt (tím), miệng (vàng) |
 | Manual face box | Off | On/Off | Dùng khung mặt thủ công thay vì auto |
 | Face center X / Y | 0.50 / 0.45 | 0–1 | Tâm mặt, tọa độ chuẩn hóa |
 | Face width / height | 0.32 / 0.42 | 0.05–1 | Kích thước **đầy đủ** của khung mặt, chuẩn hóa |
@@ -404,6 +408,8 @@ Chi phí chính là fragment shader full-resolution, cộng thêm mask pass nử
 - `MaskAnalysis` chỉ chạy mỗi 6 frame khi face-aware auto hoặc cân bằng sáng tự động bật; bản copy sang staging surface được map ở frame sau nên không chặn pass render.
 - `BlurBase` luôn rẻ hơn một bilateral full-res cùng bán kính vì chỉ chạy trên 1/4–1/16 số pixel.
 - Tắt **Face-aware zones** nếu không dùng teeth/eye để bỏ mask pass khi `Skin detection` cũng tắt.
+- **Đều màu da** thêm 12 mẫu texture mỗi pixel và chỉ chạy khi slider lớn hơn `0`; mọi preset có sẵn đều để 0 nên chi phí mặc định không đổi.
+- **Giảm quầng mắt** dùng lại face/eye zones, không thêm pass. Nó chỉ hoạt động khi bật Face-aware zones và có face box hợp lệ.
 - Nếu tụt frame: hạ Quality trước, sau đó giảm Radius, tắt Glow.
 
 ## Giới hạn đã biết
@@ -411,6 +417,8 @@ Chi phí chính là fragment shader full-resolution, cộng thêm mask pass nử
 - **Face detection là heuristic**, không phải ML landmark/segmentation. Detector tìm component da lớn nhất và ước lượng mặt từ dải trên; có thể sai khi có nhiều người, mặt bị che, đội mũ, ánh sáng mạnh hoặc nền cùng màu da. Dùng **Show face zones** và **Manual face box** để xử lý.
 - **Teeth/eye zones là ellipse ước lượng**, không bám theo landmark từng răng/mí mắt. Kết quả tốt nhất khi mặt nhìn thẳng, chiếm phần lớn khung hình.
 - Skin mask vẫn dựa trên màu; coherence + face prior giảm nhưng không loại bỏ hoàn toàn gỗ/tường/quần áo màu da.
+- **Vùng quầng mắt là ellipse ước lượng** theo vị trí mắt; với khuôn mặt khác thường, vùng này có thể chạm gò má. Hạ giá trị hoặc dùng khung mặt thủ công nếu gặp.
+- **Đều màu da là low-pass chroma**, không phải tẩy sắc tố: nó làm phẳng vết loang, nhưng vết sẫm màu mạnh hoặc bóng đổ cứng vẫn cần ánh sáng/trang điểm.
 - Không khử noise.
 - HDR được xử lý nhưng không tone-map; filter giữ nguyên dải động của nguồn.
 - Kết quả phụ thuộc tông da và điều kiện ánh sáng; nên test với nhiều tông da trước khi dùng cho production.

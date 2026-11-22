@@ -2,7 +2,8 @@
  * Standalone load/render test for obs-beauty-filter.
  *
  * Usage:
- *   beauty-load-test <plugin-binary> <module-data-dir> [image-source-binary] [image-source-data-dir]
+ *   beauty-load-test <plugin-binary> <module-data-dir> [image-source-binary]
+ * [image-source-data-dir]
  *
  * The optional image-source module is used to create sources so the filter
  * render path, mask output, face zones, teeth/eye enhancement, opacity
@@ -145,8 +146,7 @@ static bool render_pixel_hdr(obs_source_t *source, uint32_t width, uint32_t heig
 	gs_texrender_t *render = gs_texrender_create(GS_RGBA16F, GS_ZS_NONE);
 	gs_stagesurf_t *stage = NULL;
 
-	if (render &&
-	    gs_texrender_begin_with_color_space(render, width, height, space)) {
+	if (render && gs_texrender_begin_with_color_space(render, width, height, space)) {
 		gs_ortho(0.0f, (float)width, 0.0f, (float)height, -100.0f, 100.0f);
 
 		struct vec4 clear_color;
@@ -193,6 +193,7 @@ static bool render_pixel_hdr(obs_source_t *source, uint32_t width, uint32_t heig
 struct pattern_data {
 	enum gs_color_space space;
 	bool textured;
+	bool chroma;
 };
 
 static const char *pattern_get_name(void *unused)
@@ -207,6 +208,7 @@ static void *pattern_create(obs_data_t *settings, obs_source_t *source)
 	UNUSED_PARAMETER(source);
 	pattern->space = (enum gs_color_space)obs_data_get_int(settings, "space");
 	pattern->textured = obs_data_get_bool(settings, "textured");
+	pattern->chroma = obs_data_get_bool(settings, "chroma");
 	if (pattern->space == GS_CS_SRGB && obs_data_get_bool(settings, "hdr"))
 		pattern->space = GS_CS_709_EXTENDED;
 	return pattern;
@@ -273,11 +275,11 @@ static void pattern_render(void *data, gs_effect_t *effect)
 	if (pattern->space != GS_CS_SRGB) {
 		/* 4.0 is four times SDR white.  A filter that bypasses or
 		 * clamps HDR cannot preserve it. */
-		pattern_solid_rect(color, 0.0f, 0.0f, PATTERN_WIDTH, PATTERN_HEIGHT, 4.0f,
-				   0.4f, 0.4f);
+		pattern_solid_rect(color, 0.0f, 0.0f, PATTERN_WIDTH, PATTERN_HEIGHT, 4.0f, 0.4f,
+				   0.4f);
 	} else {
-		pattern_solid_rect(color, 0.0f, 0.0f, PATTERN_WIDTH, PATTERN_HEIGHT, 0.08f,
-				   0.16f, 0.32f);
+		pattern_solid_rect(color, 0.0f, 0.0f, PATTERN_WIDTH, PATTERN_HEIGHT, 0.08f, 0.16f,
+				   0.32f);
 		pattern_solid_rect(color, 400.0f, 100.0f, 480.0f, 520.0f, 200.0f / 255.0f,
 				   150.0f / 255.0f, 120.0f / 255.0f);
 		if (pattern->textured) {
@@ -286,15 +288,29 @@ static void pattern_render(void *data, gs_effect_t *effect)
 			 * that ignores detail should flatten it to the mean. */
 			for (x = 0; x < 48; ++x) {
 				if (x & 1)
-					pattern_solid_rect(color, 400.0f + (float)x * 10.0f,
-							   100.0f, 10.0f, 520.0f,
-							   188.0f / 255.0f, 140.0f / 255.0f,
-							   112.0f / 255.0f);
+					pattern_solid_rect(color, 400.0f + (float)x * 10.0f, 100.0f,
+							   10.0f, 520.0f, 188.0f / 255.0f,
+							   140.0f / 255.0f, 112.0f / 255.0f);
 				else
-					pattern_solid_rect(color, 400.0f + (float)x * 10.0f,
-							   100.0f, 10.0f, 520.0f,
-							   200.0f / 255.0f, 150.0f / 255.0f,
-							   120.0f / 255.0f);
+					pattern_solid_rect(color, 400.0f + (float)x * 10.0f, 100.0f,
+							   10.0f, 520.0f, 200.0f / 255.0f,
+							   150.0f / 255.0f, 120.0f / 255.0f);
+			}
+		}
+		if (pattern->chroma) {
+			/* Ten-pixel stripes with a strong red/green chroma
+			 * difference and only a small luma step, so even-tone
+			 * smoothing can be measured without mistaking it for
+			 * ordinary luminance detail removal. */
+			for (x = 0; x < 10; ++x) {
+				if (x & 1)
+					pattern_solid_rect(color, 400.0f + (float)x * 10.0f, 520.0f,
+							   10.0f, 80.0f, 178.0f / 255.0f,
+							   158.0f / 255.0f, 108.0f / 255.0f);
+				else
+					pattern_solid_rect(color, 400.0f + (float)x * 10.0f, 520.0f,
+							   10.0f, 80.0f, 218.0f / 255.0f,
+							   148.0f / 255.0f, 128.0f / 255.0f);
 			}
 		}
 		pattern_solid_rect(color, 520.0f, 280.0f, 60.0f, 40.0f, 215.0f / 255.0f,
@@ -338,6 +354,11 @@ static int luma8(const uint8_t px[4])
 	return (px[0] * 299 + px[1] * 587 + px[2] * 114) / 1000;
 }
 
+static int rg_chroma(const uint8_t px[4])
+{
+	return (int)px[0] - (int)px[1];
+}
+
 static bool color_near(const uint8_t px[4], int r, int g, int b, int tolerance)
 {
 	return px[3] >= 250 && abs_int((int)px[0] - r) <= tolerance &&
@@ -358,10 +379,12 @@ static void set_test_defaults(obs_data_t *settings)
 	obs_data_set_double(settings, "rosy", 0.15);
 	obs_data_set_double(settings, "clarity", 0.10);
 	obs_data_set_double(settings, "glow", 0.05);
+	obs_data_set_double(settings, "even_tone", 0.0);
 	obs_data_set_bool(settings, "face_aware", true);
 	obs_data_set_double(settings, "temporal_strength", 0.60);
 	obs_data_set_double(settings, "teeth_whiten", 0.0);
 	obs_data_set_double(settings, "eye_brighten", 0.0);
+	obs_data_set_double(settings, "under_eye", 0.0);
 	obs_data_set_bool(settings, "zone_preview", false);
 	obs_data_set_bool(settings, "face_manual", false);
 	obs_data_set_double(settings, "face_cx", 0.50);
@@ -403,8 +426,9 @@ static obs_source_t *make_filter(const char *name, obs_data_t *settings)
 int main(int argc, char **argv)
 {
 	if (argc < 3) {
-		fprintf(stderr, "Usage: %s <plugin-binary> <module-data-dir> "
-				"[image-source-binary] [image-source-data-dir]\n",
+		fprintf(stderr,
+			"Usage: %s <plugin-binary> <module-data-dir> "
+			"[image-source-binary] [image-source-data-dir]\n",
 			argv[0]);
 		return 2;
 	}
@@ -462,8 +486,18 @@ int main(int argc, char **argv)
 	{
 		obs_properties_t *props = obs_source_properties(filter);
 		static const char *const required[] = {
-			"preset", "preset_name", "preset_save", "preset_delete",
-			"preset_reset", "light_balance",
+			"preset",	 "preset_name",	     "preset_save",
+			"preset_delete", "preset_reset",     "light_balance",
+			"amount",	 "radius",	     "detail",
+			"skin_detect",	 "skin_sensitivity", "mask_preview",
+			"brightness",	 "warmth",	     "saturation",
+			"rosy",		 "even_tone",	     "clarity",
+			"glow",		 "face_aware",	     "temporal_strength",
+			"teeth_whiten",	 "eye_brighten",     "under_eye",
+			"zone_preview",	 "face_manual",	     "face_cx",
+			"face_cy",	 "face_w",	     "face_h",
+			"quality",	 "split_view",	     "opacity",
+			"anti_banding",
 		};
 		if (!props)
 			return fail("filter properties");
@@ -486,8 +520,8 @@ int main(int argc, char **argv)
 		obs_data_set_int(color_settings, "width", 1280);
 		obs_data_set_int(color_settings, "height", 720);
 		obs_data_set_int(color_settings, "color", 0xFF7896C8); /* skin tone */
-		obs_source_t *color =
-			obs_source_create("color_source", "beauty-color-test", color_settings, NULL);
+		obs_source_t *color = obs_source_create("color_source", "beauty-color-test",
+							color_settings, NULL);
 		obs_data_release(color_settings);
 		if (!source_valid(color)) {
 			if (color)
@@ -500,8 +534,8 @@ int main(int argc, char **argv)
 			obs_source_release(color);
 			return fail("render original source");
 		}
-		printf("center pixel RGBA (original):   %u %u %u %u\n", original[0],
-		       original[1], original[2], original[3]);
+		printf("center pixel RGBA (original):   %u %u %u %u\n", original[0], original[1],
+		       original[2], original[3]);
 
 		obs_source_filter_add(color, filter);
 
@@ -510,8 +544,8 @@ int main(int argc, char **argv)
 			obs_source_release(color);
 			return fail("render filter");
 		}
-		printf("center pixel RGBA (processed):  %u %u %u %u\n", processed[0],
-		       processed[1], processed[2], processed[3]);
+		printf("center pixel RGBA (processed):  %u %u %u %u\n", processed[0], processed[1],
+		       processed[2], processed[3]);
 
 		if (!color_near(processed, 200, 150, 120, 8)) {
 			obs_source_release(color);
@@ -530,8 +564,7 @@ int main(int argc, char **argv)
 		obs_data_t *mask_settings = obs_data_create();
 		set_test_defaults(mask_settings);
 		obs_data_set_bool(mask_settings, "mask_preview", true);
-		obs_source_t *mask_filter =
-			make_filter("beauty-mask-test", mask_settings);
+		obs_source_t *mask_filter = make_filter("beauty-mask-test", mask_settings);
 		if (!mask_filter) {
 			obs_source_release(color);
 			return fail("mask filter creation");
@@ -545,8 +578,8 @@ int main(int argc, char **argv)
 			obs_source_release(mask_filter);
 			return fail("render skin mask preview");
 		}
-		printf("center pixel RGBA (skin mask):  %u %u %u %u\n", mask[0], mask[1],
-		       mask[2], mask[3]);
+		printf("center pixel RGBA (skin mask):  %u %u %u %u\n", mask[0], mask[1], mask[2],
+		       mask[3]);
 
 		if (!color_near(mask, 255, 255, 255, 2)) {
 			obs_source_release(color);
@@ -561,8 +594,7 @@ int main(int argc, char **argv)
 		obs_data_t *opacity_settings = obs_data_create();
 		set_test_defaults(opacity_settings);
 		obs_data_set_double(opacity_settings, "opacity", 0.0);
-		obs_source_t *opacity_filter =
-			make_filter("beauty-opacity-test", opacity_settings);
+		obs_source_t *opacity_filter = make_filter("beauty-opacity-test", opacity_settings);
 		if (!opacity_filter) {
 			obs_source_release(color);
 			return fail("opacity filter creation");
@@ -593,9 +625,8 @@ int main(int argc, char **argv)
 		/* ------------------------------------------------------------- */
 		obs_data_t *pattern_sdr_settings = obs_data_create();
 		obs_data_set_bool(pattern_sdr_settings, "hdr", false);
-		obs_source_t *pattern =
-			obs_source_create("beauty_test_pattern", "beauty-pattern", pattern_sdr_settings,
-					  NULL);
+		obs_source_t *pattern = obs_source_create("beauty_test_pattern", "beauty-pattern",
+							  pattern_sdr_settings, NULL);
 		obs_data_release(pattern_sdr_settings);
 		if (!source_valid(pattern)) {
 			obs_source_release(color);
@@ -620,8 +651,7 @@ int main(int argc, char **argv)
 		obs_data_set_bool(zone_settings, "face_manual", true);
 		obs_data_set_double(zone_settings, "teeth_whiten", 1.0);
 		obs_data_set_double(zone_settings, "eye_brighten", 1.0);
-		obs_source_t *zone_filter =
-			make_filter("beauty-face-zones", zone_settings);
+		obs_source_t *zone_filter = make_filter("beauty-face-zones", zone_settings);
 		if (!zone_filter) {
 			obs_source_release(pattern);
 			obs_source_release(color);
@@ -665,8 +695,7 @@ int main(int argc, char **argv)
 		obs_data_set_bool(preview_settings, "face_aware", true);
 		obs_data_set_bool(preview_settings, "face_manual", true);
 		obs_data_set_bool(preview_settings, "zone_preview", true);
-		obs_source_t *preview_filter =
-			make_filter("beauty-zone-preview", preview_settings);
+		obs_source_t *preview_filter = make_filter("beauty-zone-preview", preview_settings);
 		if (!preview_filter) {
 			obs_source_release(pattern);
 			obs_source_release(color);
@@ -706,14 +735,193 @@ int main(int argc, char **argv)
 		obs_source_release(preview_filter);
 
 		/* ------------------------------------------------------------- */
+		/* Under-eye correction: local lift inside the under-eye zone    */
+		/* ------------------------------------------------------------- */
+		uint8_t under_before[4];
+		uint8_t under_reference_before[4];
+		if (!render_pixel(pattern, 1280, 720, 550, 391, under_before) ||
+		    !render_pixel(pattern, 1280, 720, 550, 460, under_reference_before)) {
+			obs_source_release(pattern);
+			obs_source_release(color);
+			return fail("render under-eye reference pixels");
+		}
+
+		obs_data_t *under_settings = obs_data_create();
+		set_test_defaults(under_settings);
+		set_neutral_processing(under_settings);
+		obs_data_set_bool(under_settings, "face_aware", true);
+		obs_data_set_bool(under_settings, "face_manual", true);
+		obs_data_set_double(under_settings, "under_eye", 1.0);
+		obs_source_t *under_filter = make_filter("beauty-under-eye", under_settings);
+		if (!under_filter) {
+			obs_source_release(pattern);
+			obs_source_release(color);
+			return fail("under-eye filter creation");
+		}
+
+		obs_source_filter_add(pattern, under_filter);
+
+		uint8_t under_after[4];
+		uint8_t under_reference_after[4];
+		if (!render_pixel(pattern, 1280, 720, 550, 391, under_after) ||
+		    !render_pixel(pattern, 1280, 720, 550, 460, under_reference_after)) {
+			obs_source_release(pattern);
+			obs_source_release(color);
+			obs_source_release(under_filter);
+			return fail("render under-eye output");
+		}
+		printf("under-eye luma before/after:    %d / %d\n", luma8(under_before),
+		       luma8(under_after));
+
+		if (luma8(under_after) < luma8(under_before) + 2) {
+			obs_source_release(pattern);
+			obs_source_release(color);
+			obs_source_release(under_filter);
+			return fail("under-eye correction did not brighten the zone");
+		}
+		if (abs_int(luma8(under_reference_after) - luma8(under_reference_before)) > 2) {
+			obs_source_release(pattern);
+			obs_source_release(color);
+			obs_source_release(under_filter);
+			return fail("under-eye correction leaked outside its zone");
+		}
+
+		obs_source_filter_remove(pattern, under_filter);
+		obs_source_release(under_filter);
+
+		/* ------------------------------------------------------------- */
+		/* Even skin tone: chroma detail must drop, luma detail stays    */
+		/* ------------------------------------------------------------- */
+		obs_data_t *chroma_settings = obs_data_create();
+		obs_data_set_bool(chroma_settings, "hdr", false);
+		obs_data_set_bool(chroma_settings, "chroma", true);
+		obs_source_t *chroma = obs_source_create("beauty_test_pattern", "beauty-chroma",
+							 chroma_settings, NULL);
+		obs_data_release(chroma_settings);
+		if (!source_valid(chroma)) {
+			obs_source_release(pattern);
+			obs_source_release(color);
+			return fail("chroma pattern source creation");
+		}
+
+		uint8_t chroma_a[4];
+		uint8_t chroma_b[4];
+		if (!render_pixel(chroma, 1280, 720, 405, 560, chroma_a) ||
+		    !render_pixel(chroma, 1280, 720, 415, 560, chroma_b)) {
+			obs_source_release(chroma);
+			obs_source_release(pattern);
+			obs_source_release(color);
+			return fail("render chroma reference pixels");
+		}
+		const int chroma_before = abs_int(rg_chroma(chroma_a) - rg_chroma(chroma_b));
+		const int luma_before = abs_int(luma8(chroma_a) - luma8(chroma_b));
+		printf("chroma contrast before:         %d (luma %d)\n", chroma_before,
+		       luma_before);
+
+		if (chroma_before < 30) {
+			obs_source_release(chroma);
+			obs_source_release(pattern);
+			obs_source_release(color);
+			return fail("chroma pattern did not produce enough contrast");
+		}
+
+		obs_data_t *tone_settings = obs_data_create();
+		set_test_defaults(tone_settings);
+		obs_data_set_double(tone_settings, "amount", 1.0);
+		obs_data_set_double(tone_settings, "radius", 12.0);
+		obs_data_set_double(tone_settings, "detail", 0.70);
+		obs_data_set_bool(tone_settings, "skin_detect", false);
+		obs_data_set_bool(tone_settings, "face_aware", false);
+		obs_data_set_bool(tone_settings, "anti_banding", false);
+		obs_data_set_double(tone_settings, "temporal_strength", 0.0);
+		obs_data_set_double(tone_settings, "light_balance", 0.0);
+		obs_data_set_double(tone_settings, "rosy", 0.0);
+		obs_data_set_double(tone_settings, "clarity", 0.0);
+		obs_data_set_double(tone_settings, "glow", 0.0);
+		obs_data_set_double(tone_settings, "even_tone", 0.0);
+		obs_source_t *tone_off = make_filter("beauty-tone-off", tone_settings);
+		if (!tone_off) {
+			obs_source_release(chroma);
+			obs_source_release(pattern);
+			obs_source_release(color);
+			return fail("even-tone off filter creation");
+		}
+
+		obs_source_filter_add(chroma, tone_off);
+		uint8_t tone_a0[4];
+		uint8_t tone_b0[4];
+		if (!render_pixel(chroma, 1280, 720, 405, 560, tone_a0) ||
+		    !render_pixel(chroma, 1280, 720, 415, 560, tone_b0)) {
+			obs_source_release(chroma);
+			obs_source_release(pattern);
+			obs_source_release(color);
+			obs_source_release(tone_off);
+			return fail("render even-tone off");
+		}
+		const int chroma_off = abs_int(rg_chroma(tone_a0) - rg_chroma(tone_b0));
+		const int luma_off = abs_int(luma8(tone_a0) - luma8(tone_b0));
+		obs_source_filter_remove(chroma, tone_off);
+		obs_source_release(tone_off);
+
+		obs_data_t *tone_on_settings = obs_data_create();
+		set_test_defaults(tone_on_settings);
+		obs_data_set_double(tone_on_settings, "amount", 1.0);
+		obs_data_set_double(tone_on_settings, "radius", 12.0);
+		obs_data_set_double(tone_on_settings, "detail", 0.70);
+		obs_data_set_bool(tone_on_settings, "skin_detect", false);
+		obs_data_set_bool(tone_on_settings, "face_aware", false);
+		obs_data_set_bool(tone_on_settings, "anti_banding", false);
+		obs_data_set_double(tone_on_settings, "temporal_strength", 0.0);
+		obs_data_set_double(tone_on_settings, "light_balance", 0.0);
+		obs_data_set_double(tone_on_settings, "rosy", 0.0);
+		obs_data_set_double(tone_on_settings, "clarity", 0.0);
+		obs_data_set_double(tone_on_settings, "glow", 0.0);
+		obs_data_set_double(tone_on_settings, "even_tone", 1.0);
+		obs_source_t *tone_on = make_filter("beauty-tone-on", tone_on_settings);
+		if (!tone_on) {
+			obs_source_release(chroma);
+			obs_source_release(pattern);
+			obs_source_release(color);
+			return fail("even-tone on filter creation");
+		}
+
+		obs_source_filter_add(chroma, tone_on);
+		uint8_t tone_a1[4];
+		uint8_t tone_b1[4];
+		if (!render_pixel(chroma, 1280, 720, 405, 560, tone_a1) ||
+		    !render_pixel(chroma, 1280, 720, 415, 560, tone_b1)) {
+			obs_source_release(chroma);
+			obs_source_release(pattern);
+			obs_source_release(color);
+			obs_source_release(tone_on);
+			return fail("render even-tone on");
+		}
+		const int chroma_on = abs_int(rg_chroma(tone_a1) - rg_chroma(tone_b1));
+		const int luma_on = abs_int(luma8(tone_a1) - luma8(tone_b1));
+		printf("chroma contrast off/on:         %d / %d (luma %d / %d)\n", chroma_off,
+		       chroma_on, luma_off, luma_on);
+
+		int tone_status = 0;
+		if (chroma_on * 2 > chroma_off)
+			tone_status = fail("even skin tone did not reduce chroma contrast");
+		else if (luma_on * 10 < luma_off * 6)
+			tone_status = fail("even skin tone removed too much luma detail");
+
+		obs_source_filter_remove(chroma, tone_on);
+		obs_source_release(tone_on);
+		obs_source_release(chroma);
+		if (tone_status)
+			return tone_status;
+
+		/* ------------------------------------------------------------- */
 		/* Detail preservation: frequency separation must remove the     */
 		/* stripe texture while leaving the overall tone intact          */
 		/* ------------------------------------------------------------- */
 		obs_data_t *texture_settings = obs_data_create();
 		obs_data_set_bool(texture_settings, "hdr", false);
 		obs_data_set_bool(texture_settings, "textured", true);
-		obs_source_t *texture = obs_source_create(
-			"beauty_test_pattern", "beauty-texture", texture_settings, NULL);
+		obs_source_t *texture = obs_source_create("beauty_test_pattern", "beauty-texture",
+							  texture_settings, NULL);
 		obs_data_release(texture_settings);
 		if (!source_valid(texture)) {
 			obs_source_release(pattern);
@@ -730,10 +938,9 @@ int main(int argc, char **argv)
 			obs_source_release(color);
 			return fail("render textured reference pixels");
 		}
-		const int contrast_before =
-			abs_int(luma8(stripe_a) - luma8(stripe_b));
-		printf("texture stripe contrast before: %d (%d vs %d)\n",
-		       contrast_before, luma8(stripe_a), luma8(stripe_b));
+		const int contrast_before = abs_int(luma8(stripe_a) - luma8(stripe_b));
+		printf("texture stripe contrast before: %d (%d vs %d)\n", contrast_before,
+		       luma8(stripe_a), luma8(stripe_b));
 
 		if (contrast_before < 6) {
 			obs_source_release(texture);
@@ -754,8 +961,7 @@ int main(int argc, char **argv)
 		obs_data_set_double(smooth_settings, "rosy", 0.0);
 		obs_data_set_double(smooth_settings, "clarity", 0.0);
 		obs_data_set_double(smooth_settings, "glow", 0.0);
-		obs_source_t *smooth_filter =
-			make_filter("beauty-texture-smooth", smooth_settings);
+		obs_source_t *smooth_filter = make_filter("beauty-texture-smooth", smooth_settings);
 		if (!smooth_filter) {
 			obs_source_release(texture);
 			obs_source_release(pattern);
@@ -776,8 +982,8 @@ int main(int argc, char **argv)
 			return fail("render smoothed texture pixels");
 		}
 		const int contrast_after = abs_int(luma8(smooth_a) - luma8(smooth_b));
-		printf("texture stripe contrast after:  %d (%d vs %d)\n",
-		       contrast_after, luma8(smooth_a), luma8(smooth_b));
+		printf("texture stripe contrast after:  %d (%d vs %d)\n", contrast_after,
+		       luma8(smooth_a), luma8(smooth_b));
 
 		if (contrast_after * 100 > contrast_before * 55) {
 			obs_source_release(texture);
@@ -805,8 +1011,7 @@ int main(int argc, char **argv)
 		obs_data_set_double(detail_settings, "rosy", 0.0);
 		obs_data_set_double(detail_settings, "clarity", 0.0);
 		obs_data_set_double(detail_settings, "glow", 0.0);
-		obs_source_t *detail_filter =
-			make_filter("beauty-texture-detail", detail_settings);
+		obs_source_t *detail_filter = make_filter("beauty-texture-detail", detail_settings);
 		if (!detail_filter) {
 			obs_source_release(texture);
 			obs_source_release(pattern);
@@ -827,8 +1032,8 @@ int main(int argc, char **argv)
 			return fail("render detailed texture pixels");
 		}
 		const int contrast_detail = abs_int(luma8(detail_a) - luma8(detail_b));
-		printf("texture stripe contrast detail: %d (%d vs %d)\n",
-		       contrast_detail, luma8(detail_a), luma8(detail_b));
+		printf("texture stripe contrast detail: %d (%d vs %d)\n", contrast_detail,
+		       luma8(detail_a), luma8(detail_b));
 
 		if (contrast_detail < contrast_after + 3) {
 			obs_source_release(texture);
@@ -936,9 +1141,8 @@ int main(int argc, char **argv)
 		/* ------------------------------------------------------------- */
 		obs_data_t *pattern_hdr_settings = obs_data_create();
 		obs_data_set_bool(pattern_hdr_settings, "hdr", true);
-		obs_source_t *hdr_pattern = obs_source_create("beauty_test_pattern",
-							      "beauty-pattern-hdr",
-							      pattern_hdr_settings, NULL);
+		obs_source_t *hdr_pattern = obs_source_create(
+			"beauty_test_pattern", "beauty-pattern-hdr", pattern_hdr_settings, NULL);
 		obs_data_release(pattern_hdr_settings);
 		if (!source_valid(hdr_pattern)) {
 			obs_source_release(pattern);
@@ -1009,9 +1213,9 @@ int main(int argc, char **argv)
 		/* ------------------------------------------------------------- */
 		obs_data_t *pattern_scrgb_settings = obs_data_create();
 		obs_data_set_int(pattern_scrgb_settings, "space", GS_CS_709_SCRGB);
-		obs_source_t *scrgb_pattern = obs_source_create(
-			"beauty_test_pattern", "beauty-pattern-scrgb",
-			pattern_scrgb_settings, NULL);
+		obs_source_t *scrgb_pattern =
+			obs_source_create("beauty_test_pattern", "beauty-pattern-scrgb",
+					  pattern_scrgb_settings, NULL);
 		obs_data_release(pattern_scrgb_settings);
 		if (!source_valid(scrgb_pattern)) {
 			obs_source_release(pattern);
@@ -1027,8 +1231,8 @@ int main(int argc, char **argv)
 			obs_source_release(color);
 			return fail("render scRGB reference pixel");
 		}
-		printf("scRGB pixel before filter:     %.3f %.3f %.3f %.3f\n",
-		       scrgb_before[0], scrgb_before[1], scrgb_before[2], scrgb_before[3]);
+		printf("scRGB pixel before filter:     %.3f %.3f %.3f %.3f\n", scrgb_before[0],
+		       scrgb_before[1], scrgb_before[2], scrgb_before[3]);
 
 		obs_data_t *scrgb_settings = obs_data_create();
 		set_test_defaults(scrgb_settings);
@@ -1036,8 +1240,7 @@ int main(int argc, char **argv)
 		obs_data_set_bool(scrgb_settings, "skin_detect", false);
 		obs_data_set_bool(scrgb_settings, "face_aware", false);
 		obs_data_set_double(scrgb_settings, "rosy", 1.0);
-		obs_source_t *scrgb_filter =
-			make_filter("beauty-scrgb", scrgb_settings);
+		obs_source_t *scrgb_filter = make_filter("beauty-scrgb", scrgb_settings);
 		if (!scrgb_filter) {
 			obs_source_release(scrgb_pattern);
 			obs_source_release(pattern);
@@ -1056,8 +1259,8 @@ int main(int argc, char **argv)
 			obs_source_release(scrgb_filter);
 			return fail("render filtered scRGB pixel");
 		}
-		printf("scRGB pixel after filter:      %.3f %.3f %.3f %.3f\n",
-		       scrgb_after[0], scrgb_after[1], scrgb_after[2], scrgb_after[3]);
+		printf("scRGB pixel after filter:      %.3f %.3f %.3f %.3f\n", scrgb_after[0],
+		       scrgb_after[1], scrgb_after[2], scrgb_after[3]);
 
 		if (!(scrgb_after[0] > 1.5f)) {
 			obs_source_release(scrgb_pattern);
@@ -1094,7 +1297,8 @@ int main(int argc, char **argv)
 
 	printf("OK: module loaded, filter created, effect compiled");
 	if (argc >= 5)
-		printf(", filter rendered, mask/opacity/face zones/texture/light balance/HDR verified");
+		printf(", filter rendered, mask/opacity/face zones/texture/even "
+		       "tone/under-eye/light balance/HDR verified");
 	printf("\n");
 
 	obs_shutdown();

@@ -5,7 +5,7 @@ cmake_minimum_required(VERSION 3.28...3.30)
 #      add_core_module(obs-beauty-filter) to plugins/CMakeLists.txt.
 #   2. Standalone: point CMAKE_PREFIX_PATH at an OBS build/install tree that
 #      provides libobsConfig.cmake.
-set(BEAUTY_FILTER_VERSION "1.8.0")
+set(BEAUTY_FILTER_VERSION "1.9.0")
 
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   project(obs-beauty-filter VERSION ${BEAUTY_FILTER_VERSION} LANGUAGES C)
@@ -90,7 +90,47 @@ if(NOT BEAUTY_SANITIZE STREQUAL "OFF")
   add_link_options(-fsanitize=${BEAUTY_SANITIZE})
 endif()
 
+option(BEAUTY_WERROR "Treat compiler warnings as errors" OFF)
+
 set(TARGET_NAME obs-beauty-filter)
+
+# One warning policy for the plugin, the demo renderer and every test binary.
+# BEAUTY_WERROR is used by the Linux CI format/strict job so a new warning fails
+# the build instead of silently shipping.
+function(beauty_add_warnings target)
+  if(MSVC)
+    target_compile_options(${target} PRIVATE /W3 /utf-8)
+    if(BEAUTY_WERROR)
+      target_compile_options(${target} PRIVATE /WX)
+    endif()
+  else()
+    target_compile_options(${target} PRIVATE -Wall -Wextra -Wno-unused-parameter
+                           -Wshadow -Wstrict-prototypes -Wmissing-prototypes
+                           -Wpointer-arith -Wcast-qual)
+    if(BEAUTY_WERROR)
+      target_compile_options(${target} PRIVATE -Werror)
+    endif()
+  endif()
+endfunction()
+
+# Convenience targets for contributors: `format` rewrites the sources and
+# `format-check` fails when a file would change (used by Linux CI).  Only
+# defined for standalone builds so an in-tree OBS build is not polluted.
+if(BEAUTY_FILTER_STANDALONE)
+  find_program(BEAUTY_CLANG_FORMAT NAMES clang-format)
+  if(BEAUTY_CLANG_FORMAT)
+    file(GLOB BEAUTY_FORMAT_SOURCES CONFIGURE_DEPENDS
+         "${CMAKE_CURRENT_SOURCE_DIR}/src/*.c"
+         "${CMAKE_CURRENT_SOURCE_DIR}/src/*.h"
+         "${CMAKE_CURRENT_SOURCE_DIR}/tests/*.c")
+    add_custom_target(format
+      COMMAND "${BEAUTY_CLANG_FORMAT}" -i ${BEAUTY_FORMAT_SOURCES}
+      COMMENT "Formatting C sources with clang-format")
+    add_custom_target(format-check
+      COMMAND "${BEAUTY_CLANG_FORMAT}" --dry-run --Werror ${BEAUTY_FORMAT_SOURCES}
+      COMMENT "Checking C formatting with clang-format")
+  endif()
+endif()
 
 add_library(${TARGET_NAME} MODULE)
 target_sources(
@@ -117,11 +157,7 @@ target_compile_features(${TARGET_NAME} PRIVATE c_std_99)
 target_compile_definitions(${TARGET_NAME} PRIVATE
   BEAUTY_VERSION="${BEAUTY_FILTER_VERSION}")
 
-if(MSVC)
-  target_compile_options(${TARGET_NAME} PRIVATE /W3 /utf-8)
-else()
-  target_compile_options(${TARGET_NAME} PRIVATE -Wall -Wextra -Wno-unused-parameter)
-endif()
+beauty_add_warnings(${TARGET_NAME})
 
 set_target_properties(
   ${TARGET_NAME}
@@ -147,11 +183,7 @@ if(BEAUTY_BUILD_DEMO_TOOLS)
   add_executable(beauty-demo-render tools/demo/render-demo.c)
   target_link_libraries(beauty-demo-render PRIVATE OBS::libobs)
   target_compile_features(beauty-demo-render PRIVATE c_std_99)
-  if(MSVC)
-    target_compile_options(beauty-demo-render PRIVATE /W3 /utf-8)
-  else()
-    target_compile_options(beauty-demo-render PRIVATE -Wall -Wextra)
-  endif()
+  beauty_add_warnings(beauty-demo-render)
 endif()
 
 option(BEAUTY_BUILD_TESTS "Build the standalone tests" OFF)
@@ -168,20 +200,12 @@ if(BEAUTY_BUILD_TESTS)
   target_include_directories(beauty-render-matrix-test PRIVATE src)
   target_link_libraries(beauty-render-matrix-test PRIVATE OBS::libobs)
   target_compile_features(beauty-render-matrix-test PRIVATE c_std_99)
-  if(MSVC)
-    target_compile_options(beauty-render-matrix-test PRIVATE /W3 /utf-8)
-  else()
-    target_compile_options(beauty-render-matrix-test PRIVATE -Wall -Wextra)
-  endif()
+  beauty_add_warnings(beauty-render-matrix-test)
 
   add_executable(beauty-face-region-test tests/face-region-test.c src/face-region.c)
   target_include_directories(beauty-face-region-test PRIVATE src)
   target_compile_features(beauty-face-region-test PRIVATE c_std_99)
-  if(MSVC)
-    target_compile_options(beauty-face-region-test PRIVATE /W3 /utf-8)
-  else()
-    target_compile_options(beauty-face-region-test PRIVATE -Wall -Wextra)
-  endif()
+  beauty_add_warnings(beauty-face-region-test)
 
   add_executable(
     beauty-preset-test
@@ -197,11 +221,7 @@ if(BEAUTY_BUILD_TESTS)
     BEAUTY_CUSTOM_PRESETS_NO_MODULE_PATH
   )
   target_compile_features(beauty-preset-test PRIVATE c_std_99)
-  if(MSVC)
-    target_compile_options(beauty-preset-test PRIVATE /W3 /utf-8)
-  else()
-    target_compile_options(beauty-preset-test PRIVATE -Wall -Wextra)
-  endif()
+  beauty_add_warnings(beauty-preset-test)
 endif()
 
 # In-tree builds use OBS' own layout and helpers (including the core-module

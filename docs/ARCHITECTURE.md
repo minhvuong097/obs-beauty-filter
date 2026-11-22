@@ -2,7 +2,7 @@
 
 **[English](ARCHITECTURE.en.md) | Tiếng Việt**
 
-Tài liệu này mô tả luồng xử lý, công thức shader và các quyết định thiết kế của plugin **1.8.0** để ổn định trong pipeline filter của OBS.
+Tài liệu này mô tả luồng xử lý, công thức shader và các quyết định thiết kế của plugin **1.9.0** để ổn định trong pipeline filter của OBS.
 
 ## 1. Vòng đời filter và pipeline render
 
@@ -278,7 +278,26 @@ result = lerp(result, eye_target, eye_amount);
 - Iris/pupil tối (`dark`) được nâng nhẹ để mắt có hồn hơn.
 - Vùng da quanh mắt có thể bị ảnh hưởng nhẹ; giảm `eye_brighten` nếu thấy không tự nhiên.
 
-Cả hai hiệu ứng đều **tắt hoàn toàn** khi `face_valid = 0`.
+
+### 4.3. Giảm quầng mắt
+
+Hai ellipse mềm nằm dưới tâm mắt `0.28 * face_height`, rộng `0.34` và cao
+`0.12` theo đơn vị khung mặt. Hiệu ứng có trọng số theo độ tối của pixel để mí
+dưới giữ được form thay vì bị nâng phẳng:
+
+```hlsl
+float shadow = 1.0 - smoothstep(0.20, 0.68, display_luma);
+float under  = saturate(under_eye * under_zone * mask * (0.25 + 0.75 * shadow));
+float3 target = lerp(result, float3(luminance(result)), 0.35) * 1.12;
+result = lerp(result, target, under * 0.60);
+```
+
+- Màu được kéo 35% về trung tính trước khi nâng 12%, nên vùng quầng vàng không
+  chỉ đơn giản là sáng vàng hơn.
+- Vùng nhân với `face_ok`, nên tự tắt khi face zones tắt hoặc không có box hợp lệ.
+- **Show face zones** vẽ vùng này màu tím.
+
+Các hiệu ứng vùng mặt **tắt hoàn toàn** khi `face_valid = 0`.
 
 ## 5. Base pass và frequency separation
 
@@ -423,6 +442,30 @@ result -= over * (0.55 * light_balance * saturate(gain - 1.0));
 gain được đo từ ảnh đã qua tone-mapping của OBS, cùng một công thức áp dụng cho
 SDR 8-bit, SDR 16-bit và HDR; nguồn HDR không đi qua shoulder.
 
+### 6.2. Đều màu da
+
+Vết loang trên da chủ yếu là biến thiên chroma trên nền luma gần như không đổi.
+Frequency separation chính đã loại chroma tần số cao qua base bilateral, nhưng
+base cố ý giữ chroma qua cạnh mạnh (môi, lông mày), nên cần một low-pass chroma
+riêng và rộng hơn:
+
+```hlsl
+tap = texel_size * clamp(radius, 4.0, 40.0) * 1.5;
+acc = center + 12 mẫu theo +/-x và +/-y ở 1x, 2x và 3x tap;
+chroma_shift = acc / 13.0 - center;
+chroma_shift -= float3(luminance(chroma_shift));   // trung tính theo luma
+evened  = result + chroma_shift * (even_tone * mask);
+evened += luminance(result) - luminance(evened);   // trả lại luma chính xác
+result  = evened;
+```
+
+Dùng ba khoảng cách thay vì một vòng vì một offset duy nhất dễ alias với texture
+chu kỳ (sọc, vân vải); kernel trộn rộng hơn sẽ hội tụ về trung bình cục bộ. Chỉ
+chroma dịch chuyển nên lỗ chân lông và nếp nhăn nhỏ không bị ảnh hưởng, còn
+`even_tone = 0` bỏ qua toàn bộ khối (giữ nguyên golden output của render matrix).
+Khoảng cách mẫu đi theo `radius`, nên control nhất quán ở 720p, 1080p và 4K sau
+khi C scale bán kính.
+
 ## 7. Alpha, color space và HDR
 
 - Texture OBS thường là premultiplied alpha. Helper `sample_linear()` vừa unpremultiply vừa quy đổi về linear tương đối SDR:
@@ -456,7 +499,7 @@ SDR 8-bit, SDR 16-bit và HDR; nguồn HDR không đi qua shoulder.
 
 - **Mask preview**: trả `float3(mask)` (premultiplied), cho thấy vùng da trắng và vùng khác đen.
 - **Split preview**: `uv.x < 0.5` trả màu gốc; nửa phải là kết quả.
-- **Zone preview**: tô face prior xanh lá, eye zones xanh dương và mouth zone vàng, dùng để kiểm tra face box.
+- **Zone preview**: tô face prior xanh lá, eye zones xanh dương, quầng mắt tím và mouth zone vàng, dùng để kiểm tra face box.
 - Preview được đặt sau opacity để vẫn nhìn thấy mask dù opacity = 0 (trừ split).
 
 ## 9. An toàn luồng và tài nguyên
@@ -497,6 +540,7 @@ Hướng phát triển: preset, compute shader cho radius lớn, đo GPU time, v
 | `warmth` | double | -50..50 |
 | `saturation` | double | -50..50 |
 | `rosy` | double | 0..1 |
+| `even_tone` | double | 0..1, mặc định 0; chỉ làm mịn chroma |
 | `clarity` | double | 0..1 |
 | `glow` | double | 0..1 |
 | `light_balance` | double | 0..1, mặc định 0.35; 0 = tắt |
@@ -504,6 +548,7 @@ Hướng phát triển: preset, compute shader cho radius lớn, đo GPU time, v
 | `temporal_strength` | double | 0..1 |
 | `teeth_whiten` | double | 0..1 |
 | `eye_brighten` | double | 0..1 |
+| `under_eye` | double | 0..1, mặc định 0; cần `face_aware` |
 | `zone_preview` | bool | |
 | `face_manual` | bool | |
 | `face_cx` | double | 0..1 |
@@ -525,7 +570,7 @@ sửa bằng tay:
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "presets": [
     {
       "name": "My Look",

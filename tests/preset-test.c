@@ -31,7 +31,8 @@ static bool close_enough(double actual, double expected)
 	return fabs(actual - expected) < 1e-9;
 }
 
-static void expect_double(obs_data_t *settings, const char *key, double expected, const char *message)
+static void expect_double(obs_data_t *settings, const char *key, double expected,
+			  const char *message)
 {
 	const double actual = obs_data_get_double(settings, key);
 
@@ -86,10 +87,16 @@ static void check_table(void)
 		expect(preset->rosy >= 0.0 && preset->rosy <= 1.0, "rosy out of range");
 		expect(preset->clarity >= 0.0 && preset->clarity <= 1.0, "clarity out of range");
 		expect(preset->glow >= 0.0 && preset->glow <= 1.0, "glow out of range");
+		expect(preset->light_balance >= 0.0 && preset->light_balance <= 1.0,
+		       "light balance out of range");
+		expect(preset->even_tone >= 0.0 && preset->even_tone <= 1.0,
+		       "even tone out of range");
 		expect(preset->temporal >= 0.0 && preset->temporal <= 1.0,
 		       "temporal strength out of range");
 		expect(preset->teeth >= 0.0 && preset->teeth <= 1.0, "teeth out of range");
 		expect(preset->eyes >= 0.0 && preset->eyes <= 1.0, "eyes out of range");
+		expect(preset->under_eye >= 0.0 && preset->under_eye <= 1.0,
+		       "under-eye out of range");
 		expect(quality_valid(preset->quality), "unknown quality value");
 
 		for (j = i + 1; j < count; j++) {
@@ -145,11 +152,13 @@ static void check_apply(void)
 	expect_double(settings, S_ROSY, cinema->rosy, "apply rosy");
 	expect_double(settings, S_CLARITY, cinema->clarity, "apply clarity");
 	expect_double(settings, S_GLOW, cinema->glow, "apply glow");
-	expect(obs_data_get_bool(settings, S_FACE_AWARE) == cinema->face_aware,
-	       "apply face-aware");
+	expect_double(settings, S_LIGHT_BALANCE, cinema->light_balance, "apply light balance");
+	expect_double(settings, S_EVEN_TONE, cinema->even_tone, "apply even tone");
+	expect(obs_data_get_bool(settings, S_FACE_AWARE) == cinema->face_aware, "apply face-aware");
 	expect_double(settings, S_TEMPORAL, cinema->temporal, "apply temporal");
 	expect_double(settings, S_TEETH, cinema->teeth, "apply teeth");
 	expect_double(settings, S_EYES, cinema->eyes, "apply eyes");
+	expect_double(settings, S_UNDER_EYE, cinema->under_eye, "apply under-eye");
 	expect(same_quality(obs_data_get_string(settings, S_QUALITY), cinema->quality),
 	       "apply quality");
 	expect(obs_data_get_bool(settings, S_ANTI_BANDING) == cinema->anti_banding,
@@ -187,10 +196,13 @@ static void check_default_preset(void)
 	expect_double(settings, S_ROSY, 0.15, "default rosy");
 	expect_double(settings, S_CLARITY, 0.10, "default clarity");
 	expect_double(settings, S_GLOW, 0.05, "default glow");
+	expect_double(settings, S_LIGHT_BALANCE, 0.35, "default light balance");
+	expect_double(settings, S_EVEN_TONE, 0.0, "default even tone");
 	expect(obs_data_get_bool(settings, S_FACE_AWARE), "default face-aware");
 	expect_double(settings, S_TEMPORAL, 0.60, "default temporal");
 	expect_double(settings, S_TEETH, 0.0, "default teeth");
 	expect_double(settings, S_EYES, 0.0, "default eyes");
+	expect_double(settings, S_UNDER_EYE, 0.0, "default under-eye");
 	expect(same_quality(obs_data_get_string(settings, S_QUALITY), "balanced"),
 	       "default quality");
 	expect(obs_data_get_bool(settings, S_ANTI_BANDING), "default anti-banding");
@@ -278,14 +290,15 @@ static void check_custom_presets(void)
 	beauty_preset_apply(settings, cinema);
 	obs_data_set_bool(settings, S_SKIN_DETECT, false);
 	obs_data_set_double(settings, S_AMOUNT, 0.42);
+	obs_data_set_double(settings, S_LIGHT_BALANCE, 0.72);
+	obs_data_set_double(settings, S_EVEN_TONE, 0.31);
+	obs_data_set_double(settings, S_UNDER_EYE, 0.27);
 
 	expect(!beauty_custom_preset_save("natural", settings),
 	       "saving with a built-in name must fail");
-	expect(beauty_custom_preset_save("  My Look  ", settings),
-	       "valid custom preset must save");
+	expect(beauty_custom_preset_save("  My Look  ", settings), "valid custom preset must save");
 	expect(beauty_custom_preset_count() == 1, "one custom preset must be listed");
-	expect(beauty_custom_preset_name_at(0, name, sizeof(name)) &&
-		       strcmp(name, "My Look") == 0,
+	expect(beauty_custom_preset_name_at(0, name, sizeof(name)) && strcmp(name, "My Look") == 0,
 	       "custom preset name must round-trip");
 	expect(beauty_custom_preset_exists("my look"),
 	       "custom preset lookup must be case-insensitive");
@@ -305,6 +318,9 @@ static void check_custom_presets(void)
 		       "custom preset must apply case-insensitively");
 		expect_double(applied, S_AMOUNT, 0.42, "custom apply amount");
 		expect_double(applied, S_RADIUS, cinema->radius, "custom apply radius");
+		expect_double(applied, S_LIGHT_BALANCE, 0.72, "custom apply light balance");
+		expect_double(applied, S_EVEN_TONE, 0.31, "custom apply even tone");
+		expect_double(applied, S_UNDER_EYE, 0.27, "custom apply under-eye");
 		expect(!obs_data_get_bool(applied, S_SKIN_DETECT),
 		       "custom preset must restore skin detection");
 		obs_data_release(applied);
@@ -337,6 +353,58 @@ static void check_custom_presets(void)
 	beauty_custom_presets_reload();
 }
 
+static void check_legacy_custom_presets(void)
+{
+	const char *path = "beauty-custom-preset-legacy.json";
+	const char *backup = "beauty-custom-preset-legacy.json.bak";
+	const char *temp = "beauty-custom-preset-legacy.json.tmp";
+	const char *json = "{\n"
+			   "  \"version\": 1,\n"
+			   "  \"presets\": [\n"
+			   "    { \"name\": \"Legacy\", \"amount\": 0.50, "
+			   "\"detail\": 0.25 }\n"
+			   "  ]\n"
+			   "}\n";
+	FILE *file;
+	obs_data_t *applied;
+
+	remove(path);
+	remove(backup);
+	remove(temp);
+	file = fopen(path, "w");
+	expect(file != NULL, "legacy preset file must be writable");
+	if (!file)
+		return;
+	fputs(json, file);
+	fclose(file);
+
+	set_custom_path(path);
+	beauty_custom_presets_reload();
+
+	applied = obs_data_create();
+	if (applied) {
+		beauty_preset_apply(applied, beauty_preset_find("default"));
+		expect(beauty_custom_preset_apply(applied, "Legacy"),
+		       "version 1 custom preset must still apply");
+		expect_double(applied, S_AMOUNT, 0.50, "legacy custom amount");
+		expect_double(applied, S_DETAIL, 0.25, "legacy custom detail");
+		expect_double(applied, S_RADIUS, 6.0,
+			      "legacy custom missing radius must use Default");
+		expect_double(applied, S_LIGHT_BALANCE, 0.35,
+			      "legacy custom missing light balance must use Default");
+		expect_double(applied, S_EVEN_TONE, 0.0,
+			      "legacy custom missing even tone must use Default");
+		expect_double(applied, S_UNDER_EYE, 0.0,
+			      "legacy custom missing under-eye must use Default");
+		obs_data_release(applied);
+	}
+
+	remove(path);
+	remove(backup);
+	remove(temp);
+	beauty_custom_presets_reload();
+}
+
 int main(void)
 {
 	/* obs_data_* is self-contained; no graphics/display or obs_startup(). */
@@ -346,6 +414,7 @@ int main(void)
 	check_default_preset();
 	check_null_arguments();
 	check_custom_presets();
+	check_legacy_custom_presets();
 
 	if (failures) {
 		fprintf(stderr, "%d preset test failure(s)\n", failures);

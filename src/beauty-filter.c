@@ -59,6 +59,7 @@
 #define T_WARMTH                obs_module_text("Complexion.Warmth")
 #define T_SATURATION            obs_module_text("Complexion.Saturation")
 #define T_ROSY                  obs_module_text("Complexion.Rosy")
+#define T_EVEN_TONE             obs_module_text("Complexion.EvenTone")
 
 #define T_GROUP_DETAIL          obs_module_text("Group.Detail")
 #define T_CLARITY               obs_module_text("Detail.Clarity")
@@ -70,6 +71,7 @@
 #define T_TEMPORAL              obs_module_text("Face.Temporal")
 #define T_TEETH                 obs_module_text("Face.Teeth")
 #define T_EYES                  obs_module_text("Face.Eyes")
+#define T_UNDER_EYE             obs_module_text("Face.UnderEye")
 #define T_ZONE_PREVIEW          obs_module_text("Face.ZonePreview")
 #define T_FACE_MANUAL           obs_module_text("Face.Manual")
 #define T_FACE_CX               obs_module_text("Face.CenterX")
@@ -123,6 +125,7 @@ struct beauty_filter {
 	gs_eparam_t *p_warmth;
 	gs_eparam_t *p_saturation;
 	gs_eparam_t *p_rosy;
+	gs_eparam_t *p_even_tone;
 	gs_eparam_t *p_clarity;
 	gs_eparam_t *p_glow;
 	gs_eparam_t *p_light_balance;
@@ -140,6 +143,7 @@ struct beauty_filter {
 	gs_eparam_t *p_face_size;
 	gs_eparam_t *p_teeth_whiten;
 	gs_eparam_t *p_eye_brighten;
+	gs_eparam_t *p_under_eye;
 	gs_eparam_t *p_zone_preview;
 	gs_eparam_t *p_hdr_scale;
 	gs_eparam_t *p_is_hdr;
@@ -154,6 +158,7 @@ struct beauty_filter {
 	float warmth;
 	float saturation;
 	float rosy;
+	float even_tone;
 	float clarity;
 	float glow;
 	float light_balance;
@@ -167,6 +172,7 @@ struct beauty_filter {
 	float temporal_strength;
 	float teeth_whiten;
 	float eye_brighten;
+	float under_eye;
 
 	float face_cx;
 	float face_cy;
@@ -234,38 +240,44 @@ static float clamp_float(float value, float lo, float hi)
 	return value < lo ? lo : (value > hi ? hi : value);
 }
 
+/* Every value is clamped again on the way in: a hand-edited scene
+ * collection, an older preset or a future UI bug must never feed an
+ * out-of-range uniform to the shader. */
+static float beauty_setting_float(obs_data_t *settings, const char *name, float lo, float hi)
+{
+	return clamp_float((float)obs_data_get_double(settings, name), lo, hi);
+}
+
 static void beauty_update(void *data, obs_data_t *settings)
 {
 	struct beauty_filter *filter = data;
 	const char *quality;
 
-	filter->amount = (float)obs_data_get_double(settings, S_AMOUNT);
-	filter->radius = (float)obs_data_get_double(settings, S_RADIUS);
-	filter->detail = (float)obs_data_get_double(settings, S_DETAIL);
-	filter->skin_sensitivity = (float)obs_data_get_double(settings, S_SKIN_SENSITIVITY);
+	filter->amount = beauty_setting_float(settings, S_AMOUNT, 0.0f, 1.0f);
+	filter->radius = beauty_setting_float(settings, S_RADIUS, 0.0f, 24.0f);
+	filter->detail = beauty_setting_float(settings, S_DETAIL, 0.0f, 1.0f);
+	filter->skin_sensitivity = beauty_setting_float(settings, S_SKIN_SENSITIVITY, 0.0f, 1.0f);
 
-	filter->brightness = (float)obs_data_get_double(settings, S_BRIGHTNESS) / 100.0f;
-	filter->warmth = (float)obs_data_get_double(settings, S_WARMTH) / 100.0f;
-	filter->saturation = (float)obs_data_get_double(settings, S_SATURATION) / 100.0f;
-	filter->rosy = (float)obs_data_get_double(settings, S_ROSY);
+	filter->brightness = beauty_setting_float(settings, S_BRIGHTNESS, -50.0f, 50.0f) / 100.0f;
+	filter->warmth = beauty_setting_float(settings, S_WARMTH, -50.0f, 50.0f) / 100.0f;
+	filter->saturation = beauty_setting_float(settings, S_SATURATION, -50.0f, 50.0f) / 100.0f;
+	filter->rosy = beauty_setting_float(settings, S_ROSY, 0.0f, 1.0f);
+	filter->even_tone = beauty_setting_float(settings, S_EVEN_TONE, 0.0f, 1.0f);
 
-	filter->clarity = (float)obs_data_get_double(settings, S_CLARITY);
-	filter->glow = (float)obs_data_get_double(settings, S_GLOW);
-	filter->light_balance =
-		clamp_float((float)obs_data_get_double(settings, S_LIGHT_BALANCE), 0.0f, 1.0f);
-	filter->opacity = (float)obs_data_get_double(settings, S_OPACITY);
+	filter->clarity = beauty_setting_float(settings, S_CLARITY, 0.0f, 1.0f);
+	filter->glow = beauty_setting_float(settings, S_GLOW, 0.0f, 1.0f);
+	filter->light_balance = beauty_setting_float(settings, S_LIGHT_BALANCE, 0.0f, 1.0f);
+	filter->opacity = beauty_setting_float(settings, S_OPACITY, 0.0f, 1.0f);
 
-	filter->temporal_strength =
-		clamp_float((float)obs_data_get_double(settings, S_TEMPORAL), 0.0f, 1.0f);
-	filter->teeth_whiten =
-		clamp_float((float)obs_data_get_double(settings, S_TEETH), 0.0f, 1.0f);
-	filter->eye_brighten =
-		clamp_float((float)obs_data_get_double(settings, S_EYES), 0.0f, 1.0f);
+	filter->temporal_strength = beauty_setting_float(settings, S_TEMPORAL, 0.0f, 1.0f);
+	filter->teeth_whiten = beauty_setting_float(settings, S_TEETH, 0.0f, 1.0f);
+	filter->eye_brighten = beauty_setting_float(settings, S_EYES, 0.0f, 1.0f);
+	filter->under_eye = beauty_setting_float(settings, S_UNDER_EYE, 0.0f, 1.0f);
 
-	filter->face_cx = clamp_float((float)obs_data_get_double(settings, S_FACE_CX), 0.0f, 1.0f);
-	filter->face_cy = clamp_float((float)obs_data_get_double(settings, S_FACE_CY), 0.0f, 1.0f);
-	filter->face_w = clamp_float((float)obs_data_get_double(settings, S_FACE_W), 0.02f, 1.0f);
-	filter->face_h = clamp_float((float)obs_data_get_double(settings, S_FACE_H), 0.02f, 1.0f);
+	filter->face_cx = beauty_setting_float(settings, S_FACE_CX, 0.0f, 1.0f);
+	filter->face_cy = beauty_setting_float(settings, S_FACE_CY, 0.0f, 1.0f);
+	filter->face_w = beauty_setting_float(settings, S_FACE_W, 0.02f, 1.0f);
+	filter->face_h = beauty_setting_float(settings, S_FACE_H, 0.02f, 1.0f);
 
 	filter->skin_detect = obs_data_get_bool(settings, S_SKIN_DETECT);
 	filter->mask_preview = obs_data_get_bool(settings, S_MASK_PREVIEW);
@@ -282,6 +294,12 @@ static void beauty_update(void *data, obs_data_t *settings)
 		filter->quality = BEAUTY_QUALITY_HIGH;
 	else
 		filter->quality = BEAUTY_QUALITY_BALANCED;
+
+	/* Do not carry an old exposure measurement into a fresh enable. */
+	if (filter->light_balance <= 0.0001f) {
+		filter->auto_gain = 1.0f;
+		filter->auto_gain_valid = false;
+	}
 }
 
 static void beauty_release_resources(struct beauty_filter *filter)
@@ -317,8 +335,7 @@ static void beauty_release_resources(struct beauty_filter *filter)
 
 static bool beauty_space_is_extended(enum gs_color_space space)
 {
-	return space == GS_CS_SRGB_16F || space == GS_CS_709_EXTENDED ||
-	       space == GS_CS_709_SCRGB;
+	return space == GS_CS_SRGB_16F || space == GS_CS_709_EXTENDED || space == GS_CS_709_SCRGB;
 }
 
 static bool beauty_ensure_resources(struct beauty_filter *filter, uint32_t width, uint32_t height,
@@ -400,9 +417,9 @@ static bool beauty_ensure_resources(struct beauty_filter *filter, uint32_t width
 		gs_stagesurface_create(filter->analysis_width, filter->analysis_height, GS_RGBA);
 	filter->white_tex = gs_texture_create(1, 1, GS_RGBA, 1, &white_ptr, 0);
 
-	if (!filter->src_texrender || !filter->mask_texrender[0] ||
-	    !filter->mask_texrender[1] || !filter->analysis_texrender ||
-	    !filter->base_texrender || !filter->analysis_stage || !filter->white_tex) {
+	if (!filter->src_texrender || !filter->mask_texrender[0] || !filter->mask_texrender[1] ||
+	    !filter->analysis_texrender || !filter->base_texrender || !filter->analysis_stage ||
+	    !filter->white_tex) {
 		if (!filter->resource_failed) {
 			blog(LOG_ERROR,
 			     "[obs-beauty-filter] Failed to allocate GPU resources for %ux%u; "
@@ -419,8 +436,8 @@ static bool beauty_ensure_resources(struct beauty_filter *filter, uint32_t width
 	return true;
 }
 
-static void beauty_draw_technique(struct beauty_filter *filter, const char *name,
-				  uint32_t width, uint32_t height, gs_texture_t *draw_tex)
+static void beauty_draw_technique(struct beauty_filter *filter, const char *name, uint32_t width,
+				  uint32_t height, gs_texture_t *draw_tex)
 {
 	gs_technique_t *tech = gs_effect_get_technique(filter->effect, name);
 	size_t passes;
@@ -438,12 +455,80 @@ static void beauty_draw_technique(struct beauty_filter *filter, const char *name
 	gs_technique_end(tech);
 }
 
+/* A changed shader or a rename in the C code otherwise fails silently: the
+ * render passes still run, but a control stops working.  Log the exact
+ * uniforms that are missing once, at creation. */
+static void beauty_check_effect_params(struct beauty_filter *filter)
+{
+	const struct {
+		const char *name;
+		gs_eparam_t *param;
+	} required[] = {
+		{"image", filter->p_image},
+		{"mask_tex", filter->p_mask_tex},
+		{"history_tex", filter->p_history_tex},
+		{"base_tex", filter->p_base_tex},
+		{"texel_size", filter->p_texel_size},
+		{"analysis_texel", filter->p_analysis_texel},
+		{"radius", filter->p_radius},
+		{"amount", filter->p_amount},
+		{"detail", filter->p_detail},
+		{"skin_detect", filter->p_skin_detect},
+		{"skin_sensitivity", filter->p_skin_sensitivity},
+		{"brightness", filter->p_brightness},
+		{"warmth", filter->p_warmth},
+		{"saturation", filter->p_saturation},
+		{"rosy", filter->p_rosy},
+		{"even_tone", filter->p_even_tone},
+		{"clarity", filter->p_clarity},
+		{"glow", filter->p_glow},
+		{"light_balance", filter->p_light_balance},
+		{"auto_gain", filter->p_auto_gain},
+		{"opacity", filter->p_opacity},
+		{"mask_preview", filter->p_mask_preview},
+		{"split_view", filter->p_split_view},
+		{"temporal_strength", filter->p_temporal_strength},
+		{"history_valid", filter->p_history_valid},
+		{"use_mask_tex", filter->p_use_mask_tex},
+		{"face_aware", filter->p_face_aware},
+		{"face_valid", filter->p_face_valid},
+		{"face_center", filter->p_face_center},
+		{"face_size", filter->p_face_size},
+		{"teeth_whiten", filter->p_teeth_whiten},
+		{"eye_brighten", filter->p_eye_brighten},
+		{"under_eye", filter->p_under_eye},
+		{"zone_preview", filter->p_zone_preview},
+		{"hdr_scale", filter->p_hdr_scale},
+		{"is_hdr", filter->p_is_hdr},
+		{"base_valid", filter->p_base_valid},
+		{"dither_strength", filter->p_dither},
+	};
+	size_t missing = 0;
+	size_t i;
+
+	for (i = 0; i < OBS_COUNTOF(required); i++) {
+		if (required[i].param)
+			continue;
+
+		blog(LOG_WARNING,
+		     "[obs-beauty-filter] effect is missing uniform '%s'; "
+		     "the related control will not work",
+		     required[i].name);
+		missing++;
+	}
+
+	if (missing)
+		blog(LOG_ERROR,
+		     "[obs-beauty-filter] %zu required effect uniform(s) missing; "
+		     "the installed beauty_filter.effect does not match this build",
+		     missing);
+}
+
 static void beauty_update_auto_face(struct beauty_filter *filter, const uint8_t *data,
 				    uint32_t linesize)
 {
-	struct beauty_face_region region =
-		beauty_face_region_detect(data, linesize, filter->analysis_width,
-					  filter->analysis_height, 64);
+	struct beauty_face_region region = beauty_face_region_detect(
+		data, linesize, filter->analysis_width, filter->analysis_height, 64);
 
 	if (region.valid) {
 		if (filter->auto_face_valid) {
@@ -522,8 +607,9 @@ static void beauty_update_light_balance(struct beauty_filter *filter, const uint
 	}
 
 	if (getenv("BEAUTY_DEBUG_LIGHT"))
-		fprintf(stderr, "[light] frame=%.3f skin=%.3f cov=%.1f%% mean=%.3f "
-				"target=%.2f gain=%.3f\n",
+		fprintf(stderr,
+			"[light] frame=%.3f skin=%.3f cov=%.1f%% mean=%.3f "
+			"target=%.2f gain=%.3f\n",
 			frame_mean, skin_weight > 0.0 ? skin_sum / skin_weight : 0.0,
 			100.0 * skin_weight / count, mean, target,
 			target / (mean > 0.004 ? mean : 0.004));
@@ -595,8 +681,8 @@ static void beauty_analyse_mask(struct beauty_filter *filter, gs_texture_t *mask
 		return;
 	}
 
-	gs_ortho(0.0f, (float)filter->analysis_width, 0.0f,
-		 (float)filter->analysis_height, -100.0f, 100.0f);
+	gs_ortho(0.0f, (float)filter->analysis_width, 0.0f, (float)filter->analysis_height, -100.0f,
+		 100.0f);
 	beauty_draw_technique(filter, "MaskAnalysis", filter->analysis_width,
 			      filter->analysis_height, mask_tex);
 	gs_texrender_end(filter->analysis_texrender);
@@ -668,8 +754,8 @@ static void beauty_render(void *data, gs_effect_t *unused)
 		GS_CS_709_EXTENDED,
 		GS_CS_709_SCRGB,
 	};
-	const enum gs_color_space source_space = obs_source_get_color_space(
-		target, OBS_COUNTOF(preferred_spaces), preferred_spaces);
+	const enum gs_color_space source_space =
+		obs_source_get_color_space(target, OBS_COUNTOF(preferred_spaces), preferred_spaces);
 
 	if (source_space != GS_CS_SRGB && source_space != GS_CS_SRGB_16F &&
 	    source_space != GS_CS_709_EXTENDED && source_space != GS_CS_709_SCRGB) {
@@ -695,8 +781,8 @@ static void beauty_render(void *data, gs_effect_t *unused)
 	/* 1. Capture the source into a texture we control. */
 	gs_texrender_reset(filter->src_texrender);
 	gs_blend_state_push();
-	gs_blend_function_separate(GS_BLEND_SRCALPHA, GS_BLEND_INVSRCALPHA,
-				   GS_BLEND_ONE, GS_BLEND_INVSRCALPHA);
+	gs_blend_function_separate(GS_BLEND_SRCALPHA, GS_BLEND_INVSRCALPHA, GS_BLEND_ONE,
+				   GS_BLEND_INVSRCALPHA);
 	if (gs_texrender_begin_with_color_space(filter->src_texrender, width, height,
 						output_space)) {
 		struct vec4 clear_color;
@@ -751,9 +837,8 @@ static void beauty_render(void *data, gs_effect_t *unused)
 	/* The mask pass also carries the luma used by the light balance, so it
 	 * has to run whenever that control is on, even with skin detection
 	 * disabled. */
-	need_mask = filter->skin_detect || filter->face_aware ||
-		    filter->teeth_whiten > 0.0001f || filter->eye_brighten > 0.0001f ||
-		    filter->light_balance > 0.0001f;
+	need_mask = filter->skin_detect || filter->face_aware || filter->teeth_whiten > 0.0001f ||
+		    filter->eye_brighten > 0.0001f || filter->light_balance > 0.0001f;
 
 	/* 2. Skin mask + temporal stabilisation (half resolution). */
 	if (need_mask) {
@@ -762,8 +847,8 @@ static void beauty_render(void *data, gs_effect_t *unused)
 		const int write_index = filter->mask_index;
 
 		if (filter->history_valid)
-			history_tex = gs_texrender_get_texture(
-				filter->mask_texrender[write_index ^ 1]);
+			history_tex =
+				gs_texrender_get_texture(filter->mask_texrender[write_index ^ 1]);
 		if (!history_tex)
 			history_tex = filter->white_tex;
 
@@ -772,11 +857,9 @@ static void beauty_render(void *data, gs_effect_t *unused)
 		if (filter->p_texel_size)
 			gs_effect_set_vec2(filter->p_texel_size, &texel);
 		if (filter->p_skin_sensitivity)
-			gs_effect_set_float(filter->p_skin_sensitivity,
-					    filter->skin_sensitivity);
+			gs_effect_set_float(filter->p_skin_sensitivity, filter->skin_sensitivity);
 		if (filter->p_temporal_strength)
-			gs_effect_set_float(filter->p_temporal_strength,
-					    filter->temporal_strength);
+			gs_effect_set_float(filter->p_temporal_strength, filter->temporal_strength);
 		if (filter->p_history_valid)
 			gs_effect_set_float(filter->p_history_valid,
 					    filter->history_valid ? 1.0f : 0.0f);
@@ -802,11 +885,9 @@ static void beauty_render(void *data, gs_effect_t *unused)
 		vec2_set(&face_center, face_cx, face_cy);
 		vec2_set(&face_size, face_hw, face_hh);
 		if (filter->p_face_valid)
-			gs_effect_set_float(filter->p_face_valid,
-					    face_valid ? 1.0f : 0.0f);
+			gs_effect_set_float(filter->p_face_valid, face_valid ? 1.0f : 0.0f);
 		if (filter->p_face_aware)
-			gs_effect_set_float(filter->p_face_aware,
-					    filter->face_aware ? 1.0f : 0.0f);
+			gs_effect_set_float(filter->p_face_aware, filter->face_aware ? 1.0f : 0.0f);
 		if (filter->p_face_center)
 			gs_effect_set_vec2(filter->p_face_center, &face_center);
 		if (filter->p_face_size)
@@ -817,10 +898,10 @@ static void beauty_render(void *data, gs_effect_t *unused)
 		gs_blend_function(GS_BLEND_ONE, GS_BLEND_ZERO);
 
 		gs_texrender_reset(filter->mask_texrender[write_index]);
-		if (gs_texrender_begin(filter->mask_texrender[write_index],
-				       filter->mask_width, filter->mask_height)) {
-			gs_ortho(0.0f, (float)filter->mask_width, 0.0f,
-				 (float)filter->mask_height, -100.0f, 100.0f);
+		if (gs_texrender_begin(filter->mask_texrender[write_index], filter->mask_width,
+				       filter->mask_height)) {
+			gs_ortho(0.0f, (float)filter->mask_width, 0.0f, (float)filter->mask_height,
+				 -100.0f, 100.0f);
 			beauty_draw_technique(filter, "MaskPass", filter->mask_width,
 					      filter->mask_height, src_tex);
 			gs_texrender_end(filter->mask_texrender[write_index]);
@@ -849,9 +930,8 @@ static void beauty_render(void *data, gs_effect_t *unused)
 	 * frame, so it can run a few times per second on either path. */
 	filter->frame_counter++;
 	{
-		const bool face_tick =
-			use_mask_tex && filter->face_aware && !filter->face_manual &&
-			(filter->frame_counter % FACE_READBACK_INTERVAL) == 0;
+		const bool face_tick = use_mask_tex && filter->face_aware && !filter->face_manual &&
+				       (filter->frame_counter % FACE_READBACK_INTERVAL) == 0;
 		const bool light_tick = filter->light_balance > 0.0001f &&
 					(filter->frame_counter % LIGHT_READBACK_INTERVAL) == 0;
 
@@ -896,8 +976,8 @@ static void beauty_render(void *data, gs_effect_t *unused)
 		gs_texrender_reset(filter->base_texrender);
 		if (gs_texrender_begin(filter->base_texrender, filter->base_width,
 				       filter->base_height)) {
-			gs_ortho(0.0f, (float)filter->base_width, 0.0f,
-				 (float)filter->base_height, -100.0f, 100.0f);
+			gs_ortho(0.0f, (float)filter->base_width, 0.0f, (float)filter->base_height,
+				 -100.0f, 100.0f);
 			beauty_draw_technique(filter, "BlurBase", filter->base_width,
 					      filter->base_height, src_tex);
 			gs_texrender_end(filter->base_texrender);
@@ -915,14 +995,11 @@ static void beauty_render(void *data, gs_effect_t *unused)
 		gs_effect_set_texture(filter->p_base_tex,
 				      base_rendered ? base_tex : filter->white_tex);
 	if (filter->p_base_valid)
-		gs_effect_set_float(filter->p_base_valid,
-				    base_rendered ? 1.0f : 0.0f);
+		gs_effect_set_float(filter->p_base_valid, base_rendered ? 1.0f : 0.0f);
 
-	const bool is_8bit = filter->src_format == GS_RGBA ||
-			     filter->src_format == GS_BGRA ||
+	const bool is_8bit = filter->src_format == GS_RGBA || filter->src_format == GS_BGRA ||
 			     filter->src_format == GS_BGRX;
-	filter->dither_strength =
-		(filter->anti_banding && is_8bit) ? (1.0f / 255.0f) : 0.0f;
+	filter->dither_strength = (filter->anti_banding && is_8bit) ? (1.0f / 255.0f) : 0.0f;
 	if (filter->p_dither)
 		gs_effect_set_float(filter->p_dither, filter->dither_strength);
 
@@ -948,6 +1025,8 @@ static void beauty_render(void *data, gs_effect_t *unused)
 		gs_effect_set_float(filter->p_saturation, filter->saturation);
 	if (filter->p_rosy)
 		gs_effect_set_float(filter->p_rosy, filter->rosy);
+	if (filter->p_even_tone)
+		gs_effect_set_float(filter->p_even_tone, filter->even_tone);
 	if (filter->p_clarity)
 		gs_effect_set_float(filter->p_clarity, filter->clarity);
 	if (filter->p_glow)
@@ -960,8 +1039,7 @@ static void beauty_render(void *data, gs_effect_t *unused)
 	if (filter->p_opacity)
 		gs_effect_set_float(filter->p_opacity, filter->opacity);
 	if (filter->p_mask_preview)
-		gs_effect_set_float(filter->p_mask_preview,
-				    filter->mask_preview ? 1.0f : 0.0f);
+		gs_effect_set_float(filter->p_mask_preview, filter->mask_preview ? 1.0f : 0.0f);
 	if (filter->p_split_view)
 		gs_effect_set_float(filter->p_split_view, filter->split_view ? 1.0f : 0.0f);
 	if (filter->p_use_mask_tex)
@@ -978,9 +1056,10 @@ static void beauty_render(void *data, gs_effect_t *unused)
 		gs_effect_set_float(filter->p_teeth_whiten, filter->teeth_whiten);
 	if (filter->p_eye_brighten)
 		gs_effect_set_float(filter->p_eye_brighten, filter->eye_brighten);
+	if (filter->p_under_eye)
+		gs_effect_set_float(filter->p_under_eye, filter->under_eye);
 	if (filter->p_zone_preview)
-		gs_effect_set_float(filter->p_zone_preview,
-				    filter->zone_preview ? 1.0f : 0.0f);
+		gs_effect_set_float(filter->p_zone_preview, filter->zone_preview ? 1.0f : 0.0f);
 	if (filter->p_hdr_scale)
 		gs_effect_set_float(filter->p_hdr_scale, hdr_scale);
 	if (filter->p_is_hdr)
@@ -1097,8 +1176,8 @@ static bool save_preset_clicked(obs_properties_t *props, obs_property_t *propert
 	if (!settings)
 		return false;
 
-	if (!beauty_custom_preset_name_normalise(
-		    obs_data_get_string(settings, S_PRESET_NAME), name, sizeof(name))) {
+	if (!beauty_custom_preset_name_normalise(obs_data_get_string(settings, S_PRESET_NAME), name,
+						 sizeof(name))) {
 		beauty_set_status(filter, T_PRESET_STATUS_BAD);
 	} else if (!beauty_custom_preset_save(name, settings)) {
 		beauty_set_status(filter, T_PRESET_STATUS_WRITE);
@@ -1136,8 +1215,8 @@ static bool delete_preset_clicked(obs_properties_t *props, obs_property_t *prope
 
 	current = obs_data_get_string(settings, S_PRESET);
 	have_name = beauty_preset_is_custom_id(current) &&
-		    beauty_custom_preset_name_normalise(beauty_preset_custom_name(current),
-							name, sizeof(name));
+		    beauty_custom_preset_name_normalise(beauty_preset_custom_name(current), name,
+							sizeof(name));
 	if (!have_name)
 		have_name = beauty_custom_preset_name_normalise(
 			obs_data_get_string(settings, S_PRESET_NAME), name, sizeof(name));
@@ -1188,8 +1267,7 @@ static bool setting_modified(obs_properties_t *props, obs_property_t *property,
 }
 
 static obs_property_t *add_float_setting(obs_properties_t *group, const char *name,
-					 const char *text, double min, double max,
-					 double step)
+					 const char *text, double min, double max, double step)
 {
 	obs_property_t *property =
 		obs_properties_add_float_slider(group, name, text, min, max, step);
@@ -1197,16 +1275,14 @@ static obs_property_t *add_float_setting(obs_properties_t *group, const char *na
 	return property;
 }
 
-static obs_property_t *add_bool_setting(obs_properties_t *group, const char *name,
-					const char *text)
+static obs_property_t *add_bool_setting(obs_properties_t *group, const char *name, const char *text)
 {
 	obs_property_t *property = obs_properties_add_bool(group, name, text);
 	obs_property_set_modified_callback(property, setting_modified);
 	return property;
 }
 
-static bool preset_modified(obs_properties_t *props, obs_property_t *property,
-			    obs_data_t *settings)
+static bool preset_modified(obs_properties_t *props, obs_property_t *property, obs_data_t *settings)
 {
 	struct beauty_filter *filter = obs_properties_get_param(props);
 	const char *id = obs_data_get_string(settings, S_PRESET);
@@ -1255,6 +1331,7 @@ static void beauty_update_visibility(obs_properties_t *props, bool skin_detect, 
 	beauty_is_visible(props, S_TEMPORAL, face_aware);
 	beauty_is_visible(props, S_TEETH, face_aware);
 	beauty_is_visible(props, S_EYES, face_aware);
+	beauty_is_visible(props, S_UNDER_EYE, face_aware);
 	beauty_is_visible(props, S_ZONE_PREVIEW, face_aware);
 	beauty_is_visible(props, S_FACE_MANUAL, face_aware);
 
@@ -1332,6 +1409,7 @@ static void add_tooltips(obs_properties_t *props)
 		{S_WARMTH, "Tooltip.Warmth"},
 		{S_SATURATION, "Tooltip.Saturation"},
 		{S_ROSY, "Tooltip.Rosy"},
+		{S_EVEN_TONE, "Tooltip.EvenTone"},
 		{S_CLARITY, "Tooltip.Clarity"},
 		{S_GLOW, "Tooltip.Glow"},
 		{S_LIGHT_BALANCE, "Tooltip.LightBalance"},
@@ -1339,6 +1417,7 @@ static void add_tooltips(obs_properties_t *props)
 		{S_TEMPORAL, "Tooltip.Temporal"},
 		{S_TEETH, "Tooltip.Teeth"},
 		{S_EYES, "Tooltip.Eyes"},
+		{S_UNDER_EYE, "Tooltip.UnderEye"},
 		{S_ZONE_PREVIEW, "Tooltip.ZonePreview"},
 		{S_FACE_MANUAL, "Tooltip.FaceManual"},
 		{S_FACE_CX, "Tooltip.FaceCenterX"},
@@ -1374,8 +1453,7 @@ static obs_properties_t *beauty_properties(void *data)
 	obs_property_t *p;
 
 	if (filter && (filter->effect_failed || filter->resource_failed)) {
-		info = obs_properties_add_text(props, S_ERROR_INFO, T_ERROR_INFO,
-					       OBS_TEXT_INFO);
+		info = obs_properties_add_text(props, S_ERROR_INFO, T_ERROR_INFO, OBS_TEXT_INFO);
 		obs_property_text_set_info_type(info, OBS_TEXT_INFO_ERROR);
 		obs_property_text_set_info_word_wrap(info, true);
 	}
@@ -1411,13 +1489,12 @@ static obs_properties_t *beauty_properties(void *data)
 
 	obs_properties_add_text(props, S_PRESET_NAME, T_PRESET_NAME, OBS_TEXT_DEFAULT);
 	obs_properties_add_button(props, "preset_save", T_PRESET_SAVE, save_preset_clicked);
-	obs_properties_add_button(props, "preset_delete", T_PRESET_DELETE,
-				  delete_preset_clicked);
+	obs_properties_add_button(props, "preset_delete", T_PRESET_DELETE, delete_preset_clicked);
 	obs_properties_add_button(props, "preset_reset", T_PRESET_RESET, reset_settings_clicked);
 
 	if (filter && filter->preset_status[0]) {
-		info = obs_properties_add_text(props, "preset_status_info",
-					       filter->preset_status, OBS_TEXT_INFO);
+		info = obs_properties_add_text(props, "preset_status_info", filter->preset_status,
+					       OBS_TEXT_INFO);
 		obs_property_text_set_info_type(info, OBS_TEXT_INFO_NORMAL);
 		obs_property_text_set_info_word_wrap(info, true);
 	}
@@ -1440,6 +1517,7 @@ static obs_properties_t *beauty_properties(void *data)
 	add_float_setting(group, S_WARMTH, T_WARMTH, -50.0, 50.0, 1.0);
 	add_float_setting(group, S_SATURATION, T_SATURATION, -50.0, 50.0, 1.0);
 	add_float_setting(group, S_ROSY, T_ROSY, 0.0, 1.0, 0.01);
+	add_float_setting(group, S_EVEN_TONE, T_EVEN_TONE, 0.0, 1.0, 0.01);
 	obs_properties_add_group(props, "complexion_group", T_GROUP_COMPLEXION, OBS_GROUP_NORMAL,
 				 group);
 
@@ -1457,6 +1535,7 @@ static obs_properties_t *beauty_properties(void *data)
 	add_float_setting(group, S_TEMPORAL, T_TEMPORAL, 0.0, 1.0, 0.01);
 	add_float_setting(group, S_TEETH, T_TEETH, 0.0, 1.0, 0.01);
 	add_float_setting(group, S_EYES, T_EYES, 0.0, 1.0, 0.01);
+	add_float_setting(group, S_UNDER_EYE, T_UNDER_EYE, 0.0, 1.0, 0.01);
 	add_bool_setting(group, S_ZONE_PREVIEW, T_ZONE_PREVIEW);
 	p = obs_properties_add_bool(group, S_FACE_MANUAL, T_FACE_MANUAL);
 	obs_property_set_modified_callback(p, face_manual_modified);
@@ -1489,8 +1568,8 @@ static obs_properties_t *beauty_properties(void *data)
 	{
 		char build_info[96];
 
-		snprintf(build_info, sizeof(build_info),
-			 "obs-beauty-filter %s · GPL-2.0-or-later", BEAUTY_VERSION);
+		snprintf(build_info, sizeof(build_info), "obs-beauty-filter %s · GPL-2.0-or-later",
+			 BEAUTY_VERSION);
 		obs_properties_add_text(props, "build_info", build_info, OBS_TEXT_INFO);
 	}
 
@@ -1518,11 +1597,13 @@ static void beauty_defaults(obs_data_t *settings)
 	obs_data_set_default_double(settings, S_CLARITY, 0.10);
 	obs_data_set_default_double(settings, S_GLOW, 0.05);
 	obs_data_set_default_double(settings, S_LIGHT_BALANCE, 0.35);
+	obs_data_set_default_double(settings, S_EVEN_TONE, 0.0);
 
 	obs_data_set_default_bool(settings, S_FACE_AWARE, true);
 	obs_data_set_default_double(settings, S_TEMPORAL, 0.60);
 	obs_data_set_default_double(settings, S_TEETH, 0.0);
 	obs_data_set_default_double(settings, S_EYES, 0.0);
+	obs_data_set_default_double(settings, S_UNDER_EYE, 0.0);
 	obs_data_set_default_bool(settings, S_ZONE_PREVIEW, false);
 	obs_data_set_default_bool(settings, S_FACE_MANUAL, false);
 	obs_data_set_default_double(settings, S_FACE_CX, 0.50);
@@ -1544,9 +1625,8 @@ static void *beauty_create(obs_data_t *settings, obs_source_t *context)
 	filter->context = context;
 
 	if (!effect_path) {
-		blog(LOG_ERROR,
-		     "[obs-beauty-filter] Could not find 'beauty_filter.effect'. "
-		     "Check that the module data directory is installed correctly.");
+		blog(LOG_ERROR, "[obs-beauty-filter] Could not find 'beauty_filter.effect'. "
+				"Check that the module data directory is installed correctly.");
 		bfree(filter);
 		return NULL;
 	}
@@ -1557,11 +1637,9 @@ static void *beauty_create(obs_data_t *settings, obs_source_t *context)
 	if (filter->effect) {
 		filter->p_image = gs_effect_get_param_by_name(filter->effect, "image");
 		filter->p_mask_tex = gs_effect_get_param_by_name(filter->effect, "mask_tex");
-		filter->p_history_tex =
-			gs_effect_get_param_by_name(filter->effect, "history_tex");
+		filter->p_history_tex = gs_effect_get_param_by_name(filter->effect, "history_tex");
 		filter->p_base_tex = gs_effect_get_param_by_name(filter->effect, "base_tex");
-		filter->p_base_valid =
-			gs_effect_get_param_by_name(filter->effect, "base_valid");
+		filter->p_base_valid = gs_effect_get_param_by_name(filter->effect, "base_valid");
 		filter->p_dither = gs_effect_get_param_by_name(filter->effect, "dither_strength");
 		filter->p_texel_size = gs_effect_get_param_by_name(filter->effect, "texel_size");
 		filter->p_analysis_texel =
@@ -1569,49 +1647,43 @@ static void *beauty_create(obs_data_t *settings, obs_source_t *context)
 		filter->p_radius = gs_effect_get_param_by_name(filter->effect, "radius");
 		filter->p_amount = gs_effect_get_param_by_name(filter->effect, "amount");
 		filter->p_detail = gs_effect_get_param_by_name(filter->effect, "detail");
-		filter->p_skin_detect =
-			gs_effect_get_param_by_name(filter->effect, "skin_detect");
+		filter->p_skin_detect = gs_effect_get_param_by_name(filter->effect, "skin_detect");
 		filter->p_skin_sensitivity =
 			gs_effect_get_param_by_name(filter->effect, "skin_sensitivity");
-		filter->p_brightness =
-			gs_effect_get_param_by_name(filter->effect, "brightness");
+		filter->p_brightness = gs_effect_get_param_by_name(filter->effect, "brightness");
 		filter->p_warmth = gs_effect_get_param_by_name(filter->effect, "warmth");
-		filter->p_saturation =
-			gs_effect_get_param_by_name(filter->effect, "saturation");
+		filter->p_saturation = gs_effect_get_param_by_name(filter->effect, "saturation");
 		filter->p_rosy = gs_effect_get_param_by_name(filter->effect, "rosy");
+		filter->p_even_tone = gs_effect_get_param_by_name(filter->effect, "even_tone");
 		filter->p_clarity = gs_effect_get_param_by_name(filter->effect, "clarity");
 		filter->p_glow = gs_effect_get_param_by_name(filter->effect, "glow");
 		filter->p_light_balance =
 			gs_effect_get_param_by_name(filter->effect, "light_balance");
-		filter->p_auto_gain =
-			gs_effect_get_param_by_name(filter->effect, "auto_gain");
+		filter->p_auto_gain = gs_effect_get_param_by_name(filter->effect, "auto_gain");
 		filter->p_opacity = gs_effect_get_param_by_name(filter->effect, "opacity");
 		filter->p_mask_preview =
 			gs_effect_get_param_by_name(filter->effect, "mask_preview");
-		filter->p_split_view =
-			gs_effect_get_param_by_name(filter->effect, "split_view");
+		filter->p_split_view = gs_effect_get_param_by_name(filter->effect, "split_view");
 		filter->p_temporal_strength =
 			gs_effect_get_param_by_name(filter->effect, "temporal_strength");
 		filter->p_history_valid =
 			gs_effect_get_param_by_name(filter->effect, "history_valid");
 		filter->p_use_mask_tex =
 			gs_effect_get_param_by_name(filter->effect, "use_mask_tex");
-		filter->p_face_aware =
-			gs_effect_get_param_by_name(filter->effect, "face_aware");
-		filter->p_face_valid =
-			gs_effect_get_param_by_name(filter->effect, "face_valid");
-		filter->p_face_center =
-			gs_effect_get_param_by_name(filter->effect, "face_center");
+		filter->p_face_aware = gs_effect_get_param_by_name(filter->effect, "face_aware");
+		filter->p_face_valid = gs_effect_get_param_by_name(filter->effect, "face_valid");
+		filter->p_face_center = gs_effect_get_param_by_name(filter->effect, "face_center");
 		filter->p_face_size = gs_effect_get_param_by_name(filter->effect, "face_size");
 		filter->p_teeth_whiten =
 			gs_effect_get_param_by_name(filter->effect, "teeth_whiten");
 		filter->p_eye_brighten =
 			gs_effect_get_param_by_name(filter->effect, "eye_brighten");
+		filter->p_under_eye = gs_effect_get_param_by_name(filter->effect, "under_eye");
 		filter->p_zone_preview =
 			gs_effect_get_param_by_name(filter->effect, "zone_preview");
-		filter->p_hdr_scale =
-			gs_effect_get_param_by_name(filter->effect, "hdr_scale");
+		filter->p_hdr_scale = gs_effect_get_param_by_name(filter->effect, "hdr_scale");
 		filter->p_is_hdr = gs_effect_get_param_by_name(filter->effect, "is_hdr");
+		beauty_check_effect_params(filter);
 	}
 	obs_leave_graphics();
 
@@ -1662,9 +1734,11 @@ static enum gs_color_space beauty_get_color_space(void *data, size_t count,
 		GS_CS_709_EXTENDED,
 		GS_CS_709_SCRGB,
 	};
-	const enum gs_color_space source_space = obs_source_get_color_space(
-		obs_filter_get_target(filter->context), OBS_COUNTOF(potential_spaces),
-		potential_spaces);
+	obs_source_t *target = obs_filter_get_target(filter->context);
+	const enum gs_color_space source_space =
+		target ? obs_source_get_color_space(target, OBS_COUNTOF(potential_spaces),
+						    potential_spaces)
+		       : GS_CS_SRGB;
 
 	UNUSED_PARAMETER(count);
 	UNUSED_PARAMETER(preferred_spaces);

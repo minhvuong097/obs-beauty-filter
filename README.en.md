@@ -11,7 +11,7 @@
 [![Build](https://github.com/minhvuong097/obs-beauty-filter/actions/workflows/build.yml/badge.svg)](https://github.com/minhvuong097/obs-beauty-filter/actions/workflows/build.yml)
 [![Latest release](https://img.shields.io/github/v/release/minhvuong097/obs-beauty-filter?display_name=tag)](https://github.com/minhvuong097/obs-beauty-filter/releases/latest)
 
-A GPU beauty filter for **OBS Studio** on Windows and Linux (macOS can be built from source but is not tested). Version **1.8.0** runs entirely on the GPU, plugs into the standard OBS filter pipeline, uses no AI model, never reads a full-resolution frame back to the CPU, and has no third-party runtime dependency.
+A GPU beauty filter for **OBS Studio** on Windows and Linux (macOS can be built from source but is not tested). Version **1.9.0** runs entirely on the GPU, plugs into the standard OBS filter pipeline, uses no AI model, never reads a full-resolution frame back to the CPU, and has no third-party runtime dependency.
 
 Goal: natural-looking skin for livestreams/webcams **and high-resolution cameras** while preserving eyes, eyebrows, hair, pores and the face outline — with correct HDR handling.
 
@@ -49,13 +49,15 @@ steps are in [`assets/demo/README.md`](assets/demo/README.md).
 - **Face prior**: an ellipse over the face and neck rejects most skin-coloured walls, furniture and clothing.
 - **Teeth whitening**: brightens neutral, low-chroma, bright pixels inside the mouth ellipse.
 - **Eye brightening**: lifts the sclera and gently raises the iris/pupil inside two eye ellipses.
+- **Even skin tone**: averages only the chroma channel over a wide neighbourhood, flattening redness and blotches while preserving pore-level luma texture; a smooth complexion is left untouched.
+- **Under-eye correction**: two soft zones below the eyes lift the shadow and neutralise its colour, weighted by darkness so the lower lid keeps its shape.
 - **Detail reconstruction**: retains luma texture (pores) more than chroma (blotches) and adds clarity outside skin.
 - **Complexion controls**: exposure-like brightness, luma-preserving warmth, saturation and rosy tint, all skin-weighted.
 - **Automatic light balance**: measures a 64 px readback (skin-weighted when a face is present) and lifts or lowers exposure toward a neutral level, with a soft highlight shoulder — no more blown highlights or crushed shadows, while skin stays even. Slider 0 = off, 0.35 = default, 1 = strong.
 - **Soft glow** only on highlights, useful with ring lights and clean shadows.
 - **Anti-banding**: triangular dithering for 8-bit output prevents banding in smooth skin gradients.
 - **HDR-safe**: `GS_CS_709_EXTENDED`, `GS_CS_709_SCRGB` and `GS_CS_SRGB_16F` are processed in linear light; highlights above SDR white are preserved (no bypass, no clipping).
-- **Previews**: skin mask, split view and face/eye/mouth zones.
+- **Previews**: skin mask, split view and face/eye/mouth/under-eye zones.
 - **Built-in starting presets**: Natural, Cinema, Studio, Soft, Beard, Dark skin, HDR and Default. Pick one, then fine-tune; any manual change marks the selection as **Custom**.
 - **Custom presets**: save, overwrite, reload and delete your own looks. They are stored as `custom-presets.json` in the OBS module config directory and survive scene-collection changes and restarts.
 - **Reset button**: return every control to the Default preset without removing the filter.
@@ -120,7 +122,7 @@ obs-beauty-filter/
 
 ### Option A — installer `.exe` (recommended)
 
-Download `obs-beauty-filter-1.8.0-windows-x64-setup.exe` from
+Download `obs-beauty-filter-1.9.0-windows-x64-setup.exe` from
 **[GitHub Releases](https://github.com/minhvuong097/obs-beauty-filter/releases/latest)**
 and run it. The installer:
 
@@ -151,7 +153,7 @@ your OBS scenes, profiles and custom presets untouched.
 
 ### Option B — prebuilt ZIP (manual install)
 
-- Windows x64: `obs-beauty-filter-1.8.0-windows-x64.zip`
+- Windows x64: `obs-beauty-filter-1.9.0-windows-x64.zip`
 - Linux x86_64: `obs-beauty-filter-linux-x86_64.tar.gz`
 - Each release includes `SHA256SUMS.txt` so you can verify the download.
 
@@ -314,6 +316,7 @@ set `INSTALL_LIBDIR=...` for Debian/Ubuntu multiarch).
 | Warmth | 0 | -50..50 | Warm/cool skin tint |
 | Saturation | 0 | -50..50 | Skin colour saturation |
 | Rosy tint | 0.15 | 0–1 | Natural rosy tint |
+| Even skin tone | 0 | 0–1 | Flattens redness and blotches by smoothing chroma only; luma texture is preserved |
 | Clarity | 0.10 | 0–1 | Sharpens non-skin areas |
 | Soft glow | 0.05 | 0–1 | Soft skin glow |
 | Auto light balance | 0.35 | 0–1 | Lifts/lowers exposure from measured scene brightness; 0 = off, 1 = strongest |
@@ -321,7 +324,8 @@ set `INSTALL_LIBDIR=...` for Debian/Ubuntu multiarch).
 | Temporal mask stability | 0.60 | 0–1 | Blends mask with history; higher = more stable, less flicker |
 | Teeth whitening | 0 | 0–1 | Whitens teeth inside the mouth zone |
 | Eye brightening | 0 | 0–1 | Brightens eyes inside the eye zones |
-| Show face zones | Off | On/Off | Shows face prior (green), eyes (blue), mouth (yellow) |
+| Under-eye correction | 0 | 0–1 | Lifts and neutralises under-eye shadows; needs face zones |
+| Show face zones | Off | On/Off | Shows face prior (green), eyes (blue), under-eye (violet), mouth (yellow) |
 | Manual face box | Off | On/Off | Use the manual box instead of auto detection |
 | Face center X / Y | 0.50 / 0.45 | 0–1 | Face centre in normalised coordinates |
 | Face width / height | 0.32 / 0.42 | 0.05–1 | **Full** face-box size, normalised |
@@ -407,6 +411,8 @@ The dominant cost is the full-resolution fragment shader, plus a half-resolution
 - `MaskAnalysis` runs only every 6 frames when automatic face-aware detection or automatic light balance is on, and its staging copy is mapped on the next frame, so it never stalls the render pass.
 - `BlurBase` is always cheaper than a full-resolution bilateral at the same radius because it touches 1/4–1/16 of the pixels.
 - Disable **Face-aware zones** when you do not use teeth/eye controls to skip the mask pass when `Skin detection` is also off.
+- **Even skin tone** adds 12 texture taps per pixel, and only while the slider is above `0`; it is off in every built-in preset, so the default cost is unchanged.
+- **Under-eye correction** reuses the existing eye/face zones and adds no extra pass. It is disabled unless Face-aware zones is on and a valid face box exists.
 - If frame rate drops: lower Quality first, then Radius, then disable Glow.
 
 ## Known limitations
@@ -414,6 +420,8 @@ The dominant cost is the full-resolution fragment shader, plus a half-resolution
 - **Face detection is heuristic**, not ML landmark/segmentation. It finds the largest skin component and derives the face from its upper band; it can fail with multiple people, occluded faces, hats, strong lighting or skin-coloured backgrounds. Use **Show face zones** and **Manual face box**.
 - **Teeth/eye zones are estimated ellipses**, not per-tooth/per-eyelid landmarks. Best results with a front-facing face that fills a good part of the frame.
 - The skin mask is still colour-based; coherence + face prior reduce but do not eliminate skin-coloured wood/walls/clothing.
+- **Under-eye zones are estimated ellipses** tied to the eye position; on an unusual face shape they can reach the upper cheek. Lower the value or use the manual box if that happens.
+- **Even skin tone is a chroma low-pass**, not pigment removal: it evens out blotches, but a strongly saturated stain or a hard shadow still needs lighting or makeup.
 - No noise reduction.
 - HDR is processed but not tone-mapped; the filter preserves the source dynamic range.
 - Results depend on skin tone and lighting; test with multiple skin tones before production use.

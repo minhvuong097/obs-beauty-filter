@@ -12,10 +12,11 @@
 6. **Detail preservation**: tăng nếu da bệt; giảm nếu vẫn còn mụn/texture.
 7. **Clarity**: tăng nhẹ để mắt/tóc nét.
 8. **Complexion**: chỉnh sáng/ấm/hồng ở mức nhỏ.
-9. **Cân bằng sáng tự động**: để 0.35 cho hầu hết cảnh, tăng khi phòng quá tối hoặc ngược sáng mạnh.
-10. **Temporal mask stability**: tăng nếu mask nhấp nháy; giảm nếu thấy bóng mờ khi đầu quay nhanh.
-11. **Teeth whitening / Eye brightening**: bật sau cùng, ở mức nhỏ, và kiểm tra bằng **Hiện vùng mặt**.
-12. **So sánh trái/phải** để kiểm tra, rồi tắt trước khi lên sóng.
+9. **Đều màu da**: thêm 0.15–0.35 khi vẫn còn mảng đỏ/loang màu sau khi làm mịn; control chỉ dịch chroma nên lỗ chân lông vẫn còn.
+10. **Cân bằng sáng tự động**: để 0.35 cho hầu hết cảnh, tăng khi phòng quá tối hoặc ngược sáng mạnh.
+11. **Temporal mask stability**: tăng nếu mask nhấp nháy; giảm nếu thấy bóng mờ khi đầu quay nhanh.
+12. **Giảm quầng mắt / Teeth / Eyes**: bật sau cùng, ở mức nhỏ, và kiểm tra bằng **Hiện vùng mặt** (quầng mắt màu tím).
+13. **So sánh trái/phải** để kiểm tra, rồi tắt trước khi lên sóng.
 
 ## 2. Preset gợi ý
 
@@ -35,11 +36,13 @@ Bảng điều khiển bắt đầu bằng menu **Preset khởi đầu**. Chọn
 | Warmth | 3 |
 | Saturation | 0 |
 | Rosy | 0.12 |
+| Đều màu da | 0 |
 | Clarity | 0.10 |
 | Glow | 0.05 |
 | Face-aware zones | On |
 | Temporal stability | 0.60 |
 | Teeth / Eyes | 0 / 0 |
+| Giảm quầng mắt | 0 |
 | Quality | Balanced |
 
 ### Cinema — camera cao cấp 1440p/4K
@@ -54,11 +57,13 @@ Bảng điều khiển bắt đầu bằng menu **Preset khởi đầu**. Chọn
 | Warmth | 2 |
 | Saturation | 0 |
 | Rosy | 0.10 |
+| Đều màu da | 0 |
 | Clarity | 0.08 |
 | Glow | 0.04 |
 | Face-aware zones | On |
 | Temporal stability | 0.65 |
 | Teeth / Eyes | 0.20 / 0.12 |
+| Giảm quầng mắt | 0 |
 | Quality | High |
 | Anti-banding | On |
 
@@ -76,11 +81,13 @@ Cảm biến cao cấp đã có nhiều texture, nên dùng Detail cao hơn và 
 | Warmth | 2 |
 | Saturation | 2 |
 | Rosy | 0.18 |
+| Đều màu da | 0 |
 | Clarity | 0.12 |
 | Glow | 0.10 |
 | Face-aware zones | On |
 | Temporal stability | 0.55 |
 | Teeth / Eyes | 0.35 / 0.20 |
+| Giảm quầng mắt | 0 |
 | Quality | High |
 
 ### Soft — da khô, ánh sáng mềm
@@ -95,11 +102,13 @@ Cảm biến cao cấp đã có nhiều texture, nên dùng Detail cao hơn và 
 | Warmth | 4 |
 | Saturation | 4 |
 | Rosy | 0.20 |
+| Đều màu da | 0 |
 | Clarity | 0.08 |
 | Glow | 0.18 |
 | Face-aware zones | On |
 | Temporal stability | 0.65 |
 | Teeth / Eyes | 0.25 / 0.15 |
+| Giảm quầng mắt | 0 |
 | Quality | Balanced |
 
 ### Nam giới / có râu
@@ -114,11 +123,13 @@ Cảm biến cao cấp đã có nhiều texture, nên dùng Detail cao hơn và 
 | Warmth | 0 |
 | Saturation | 0 |
 | Rosy | 0.05 |
+| Đều màu da | 0 |
 | Clarity | 0.12 |
 | Glow | 0 |
 | Face-aware zones | On |
 | Temporal stability | 0.50 |
 | Teeth / Eyes | 0.20 / 0.10 |
+| Giảm quầng mắt | 0 |
 | Quality | Balanced |
 
 ### Da sẫm màu
@@ -133,11 +144,13 @@ Cảm biến cao cấp đã có nhiều texture, nên dùng Detail cao hơn và 
 | Warmth | 0–3 |
 | Saturation | 2–5 |
 | Rosy | 0.05–0.10 |
+| Đều màu da | 0 |
 | Clarity | 0.10 |
 | Glow | 0.05 |
 | Face-aware zones | On |
 | Temporal stability | 0.60 |
 | Teeth / Eyes | 0.30 / 0.15 |
+| Giảm quầng mắt | 0 |
 | Quality | Balanced |
 
 Luôn kiểm tra **Show skin mask**: nếu vùng da tối không trắng, tăng Sensitivity; nếu tóc/nền cũng trắng, giảm.
@@ -150,6 +163,8 @@ Luôn kiểm tra **Show skin mask**: nếu vùng da tối không trắng, tăng 
 | Radius | 4–7 |
 | Detail | 0.40–0.55 |
 | Glow | 0–0.05 |
+| Đều màu da | 0 |
+| Giảm quầng mắt | 0 |
 | Face-aware zones | On |
 | Temporal stability | 0.50–0.65 |
 | Quality | High (hoặc Balanced nếu GPU yếu) |
@@ -214,7 +229,7 @@ môi trường `BEAUTY_DEBUG_LIGHT=1` (xem `docs/TESTING.md`).
 
 ### Khi nào cần bật?
 
-- Bật **Face-aware zones** nếu dùng **Teeth whitening** hoặc **Eye brightening**.
+- Bật **Face-aware zones** nếu dùng **Teeth whitening**, **Eye brightening** hoặc **Giảm quầng mắt**.
 - Face prior cũng giúp giảm tường/gỗ màu da bị nhận nhầm.
 - Tắt nếu không dùng teeth/eye và muốn giảm chi phí GPU.
 
@@ -224,6 +239,7 @@ môi trường `BEAUTY_DEBUG_LIGHT=1` (xem `docs/TESTING.md`).
 2. Màu mong đợi:
    - **xanh lá**: face prior (vùng mặt + cổ),
    - **xanh dương**: hai ellipse mắt,
+   - **tím**: hai ellipse quầng mắt,
    - **vàng**: ellipse miệng.
 3. Nếu box lệch:
    - Bật **Manual face box**.
@@ -235,6 +251,7 @@ môi trường `BEAUTY_DEBUG_LIGHT=1` (xem `docs/TESTING.md`).
 
 - **Teeth whitening**: `0.2–0.5`. Trên `0.6` dễ làm môi/nướu bị nhạt màu.
 - **Eye brightening**: `0.1–0.3`. Trên `0.4` dễ tạo mắt "trắng bệch" hoặc quầng sáng quanh mắt.
+- **Giảm quầng mắt**: `0.2–0.4`. Trên `0.6`, mí dưới có thể bị bệt hoặc xám; hiệu ứng có trọng số theo độ tối nên quầng thâm đậm cần cao hơn bóng nhẹ.
 - **Temporal stability**: `0.4–0.7` là vùng an toàn. Trên `0.8` có thể thấy bóng mờ khi đầu quay nhanh; dưới `0.3` mask dễ nhấp nháy.
 - Nếu da quanh mắt/miệng cũng sáng lên: giảm Teeth/Eyes trước, sau đó thu nhỏ face box.
 
@@ -253,7 +270,11 @@ môi trường `BEAUTY_DEBUG_LIGHT=1` (xem `docs/TESTING.md`).
 | Teeth không có tác dụng | Chưa có face box, răng tối/ám màu, hoặc zone sai | Bật Face-aware zones; bật Show face zones; dùng Manual face box; tăng Teeth vừa phải |
 | Teeth làm trắng cả môi | Zone miệng quá lớn hoặc Teeth quá cao | Thu nhỏ Face height/width; giảm Teeth |
 | Eye brightening làm sáng cả da | Zone mắt quá lớn hoặc Eyes quá cao | Giảm Eyes; thu nhỏ Face width/height; kiểm tra zone preview |
-| Face box nhảy lung tung | Nhiều người, nền màu da, mặt bị che | Dùng Manual face box; giảm Sensitivity; tắt Face-aware nếu không dùng teeth/eye |
+| Quầng mắt bị bệt/xám | Giảm quầng mắt quá cao, hoặc vùng vốn đã trung tính | Hạ giá trị Giảm quầng mắt; xem preview tím; quầng thâm đậm dùng 0.2–0.4 |
+| Quầng thâm không đổi | Chưa bật face zones, box sai, hoặc Giảm quầng mắt gần 0 | Bật Face-aware zones; chỉnh box; tăng giá trị Giảm quầng mắt |
+| Vẫn còn mảng đỏ/loang | Đều màu da quá thấp | Tăng Đều màu da 0.15–0.35; giữ Detail đủ cao để còn lỗ chân lông |
+| Da bị nhợt màu | Đều màu da quá cao | Giảm Đều màu da; thêm Rosy/Warmth nhẹ để lại sắc |
+| Face box nhảy lung tung | Nhiều người, nền màu da, mặt bị che | Dùng Manual face box; giảm Sensitivity; tắt Face-aware nếu không dùng teeth/eye/quầng mắt |
 | Tụt FPS | Quality/Radius cao, 4K, face-aware bật | Hạ Quality, giảm Radius, tắt Glow, tắt Face-aware nếu không dùng |
 | Highlight HDR bị cháy | Glow/Rosy quá cao hoặc nguồn đã cháy | Giảm Glow/Rosy; kiểm tra nguồn; filter không tone-map |
 | Không thấy tác dụng | Amount/Opacity = 0, hoặc source không hỗ trợ color space | Kiểm tra Amount/Opacity; xem log OBS |

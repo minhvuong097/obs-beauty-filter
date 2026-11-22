@@ -50,11 +50,11 @@ int main(void)
 	memset(grid, 0, sizeof(grid));
 	/* A face is taller than it is wide.  A 14x18 grid cell face at
 	 * 64x36 is roughly 22% of the frame width and 50% of its height. */
-	fill_rect(grid, 24, 7, 37, 24, 255);  /* face */
-	fill_rect(grid, 27, 11, 29, 13, 0);   /* left eye hole */
-	fill_rect(grid, 32, 11, 34, 13, 0);   /* right eye hole */
-	fill_rect(grid, 28, 19, 33, 20, 0);   /* mouth hole */
-	fill_rect(grid, 55, 2, 62, 7, 255);   /* skin-coloured wall patch */
+	fill_rect(grid, 24, 7, 37, 24, 255); /* face */
+	fill_rect(grid, 27, 11, 29, 13, 0);  /* left eye hole */
+	fill_rect(grid, 32, 11, 34, 13, 0);  /* right eye hole */
+	fill_rect(grid, 28, 19, 33, 20, 0);  /* mouth hole */
+	fill_rect(grid, 55, 2, 62, 7, 255);  /* skin-coloured wall patch */
 
 	face = beauty_face_region_detect(grid, GRID_W * 4, GRID_W, GRID_H, 64);
 	expect(face.valid, "synthetic face must be detected");

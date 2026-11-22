@@ -16,26 +16,28 @@
  * point: the property UI marks the selection as "custom" as soon as the user
  * changes a creative control.
  */
+/* clang-format off */
 static const struct beauty_preset presets[] = {
 	/* id          amount radius detail sens  bright warm sat   rosy  clar  glow
-	 * face  temporal teeth eyes  quality    anti */
+	 * light even  face  temporal teeth eyes  under quality    anti */
 	{"default",    0.35,  6.0,   0.35,  0.50, 0.0,   0.0, 0.0,  0.15, 0.10, 0.05,
-	 true, 0.60,    0.0,   0.0,   "balanced", true},
+	 0.35,  0.00,  true, 0.60,    0.0,   0.0,  0.00, "balanced", true},
 	{"natural",    0.35,  6.0,   0.40,  0.50, 0.0,   3.0, 0.0,  0.12, 0.10, 0.05,
-	 true, 0.60,    0.0,   0.0,   "balanced", true},
+	 0.35,  0.00,  true, 0.60,    0.0,   0.0,  0.00, "balanced", true},
 	{"cinema",     0.28,  8.0,   0.55,  0.50, 0.0,   2.0, 0.0,  0.10, 0.08, 0.04,
-	 true, 0.65,    0.20,  0.12,  "high",     true},
+	 0.35,  0.00,  true, 0.65,    0.20,  0.12, 0.00, "high",     true},
 	{"studio",     0.60,  10.0,  0.28,  0.50, 4.0,   2.0, 2.0,  0.18, 0.12, 0.10,
-	 true, 0.55,    0.35,  0.20,  "high",     true},
+	 0.35,  0.00,  true, 0.55,    0.35,  0.20, 0.00, "high",     true},
 	{"soft",       0.45,  8.0,   0.30,  0.55, 3.0,   4.0, 4.0,  0.20, 0.08, 0.18,
-	 true, 0.65,    0.25,  0.15,  "balanced", true},
+	 0.35,  0.00,  true, 0.65,    0.25,  0.15, 0.00, "balanced", true},
 	{"beard",      0.22,  5.0,   0.60,  0.45, 0.0,   0.0, 0.0,  0.05, 0.12, 0.0,
-	 true, 0.50,    0.20,  0.10,  "balanced", true},
+	 0.35,  0.00,  true, 0.50,    0.20,  0.10, 0.00, "balanced", true},
 	{"dark_skin",  0.30,  6.0,   0.45,  0.70, 4.0,   2.0, 3.0,  0.08, 0.10, 0.05,
-	 true, 0.60,    0.30,  0.15,  "balanced", true},
+	 0.35,  0.00,  true, 0.60,    0.30,  0.15, 0.00, "balanced", true},
 	{"hdr",        0.30,  6.0,   0.48,  0.50, 0.0,   0.0, 0.0,  0.08, 0.10, 0.03,
-	 true, 0.60,    0.15,  0.10,  "high",     true},
+	 0.35,  0.00,  true, 0.60,    0.15,  0.10, 0.00, "high",     true},
 };
+/* clang-format on */
 
 bool beauty_preset_is_custom_id(const char *id)
 {
@@ -91,10 +93,13 @@ void beauty_preset_apply(obs_data_t *settings, const struct beauty_preset *prese
 	obs_data_set_double(settings, S_ROSY, preset->rosy);
 	obs_data_set_double(settings, S_CLARITY, preset->clarity);
 	obs_data_set_double(settings, S_GLOW, preset->glow);
+	obs_data_set_double(settings, S_LIGHT_BALANCE, preset->light_balance);
+	obs_data_set_double(settings, S_EVEN_TONE, preset->even_tone);
 	obs_data_set_bool(settings, S_FACE_AWARE, preset->face_aware);
 	obs_data_set_double(settings, S_TEMPORAL, preset->temporal);
 	obs_data_set_double(settings, S_TEETH, preset->teeth);
 	obs_data_set_double(settings, S_EYES, preset->eyes);
+	obs_data_set_double(settings, S_UNDER_EYE, preset->under_eye);
 	obs_data_set_string(settings, S_QUALITY, preset->quality);
 	obs_data_set_bool(settings, S_ANTI_BANDING, preset->anti_banding);
 }

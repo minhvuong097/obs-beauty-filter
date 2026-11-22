@@ -34,5 +34,5 @@ struct beauty_face_region {
  * threshold  0..255; values >= threshold count as skin
  */
 struct beauty_face_region beauty_face_region_detect(const uint8_t *data, uint32_t linesize,
-						     uint32_t width, uint32_t height,
-						     uint8_t threshold);
+						    uint32_t width, uint32_t height,
+						    uint8_t threshold);

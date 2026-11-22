@@ -7,9 +7,15 @@
 ### Linux
 
 ```bash
-cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBEAUTY_BUILD_TESTS=ON
+cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBEAUTY_BUILD_TESTS=ON \
+  -DBEAUTY_WERROR=ON
 cmake --build build -j"$(nproc)"
+clang-format --dry-run --Werror src/*.c src/*.h tests/*.c
 ```
+
+`BEAUTY_WERROR=ON` bật thêm `-Wshadow`, `-Wstrict-prototypes`,
+`-Wmissing-prototypes`, `-Wpointer-arith` và `-Wcast-qual`. CI Linux chạy đúng
+các bước này; `CMakePresets.json` có preset `dev` với cùng cờ.
 
 ### Windows
 
@@ -82,13 +88,19 @@ Kỳ vọng:
 OK: built-in and custom presets, lookup, apply, defaults and NULL handling verified
 ```
 
-Test kiểm tra số lượng preset và ID duy nhất, khoảng giá trị hợp lệ, chuỗi quality, hành vi `find()` với `custom`/ID lạ, việc `apply()` ghi đủ mọi khóa mà không đè lên lựa chọn preset, preset `default` khớp với `beauty_defaults()`, và tham số `NULL` được bỏ qua.
+Test kiểm tra số lượng preset và ID duy nhất, khoảng giá trị hợp lệ (gồm
+`light_balance`, `even_tone`, `under_eye`), chuỗi quality, hành vi `find()` với
+`custom`/ID lạ, việc `apply()` ghi đủ mọi khóa mà không đè lên lựa chọn preset,
+preset `default` khớp với `beauty_defaults()`, và tham số `NULL` được bỏ qua.
 
 Phần custom preset ghi một file JSON thật qua `OBS_BEAUTY_CUSTOM_PRESET_PATH`,
 đọc lại từ đĩa, rồi kiểm tra trim tên, ghi đè/xóa không phân biệt hoa thường,
 từ chối tên trùng preset có sẵn hoặc tên dành riêng, từ chối ký tự điều khiển,
-giới hạn độ dài và fallback về preset Default khi thiếu khóa. Ba file tạm
-(`json`, `.tmp`, `.bak`) được dọn ở cuối.
+giới hạn độ dài và fallback về preset Default khi thiếu khóa. Một vòng
+round-trip schema 2 xác nhận `light_balance`, `even_tone`, `under_eye` sống sót
+qua save/load; một file schema 1 viết tay xác nhận preset cũ vẫn áp dụng được
+với giá trị Default cho các khóa mới. Các file tạm (`json`, `.tmp`, `.bak`) được
+dọn ở cuối.
 
 ## 4. Load + render integration test
 
@@ -122,9 +134,12 @@ scRGB pixel after filter:       4.227 0.457 0.500 1.000
 texture stripe contrast before: 10 (161 vs 151)
 texture stripe contrast after:  1 (157 vs 156)
 texture stripe contrast detail: 8 (160 vs 152)
+under-eye luma before/after:    161 / 163
+chroma contrast before:         50 (luma 8)
+chroma contrast off/on:         38 / 13 (luma 7 / 9)
 light balance luma:            161 -> 117
 light balance dark luma:       69 -> 105
-OK: module loaded, filter created, effect compiled, filter rendered, mask/opacity/face zones/texture/light balance/HDR verified
+OK: module loaded, filter created, effect compiled, filter rendered, mask/opacity/face zones/texture/even tone/under-eye/light balance/HDR verified
 ```
 
 Test kiểm tra:
@@ -150,6 +165,15 @@ Test kiểm tra:
     khung da tối phải sáng lên (69 → 105) với `light_balance = 1`, không bật skin
     detection và face tracking. Ca tối có mặt vì lỗi ở đường đo luma làm giá trị
     đọc ra 0, gain bị kẹp 2.5× và ảnh bị bổi sáng thay vì được nâng.
+11. **Giảm quầng mắt**: với face box thủ công, `under_eye = 1` phải nâng luma
+    dưới mỗi mắt ít nhất 2 mức, còn điểm tham chiếu ngoài vùng chỉ đổi tối đa 2.
+    Test bắt được zone bị đặt lệch quá vài phần trăm khung mặt.
+12. **Đều màu da**: pattern chroma sọc 10 px (chênh đỏ/lục mạnh, chênh luma nhỏ)
+    được render hai lần. `even_tone = 1` phải giảm ít nhất một nửa tương phản
+    chroma giữa hai sọc kề nhau, đồng thời giữ ít nhất 60% tương phản luma, chứng
+    minh hiệu ứng nhắm vào chroma chứ không blur toàn ảnh.
+13. **Độ phủ thuộc tính**: mọi khóa trong `src/beauty-settings.h` phải tồn tại
+    trên trang thuộc tính, để không thể thêm control vào shader mà quên UI.
 
 Nếu ra `0,0,0,0`, filter creation fail, hoặc sai lệch màu lớn, xem log shader bên dưới.
 
@@ -243,7 +267,7 @@ Nếu chạy trên backend trả về bottom-up (một số driver/backend có t
 Mở **Help → Log Files → View Current Log** và tìm:
 
 - `Loading module: obs-beauty-filter` — module được load.
-- `[obs-beauty-filter] version 1.8.0 loaded (GPL-2.0-or-later)` — đúng phiên bản
+- `[obs-beauty-filter] version 1.9.0 loaded (GPL-2.0-or-later)` — đúng phiên bản
   đang chạy; dòng này cũng hiện ở cuối trang thuộc tính, dùng khi báo lỗi.
 - `Failed to load '...beauty_filter.effect'` — **không** được xuất hiện.
 - `Compiler warnings/errors for ...beauty_filter.effect` — **không** được xuất hiện.
@@ -266,7 +290,7 @@ Khi thêm filter lần đầu, OBS sẽ compile cả 6 technique (`MaskPass`, `M
 | 2 | Amount = 0, Opacity = 1 | Ảnh gần như gốc (tone adjustment = 0 nếu các slider tone = 0) |
 | 3 | Opacity = 0 | Ảnh gốc hoàn toàn, kể cả khi Amount > 0 |
 | 4 | Show skin mask | Da trắng, mắt/môi/tóc/nền đen |
-| 5 | Show face zones | Face prior xanh lá, mắt xanh dương, miệng vàng, khớp mặt |
+| 5 | Show face zones | Face prior xanh lá, mắt xanh dương, quầng mắt tím, miệng vàng, khớp mặt |
 | 6 | Split preview | Nửa trái gốc, nửa phải đã xử lý |
 | 7 | Fast / Balanced / High | Không lỗi shader, chất lượng tăng dần |
 | 8 | Radius 0 | Không làm mịn (chỉ còn tone/clarity) |
@@ -298,6 +322,11 @@ Khi thêm filter lần đầu, OBS sẽ compile cả 6 technique (`MaskPass`, `M
 | 34 | Rê chuột lên từng control trong trang thuộc tính | Tooltip hiện câu hướng dẫn bằng ngôn ngữ UI; không thấy key `Tooltip.*` thô |
 | 35 | Cuộn xuống cuối trang thuộc tính | Dòng `obs-beauty-filter <phiên bản> · GPL-2.0-or-later` khớp với dòng version trong log |
 | 36 | Bật/tắt đèn hoặc đi vào vùng tối khi Amount > 0 | Hình sáng/tối lại trong khoảng 10 frame; không giật khung do readback đồng bộ |
+| 37 | Giảm quầng mắt = 0.4, bật face zones | Quầng mắt sáng và trung tính hơn; preview tím khớp vùng; má/trán không sáng theo |
+| 38 | Giảm quầng mắt = 1 trên mặt không có quầng rõ | Mí dưới không bị bệt/xám; nếu có, hạ slider |
+| 39 | Đều màu da = 1 trên vùng đỏ/loang | Mảng đỏ phẳng hơn nhưng lỗ chân lông và nếp nhăn còn; da không bị nhợt toàn cục |
+| 40 | Đều màu da 0 → 1 trên da vốn đã đều | Ảnh gần như không đổi, xác nhận control chỉ dịch chroma |
+| 41 | Lưu custom preset có Đều màu da và Giảm quầng mắt, khởi động lại OBS | Cả hai giá trị được khôi phục từ `custom-presets.json` (schema 2) |
 
 ## 8. Hướng dẫn benchmark — Intel i5-1235U
 
@@ -402,7 +431,7 @@ CI Windows biên dịch `installer/obs-beauty-filter.iss` bằng Inno Setup 6 sa
 bước đóng gói, rồi cài silent vào thư mục tạm:
 
 ```powershell
-.\obs-beauty-filter-1.8.0-windows-x64-setup.exe /VERYSILENT /SUPPRESSMSGBOXES `
+.\obs-beauty-filter-1.9.0-windows-x64-setup.exe /VERYSILENT /SUPPRESSMSGBOXES `
   /NORESTART /SP- /DIR=C:\temp\beauty-installer-test /LOG=install.log
 ```
 

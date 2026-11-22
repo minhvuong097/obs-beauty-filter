@@ -282,7 +282,26 @@ result = lerp(result, eye_target, eye_amount);
 - The dark iris/pupil receives a modest lift for a livelier look.
 - Skin around the eyes may be slightly affected; lower `eye_brighten` if it looks unnatural.
 
-Both effects are **completely disabled** when `face_valid = 0`.
+### 4.3. Under-eye correction
+
+Two soft ellipses sit `0.28 * face_height` below the eye centres and are `0.34`
+wide by `0.12` high in face-box units. The effect is weighted by how dark the
+pixel is, so the lower lid keeps its shape instead of receiving a flat lift:
+
+```hlsl
+float shadow = 1.0 - smoothstep(0.20, 0.68, display_luma);
+float under  = saturate(under_eye * under_zone * mask * (0.25 + 0.75 * shadow));
+float3 target = lerp(result, float3(luminance(result)), 0.35) * 1.12;
+result = lerp(result, target, under * 0.60);
+```
+
+- The colour is pulled 35% toward neutral before the 12% lift, so sallow
+  under-eye skin does not simply become brighter yellow.
+- The zone is multiplied by `face_ok`, so it is disabled when face zones are
+  off or no valid box exists.
+- `Show face zones` draws it in violet.
+
+All face-zone effects are **completely disabled** when `face_valid = 0`.
 
 ## 5. Base pass and frequency separation
 
@@ -430,6 +449,31 @@ sits behind the subject. Because the gain is measured after OBS tone-mapping,
 the same formula covers 8-bit SDR, 16-bit SDR and HDR; HDR sources skip the
 shoulder.
 
+### 6.2. Even skin tone
+
+Skin blotches are mostly chroma variation on a nearly constant luma. The main
+frequency separation removes high-frequency chroma through the bilateral base,
+but the base deliberately keeps chroma across strong edges (lips, brows), so a
+dedicated wide chroma low-pass is used:
+
+```hlsl
+tap = texel_size * clamp(radius, 4.0, 40.0) * 1.5;
+acc = center + 12 taps along +/-x and +/-y at 1x, 2x and 3x tap;
+chroma_shift = acc / 13.0 - center;
+chroma_shift -= float3(luminance(chroma_shift));   // luma-neutral
+evened  = result + chroma_shift * (even_tone * mask);
+evened += luminance(result) - luminance(evened);   // restore exact luma
+result  = evened;
+```
+
+Three distances are used instead of one ring because a single offset aliases
+against periodic texture (stripes, fabric weave); the wider mixed kernel
+converges on the local average. Only chroma moves, so pores and fine lines are
+untouched, and `even_tone = 0` skips the block entirely (and keeps the render
+matrix golden output identical). The tap distance follows `radius`, so the
+control behaves consistently at 720p, 1080p and 4K after the C-side radius
+scaling.
+
 ## 7. Alpha, colour space and HDR
 
 - OBS textures are usually premultiplied alpha. The `sample_linear()` helper both unpremultiplies and converts to SDR-relative linear:
@@ -463,7 +507,7 @@ shoulder.
 
 - **Mask preview**: returns `float3(mask)` (premultiplied), showing skin as white and other areas as black.
 - **Split preview**: `uv.x < 0.5` returns the original; the right half is the result.
-- **Zone preview**: tints the face prior green, eye zones blue and mouth zone yellow, for checking the face box.
+- **Zone preview**: tints the face prior green, eye zones blue, under-eye zone violet and mouth zone yellow, for checking the face box.
 - Previews are applied after opacity so the mask remains visible at opacity 0 (except split).
 
 ## 9. Thread and resource safety
@@ -504,6 +548,7 @@ Future direction: presets, compute shaders for large radii, GPU timing, and opti
 | `warmth` | double | -50..50 |
 | `saturation` | double | -50..50 |
 | `rosy` | double | 0..1 |
+| `even_tone` | double | 0..1, default 0; chroma-only smoothing |
 | `clarity` | double | 0..1 |
 | `glow` | double | 0..1 |
 | `light_balance` | double | 0..1, default 0.35; 0 = off |
@@ -511,6 +556,7 @@ Future direction: presets, compute shaders for large radii, GPU timing, and opti
 | `temporal_strength` | double | 0..1 |
 | `teeth_whiten` | double | 0..1 |
 | `eye_brighten` | double | 0..1 |
+| `under_eye` | double | 0..1, default 0; needs `face_aware` |
 | `zone_preview` | bool | |
 | `face_manual` | bool | |
 | `face_cx` | double | 0..1 |
@@ -532,7 +578,7 @@ small and human-editable:
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "presets": [
     {
       "name": "My Look",
@@ -551,8 +597,9 @@ small and human-editable:
   save does not corrupt the previous file.
 - Names are trimmed, limited to 64 characters, and compared
   case-insensitively. They cannot match `custom` or a built-in preset id.
-- Applying a preset fills missing keys from the built-in Default preset, which
-  keeps older or hand-edited files usable.
+- Schema 2 persists `light_balance`, `even_tone` and `under_eye`; version 1
+  files still load and every missing key falls back to the built-in Default
+  preset, so older or hand-edited files remain usable.
 - Tests override the path with `OBS_BEAUTY_CUSTOM_PRESET_PATH`; production
   builds resolve it through `obs_module_config_path()`.
 - The UI stores a transient status message in `struct beauty_filter`

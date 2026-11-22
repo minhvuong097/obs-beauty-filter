@@ -23,12 +23,17 @@
  * The file is intentionally small and human-editable:
  *
  * {
- *   "version": 1,
+ *   "version": 2,
  *   "presets": [
  *     { "name": "My Look", "amount": 0.35, ... }
  *   ]
  * }
+ *
+ * Version 2 adds light_balance, even_tone and under_eye.  Version 1 files
+ * still load: missing keys fall back to the built-in Default preset.
  */
+#define BEAUTY_CUSTOM_SCHEMA_VERSION 2
+
 static obs_data_array_t *custom_array;
 static bool custom_loaded;
 
@@ -118,6 +123,13 @@ static obs_data_array_t *custom_array_get(void)
 	if (!root)
 		return custom_array;
 
+	const long long version = obs_data_get_int(root, "version");
+	if (version > BEAUTY_CUSTOM_SCHEMA_VERSION)
+		blog(LOG_WARNING,
+		     "[obs-beauty-filter] Custom preset file uses schema %lld, but this "
+		     "build understands %d; unknown keys are ignored",
+		     version, BEAUTY_CUSTOM_SCHEMA_VERSION);
+
 	obs_data_array_t *loaded = obs_data_get_array(root, "presets");
 	if (loaded) {
 		obs_data_array_release(custom_array);
@@ -138,7 +150,7 @@ static bool custom_write(void)
 		return false;
 
 	root = obs_data_create();
-	obs_data_set_int(root, "version", 1);
+	obs_data_set_int(root, "version", BEAUTY_CUSTOM_SCHEMA_VERSION);
 	obs_data_set_array(root, "presets", custom_array_get());
 	ok = obs_data_save_json_safe(root, path, "tmp", "bak");
 	if (!ok)
@@ -275,10 +287,13 @@ static obs_data_t *settings_to_item(const char *name, obs_data_t *settings)
 	obs_data_set_double(item, S_ROSY, obs_data_get_double(settings, S_ROSY));
 	obs_data_set_double(item, S_CLARITY, obs_data_get_double(settings, S_CLARITY));
 	obs_data_set_double(item, S_GLOW, obs_data_get_double(settings, S_GLOW));
+	obs_data_set_double(item, S_LIGHT_BALANCE, obs_data_get_double(settings, S_LIGHT_BALANCE));
+	obs_data_set_double(item, S_EVEN_TONE, obs_data_get_double(settings, S_EVEN_TONE));
 	obs_data_set_bool(item, S_FACE_AWARE, obs_data_get_bool(settings, S_FACE_AWARE));
 	obs_data_set_double(item, S_TEMPORAL, obs_data_get_double(settings, S_TEMPORAL));
 	obs_data_set_double(item, S_TEETH, obs_data_get_double(settings, S_TEETH));
 	obs_data_set_double(item, S_EYES, obs_data_get_double(settings, S_EYES));
+	obs_data_set_double(item, S_UNDER_EYE, obs_data_get_double(settings, S_UNDER_EYE));
 	obs_data_set_string(item, S_QUALITY, obs_data_get_string(settings, S_QUALITY));
 	obs_data_set_bool(item, S_ANTI_BANDING, obs_data_get_bool(settings, S_ANTI_BANDING));
 
@@ -353,16 +368,12 @@ bool beauty_custom_preset_apply(obs_data_t *settings, const char *name)
 	if (!item)
 		return false;
 
-	obs_data_set_double(settings, S_AMOUNT,
-			    item_double(item, S_AMOUNT, fallback->amount));
-	obs_data_set_double(settings, S_RADIUS,
-			    item_double(item, S_RADIUS, fallback->radius));
-	obs_data_set_double(settings, S_DETAIL,
-			    item_double(item, S_DETAIL, fallback->detail));
+	obs_data_set_double(settings, S_AMOUNT, item_double(item, S_AMOUNT, fallback->amount));
+	obs_data_set_double(settings, S_RADIUS, item_double(item, S_RADIUS, fallback->radius));
+	obs_data_set_double(settings, S_DETAIL, item_double(item, S_DETAIL, fallback->detail));
 	obs_data_set_bool(settings, S_SKIN_DETECT, item_bool(item, S_SKIN_DETECT, true));
 	obs_data_set_double(settings, S_SKIN_SENSITIVITY,
-			    item_double(item, S_SKIN_SENSITIVITY,
-					fallback->skin_sensitivity));
+			    item_double(item, S_SKIN_SENSITIVITY, fallback->skin_sensitivity));
 	obs_data_set_double(settings, S_BRIGHTNESS,
 			    item_double(item, S_BRIGHTNESS, fallback->brightness));
 	obs_data_set_double(settings, S_WARMTH, item_double(item, S_WARMTH, fallback->warmth));
@@ -371,13 +382,18 @@ bool beauty_custom_preset_apply(obs_data_t *settings, const char *name)
 	obs_data_set_double(settings, S_ROSY, item_double(item, S_ROSY, fallback->rosy));
 	obs_data_set_double(settings, S_CLARITY, item_double(item, S_CLARITY, fallback->clarity));
 	obs_data_set_double(settings, S_GLOW, item_double(item, S_GLOW, fallback->glow));
+	obs_data_set_double(settings, S_LIGHT_BALANCE,
+			    item_double(item, S_LIGHT_BALANCE, fallback->light_balance));
+	obs_data_set_double(settings, S_EVEN_TONE,
+			    item_double(item, S_EVEN_TONE, fallback->even_tone));
 	obs_data_set_bool(settings, S_FACE_AWARE, item_bool(item, S_FACE_AWARE, true));
 	obs_data_set_double(settings, S_TEMPORAL,
 			    item_double(item, S_TEMPORAL, fallback->temporal));
 	obs_data_set_double(settings, S_TEETH, item_double(item, S_TEETH, fallback->teeth));
 	obs_data_set_double(settings, S_EYES, item_double(item, S_EYES, fallback->eyes));
-	obs_data_set_string(settings, S_QUALITY,
-			    item_string(item, S_QUALITY, fallback->quality));
+	obs_data_set_double(settings, S_UNDER_EYE,
+			    item_double(item, S_UNDER_EYE, fallback->under_eye));
+	obs_data_set_string(settings, S_QUALITY, item_string(item, S_QUALITY, fallback->quality));
 	obs_data_set_bool(settings, S_ANTI_BANDING,
 			  item_bool(item, S_ANTI_BANDING, fallback->anti_banding));
 

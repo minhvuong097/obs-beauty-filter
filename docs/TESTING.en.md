@@ -7,9 +7,15 @@
 ### Linux
 
 ```bash
-cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBEAUTY_BUILD_TESTS=ON
+cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBEAUTY_BUILD_TESTS=ON \
+  -DBEAUTY_WERROR=ON
 cmake --build build -j"$(nproc)"
+clang-format --dry-run --Werror src/*.c src/*.h tests/*.c
 ```
+
+`BEAUTY_WERROR=ON` also enables `-Wshadow`, `-Wstrict-prototypes`,
+`-Wmissing-prototypes`, `-Wpointer-arith` and `-Wcast-qual`. The same checks run
+in Linux CI; `CMakePresets.json` provides a `dev` preset with the same flags.
 
 ### Windows
 
@@ -83,14 +89,20 @@ Expected:
 OK: built-in and custom presets, lookup, apply, defaults and NULL handling verified
 ```
 
-It checks the preset count and unique IDs, value ranges, quality strings, `find()` behaviour for `custom`/unknown ids, that `apply()` writes every tuning key without overwriting the preset selection, that the `default` preset stays in sync with `beauty_defaults()`, and that `NULL` arguments are ignored.
+It checks the preset count and unique IDs, value ranges (including
+`light_balance`, `even_tone` and `under_eye`), quality strings, `find()`
+behaviour for `custom`/unknown ids, that `apply()` writes every tuning key
+without overwriting the preset selection, that the `default` preset stays in
+sync with `beauty_defaults()`, and that `NULL` arguments are ignored.
 
 The custom-preset part writes a real JSON file through
 `OBS_BEAUTY_CUSTOM_PRESET_PATH`, reloads it from disk, and verifies trimming,
 case-insensitive overwrite/delete, rejection of built-in and reserved names,
 control-character rejection, name-length limits, and missing-key fallback to
-the Default preset. The three temporary files (`json`, `.tmp`, `.bak`) are
-removed at the end.
+the Default preset. A schema 2 round-trip verifies that `light_balance`,
+`even_tone` and `under_eye` survive save/load, and a hand-written schema 1 file
+verifies that old presets still apply with Default values for the new keys. The
+temporary files (`json`, `.tmp`, `.bak`) are removed at the end.
 
 ## 4. Load + render integration test
 
@@ -124,9 +136,12 @@ scRGB pixel after filter:       4.227 0.457 0.500 1.000
 texture stripe contrast before: 10 (161 vs 151)
 texture stripe contrast after:  1 (157 vs 156)
 texture stripe contrast detail: 8 (160 vs 152)
+under-eye luma before/after:    161 / 163
+chroma contrast before:         50 (luma 8)
+chroma contrast off/on:         38 / 13 (luma 7 / 9)
 light balance luma:            161 -> 117
 light balance dark luma:       69 -> 105
-OK: module loaded, filter created, effect compiled, filter rendered, mask/opacity/face zones/texture/light balance/HDR verified
+OK: module loaded, filter created, effect compiled, filter rendered, mask/opacity/face zones/texture/even tone/under-eye/light balance/HDR verified
 ```
 
 The test checks:
@@ -153,6 +168,18 @@ The test checks:
     detection and no face tracking. The dark case exists because a regression in
     the luma path makes the measurement read 0, which pins the gain to the 2.5×
     clamp and washes the image out instead of lifting it.
+11. **Under-eye correction**: with a manual face box, `under_eye = 1` must raise
+    the luma under each eye by at least 2 levels while a reference point outside
+    the zone changes by at most 2. This catches a zone misplaced by more than a
+    few percent of the face box.
+12. **Even skin tone**: a chroma pattern with 10 px stripes (strong red/green
+    difference, small luma step) is rendered twice. `even_tone = 1` must at least
+    halve the chroma contrast measured between adjacent stripes while keeping at
+    least 60% of the luma contrast, proving the correction targets chroma rather
+    than blurring the whole image.
+13. **Property coverage**: every key in `src/beauty-settings.h` must exist in the
+    property page, so a control cannot be added to the shader and forgotten in
+    the UI.
 
 If you get `0,0,0,0`, filter creation fails, or colours are far off, check the shader log below.
 
@@ -248,7 +275,7 @@ If a backend returns bottom-up rows (some drivers/backends may), the `pattern ey
 Open **Help → Log Files → View Current Log** and look for:
 
 - `Loading module: obs-beauty-filter` — module loaded.
-- `[obs-beauty-filter] version 1.8.0 loaded (GPL-2.0-or-later)` — the build
+- `[obs-beauty-filter] version 1.9.0 loaded (GPL-2.0-or-later)` — the build
   actually running; the same line is shown at the bottom of the properties page,
   so mention it in a bug report.
 - `Failed to load '...beauty_filter.effect'` — must **not** appear.
@@ -272,7 +299,7 @@ On first use, OBS compiles all six techniques (`MaskPass`, `MaskAnalysis`, `Blur
 | 2 | Amount = 0, Opacity = 1 | Nearly original (tone adjustments = 0 when tone sliders are 0) |
 | 3 | Opacity = 0 | Original frame exactly, even with Amount > 0 |
 | 4 | Show skin mask | Skin white, eyes/lips/hair/background black |
-| 5 | Show face zones | Face prior green, eyes blue, mouth yellow, aligned with the face |
+| 5 | Show face zones | Face prior green, eyes blue, under-eye violet, mouth yellow, aligned with the face |
 | 6 | Split preview | Left original, right processed |
 | 7 | Fast / Balanced / High | No shader errors; quality increases |
 | 8 | Radius 0 | No smoothing (tone/clarity only) |
@@ -304,6 +331,11 @@ On first use, OBS compiles all six techniques (`MaskPass`, `MaskAnalysis`, `Blur
 | 34 | Hover any control in the property page | A tooltip shows the one-line guidance in the UI language; no raw `Tooltip.*` key appears |
 | 35 | Scroll to the bottom of the property page | `obs-beauty-filter <version> · GPL-2.0-or-later` matches the version line in the log |
 | 36 | Switch a lamp off or walk into a dark area with Amount > 0 | The image settles within about 10 frames; no stutter from a synchronous readback |
+| 37 | Under-eye = 0.4 with face zones on | Under-eye shadows lift and neutralise; the violet preview matches the area; cheeks/forehead do not brighten |
+| 38 | Under-eye = 1 on a face with no visible shadows | The lower lid does not turn flat or grey; lower the slider if it does |
+| 39 | Even tone = 1 on redness/blotches | Red patches flatten while pores and fine lines remain; no overall desaturation |
+| 40 | Even tone 0 → 1 on already smooth skin | The image is effectively unchanged, confirming the control only moves chroma |
+| 41 | Save a custom preset with Even tone and Under-eye set, restart OBS | Both values are restored from `custom-presets.json` (schema 2) |
 
 ## 8. Benchmark guide — Intel i5-1235U
 
@@ -412,7 +444,7 @@ Windows CI compiles `installer/obs-beauty-filter.iss` with Inno Setup 6 after
 packaging and then installs the setup silently into a temporary directory:
 
 ```powershell
-.\obs-beauty-filter-1.8.0-windows-x64-setup.exe /VERYSILENT /SUPPRESSMSGBOXES `
+.\obs-beauty-filter-1.9.0-windows-x64-setup.exe /VERYSILENT /SUPPRESSMSGBOXES `
   /NORESTART /SP- /DIR=C:\temp\beauty-installer-test /LOG=install.log
 ```
 

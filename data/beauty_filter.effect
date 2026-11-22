@@ -32,6 +32,7 @@ uniform float brightness;        /* -0.5..0.5, skin weighted            */
 uniform float warmth;            /* -0.5..0.5, skin weighted            */
 uniform float saturation;        /* -0.5..0.5, skin weighted            */
 uniform float rosy;              /* 0..1, skin weighted                 */
+uniform float even_tone;         /* 0..1, chroma smoothing on skin      */
 uniform float clarity;           /* 0..1, non-skin detail               */
 uniform float glow;              /* 0..1, soft skin glow                */
 uniform float light_balance;     /* 0..1 auto light balance strength    */
@@ -51,6 +52,7 @@ uniform float2 face_center;      /* normalised face centre              */
 uniform float2 face_size;        /* normalised half width/height        */
 uniform float teeth_whiten;      /* 0..1                                */
 uniform float eye_brighten;      /* 0..1                                */
+uniform float under_eye;         /* 0..1                                */
 uniform float zone_preview;      /* 0/1 show face/eye/mouth zones       */
 
 uniform float hdr_scale;         /* output linear -> SDR-relative linear */
@@ -461,6 +463,32 @@ float4 beauty_finish(float2 uv, float4 src, float3 center, float3 base)
 
 	float3 result = lerp(center, smoothed, saturate(amount * mask));
 
+	/* Even skin tone: pull only the chroma component toward a wide local
+	 * average.  Redness and blotches flatten while pore-level luma texture
+	 * is untouched, and a smooth complexion produces no shift at all. */
+	float tone = saturate(even_tone);
+	if (tone > 0.0001) {
+		float2 tap = texel_size * clamp(radius, 4.0, 40.0) * 1.5;
+		float3 acc = center;
+		acc += sample_linear(uv + float2(tap.x, 0.0));
+		acc += sample_linear(uv - float2(tap.x, 0.0));
+		acc += sample_linear(uv + float2(0.0, tap.y));
+		acc += sample_linear(uv - float2(0.0, tap.y));
+		acc += sample_linear(uv + float2(2.0 * tap.x, 0.0));
+		acc += sample_linear(uv - float2(2.0 * tap.x, 0.0));
+		acc += sample_linear(uv + float2(0.0, 2.0 * tap.y));
+		acc += sample_linear(uv - float2(0.0, 2.0 * tap.y));
+		acc += sample_linear(uv + float2(3.0 * tap.x, 0.0));
+		acc += sample_linear(uv - float2(3.0 * tap.x, 0.0));
+		acc += sample_linear(uv + float2(0.0, 3.0 * tap.y));
+		acc += sample_linear(uv - float2(0.0, 3.0 * tap.y));
+		float3 chroma_shift = acc / 13.0 - center;
+		chroma_shift -= float3(luminance(chroma_shift));
+		float3 evened = result + chroma_shift * (tone * mask);
+		evened += luminance(result) - luminance(evened);
+		result = evened;
+	}
+
 	/* Microcontrast uses a small full-resolution neighbourhood, so it does
 	 * not inherit the large skin-blur radius and produces fewer halos. */
 	float3 local = (sample_linear(uv + float2(texel_size.x, 0.0)) +
@@ -521,6 +549,15 @@ float4 beauty_finish(float2 uv, float4 src, float3 center, float3 base)
 	float eye_r_zone = ellipse_zone(uv, eye_r_c, eye_r);
 	float eye_zone = max(eye_l, eye_r_zone) * face_ok;
 
+	/* Under-eye correction sits slightly below each eye.  It lifts the
+	 * shadow and pulls the colour toward neutral instead of applying a
+	 * flat brightness, so the lower lid keeps its shape. */
+	float2 under_l_c = eye_l_c + float2(0.0, 0.28 * fh.y);
+	float2 under_r_c = eye_r_c + float2(0.0, 0.28 * fh.y);
+	float2 under_r = float2(0.34 * fh.x, 0.12 * fh.y);
+	float under_zone = max(ellipse_zone(uv, under_l_c, under_r),
+	                       ellipse_zone(uv, under_r_c, under_r)) * face_ok;
+
 	float2 mouth_c = float2(face_center.x, face_center.y + 0.44 * fh.y);
 	float mouth_zone = ellipse_zone(uv, mouth_c,
 	                                float2(0.55 * fh.x, 0.22 * fh.y)) * face_ok;
@@ -557,6 +594,19 @@ float4 beauty_finish(float2 uv, float4 src, float3 center, float3 base)
 		result = lerp(result, eye_target, eye_amount);
 	}
 
+	if (under_eye > 0.0001) {
+		float shadow = 1.0 - smoothstep(0.20, 0.68, display_luma);
+		float under = saturate(under_eye * under_zone * mask *
+		                       (0.25 + 0.75 * shadow));
+		if (under > 0.0001) {
+			float under_luma = luminance(result);
+			float3 under_target =
+				lerp(result,
+				     float3(under_luma, under_luma, under_luma), 0.35) * 1.12;
+			result = lerp(result, under_target, under * 0.60);
+		}
+	}
+
 	/* Do not clip extended-range output. */
 	if (is_hdr < 0.5)
 		result = saturate(result);
@@ -571,6 +621,7 @@ float4 beauty_finish(float2 uv, float4 src, float3 center, float3 base)
 		float prior = face_prior(uv);
 		preview += float3(0.10, 0.55, 0.15) * prior * face_ok * 0.35;
 		preview += float3(0.15, 0.35, 1.00) * eye_zone * 0.65;
+		preview += float3(0.85, 0.25, 1.00) * under_zone * 0.55;
 		preview += float3(1.00, 0.80, 0.10) * mouth_zone * 0.65;
 		result = srgb_to_linear(saturate(preview));
 	}

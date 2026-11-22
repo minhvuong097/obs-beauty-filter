@@ -1,0 +1,64 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 28,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+      }
+    },
+    {
+      "name": "dev",
+      "displayName": "Developer build (tests, warnings as errors)",
+      "inherits": "base",
+      "binaryDir": "${sourceDir}/build/dev",
+      "cacheVariables": {
+        "BEAUTY_BUILD_TESTS": "ON",
+        "BEAUTY_WERROR": "ON"
+      }
+    },
+    {
+      "name": "release",
+      "displayName": "Optimised release build",
+      "inherits": "base",
+      "binaryDir": "${sourceDir}/build/release",
+      "cacheVariables": {
+        "BEAUTY_BUILD_TESTS": "OFF"
+      }
+    },
+    {
+      "name": "sanitize",
+      "displayName": "Clang ASan + UBSan build",
+      "inherits": "base",
+      "binaryDir": "${sourceDir}/build/sanitize",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "BEAUTY_BUILD_TESTS": "ON",
+        "BEAUTY_SANITIZE": "address,undefined"
+      },
+      "environment": {
+        "CC": "clang"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "dev",
+      "configurePreset": "dev"
+    },
+    {
+      "name": "release",
+      "configurePreset": "release"
+    },
+    {
+      "name": "sanitize",
+      "configurePreset": "sanitize"
+    }
+  ]
+}

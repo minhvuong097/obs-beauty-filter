@@ -27,10 +27,13 @@ struct beauty_preset {
 	double rosy;
 	double clarity;
 	double glow;
+	double light_balance;
+	double even_tone;
 	bool face_aware;
 	double temporal;
 	double teeth;
 	double eyes;
+	double under_eye;
 	const char *quality;
 	bool anti_banding;
 };

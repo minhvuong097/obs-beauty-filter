@@ -177,27 +177,20 @@ static void pattern_render(void *data, gs_effect_t *effect)
 
 		/* Fine skin texture: alternating 1% columns across the face. */
 		for (i = 0; i < 40; i += 2) {
-			solid_rect(color, w * (0.14f + (float)i * 0.018f), h * 0.25f,
-				   w * 0.018f, h * 0.30f, 200.0f / 255.0f, 150.0f / 255.0f,
-				   120.0f / 255.0f);
-			solid_rect(color, w * (0.14f + (float)(i + 1) * 0.018f),
-				   h * 0.25f, w * 0.018f, h * 0.30f, 184.0f / 255.0f,
-				   136.0f / 255.0f, 110.0f / 255.0f);
+			solid_rect(color, w * (0.14f + (float)i * 0.018f), h * 0.25f, w * 0.018f,
+				   h * 0.30f, 200.0f / 255.0f, 150.0f / 255.0f, 120.0f / 255.0f);
+			solid_rect(color, w * (0.14f + (float)(i + 1) * 0.018f), h * 0.25f,
+				   w * 0.018f, h * 0.30f, 184.0f / 255.0f, 136.0f / 255.0f,
+				   110.0f / 255.0f);
 		}
 
 		/* Bright highlight, dark patch, saturated patch and grey eyes. */
-		solid_rect(color, w * 0.72f, h * 0.10f, w * 0.16f, h * 0.10f, 0.94f, 0.94f,
-			   0.92f);
-		solid_rect(color, w * 0.72f, h * 0.78f, w * 0.16f, h * 0.10f, 0.02f, 0.02f,
-			   0.02f);
-		solid_rect(color, w * 0.72f, h * 0.44f, w * 0.16f, h * 0.10f, 0.85f, 0.12f,
-			   0.10f);
-		solid_rect(color, w * 0.28f, h * 0.40f, w * 0.08f, h * 0.05f, 0.84f, 0.84f,
-			   0.84f);
-		solid_rect(color, w * 0.48f, h * 0.40f, w * 0.08f, h * 0.05f, 0.84f, 0.84f,
-			   0.84f);
-		solid_rect(color, w * 0.38f, h * 0.55f, w * 0.10f, h * 0.05f, 0.78f, 0.77f,
-			   0.76f);
+		solid_rect(color, w * 0.72f, h * 0.10f, w * 0.16f, h * 0.10f, 0.94f, 0.94f, 0.92f);
+		solid_rect(color, w * 0.72f, h * 0.78f, w * 0.16f, h * 0.10f, 0.02f, 0.02f, 0.02f);
+		solid_rect(color, w * 0.72f, h * 0.44f, w * 0.16f, h * 0.10f, 0.85f, 0.12f, 0.10f);
+		solid_rect(color, w * 0.28f, h * 0.40f, w * 0.08f, h * 0.05f, 0.84f, 0.84f, 0.84f);
+		solid_rect(color, w * 0.48f, h * 0.40f, w * 0.08f, h * 0.05f, 0.84f, 0.84f, 0.84f);
+		solid_rect(color, w * 0.38f, h * 0.55f, w * 0.10f, h * 0.05f, 0.78f, 0.77f, 0.76f);
 	}
 
 	gs_technique_end_pass(tech);
@@ -238,8 +231,7 @@ static void frame_free(struct frame *frame)
 		memset(frame, 0, sizeof(*frame));
 }
 
-static bool render_rgba(obs_source_t *source, uint32_t width, uint32_t height,
-			struct frame *out)
+static bool render_rgba(obs_source_t *source, uint32_t width, uint32_t height, struct frame *out)
 {
 	bool ok = false;
 
@@ -266,7 +258,8 @@ static bool render_rgba(obs_source_t *source, uint32_t width, uint32_t height,
 			uint32_t linesize = 0;
 
 			gs_stage_texture(stage, texture);
-			if (gs_stagesurface_map(stage, &pixels, &linesize) && linesize >= width * 4) {
+			if (gs_stagesurface_map(stage, &pixels, &linesize) &&
+			    linesize >= width * 4) {
 				out->data = bmalloc((size_t)linesize * height);
 				if (out->data) {
 					memcpy(out->data, pixels, (size_t)linesize * height);
@@ -503,8 +496,9 @@ static bool write_golden(const char *path, const struct resolution *res, const c
 
 	if (!golden_started) {
 		fprintf(file, "# obs-beauty-filter render matrix golden image\n");
-		fprintf(file, "# Each record is <width>x<height> <preset> followed by %dx%d RGB "
-			      "averages.\n",
+		fprintf(file,
+			"# Each record is <width>x<height> <preset> followed by %dx%d RGB "
+			"averages.\n",
 			GRID_X, GRID_Y);
 	}
 	golden_started = true;
@@ -553,8 +547,8 @@ static bool compare_golden(const char *path, const struct resolution *res, const
 	}
 
 	for (i = 0; i < GRID_SAMPLES; i++) {
-		if (fscanf(file, "%d %d %d", &expected[i][0], &expected[i][1],
-			   &expected[i][2]) != 3) {
+		if (fscanf(file, "%d %d %d", &expected[i][0], &expected[i][1], &expected[i][2]) !=
+		    3) {
 			expect(false, "truncated golden image record");
 			return false;
 		}
@@ -580,12 +574,12 @@ static bool compare_golden(const char *path, const struct resolution *res, const
 
 	const double mean = total_diff / (GRID_SAMPLES * 3);
 	if (mean > tolerance / 3.0) {
-		fprintf(stderr, "FAIL: %ux%u %s mean difference %.1f exceeds %.1f\n",
-			res->width, res->height, preset, mean, tolerance / 3.0);
+		fprintf(stderr, "FAIL: %ux%u %s mean difference %.1f exceeds %.1f\n", res->width,
+			res->height, preset, mean, tolerance / 3.0);
 		failures++;
 	} else if (max_diff > tolerance / 2) {
-		printf("note: %ux%u %s max difference %d, mean %.1f\n", res->width,
-		       res->height, preset, max_diff, mean);
+		printf("note: %ux%u %s max difference %d, mean %.1f\n", res->width, res->height,
+		       preset, max_diff, mean);
 	}
 
 	return true;
@@ -625,8 +619,8 @@ static obs_source_t *make_pattern(uint32_t width, uint32_t height, enum gs_color
 	obs_data_set_int(settings, "width", width);
 	obs_data_set_int(settings, "height", height);
 	obs_data_set_int(settings, "space", space);
-	source = obs_source_create("beauty_matrix_pattern", "beauty-matrix-pattern", settings,
-				   NULL);
+	source =
+		obs_source_create("beauty_matrix_pattern", "beauty-matrix-pattern", settings, NULL);
 	obs_data_release(settings);
 
 	return source_valid(source) ? source : NULL;
@@ -653,8 +647,8 @@ static obs_source_t *make_filter(const char *name, const struct beauty_preset *p
 	return source_valid(filter) ? filter : NULL;
 }
 
-static int run_matrix(const struct resolution *res, const char *golden_path,
-		      const char *dump_dir, int tolerance, bool write_mode)
+static int run_matrix(const struct resolution *res, const char *golden_path, const char *dump_dir,
+		      int tolerance, bool write_mode)
 {
 	obs_source_t *pattern = make_pattern(res->width, res->height, GS_CS_SRGB);
 	struct frame source_frame;
@@ -750,8 +744,8 @@ static void run_hdr_matrix(void)
 		}
 
 		obs_source_filter_add(pattern, filter);
-		const bool rendered = render_hdr_stats(pattern, 1280, 720, GS_CS_709_EXTENDED,
-						       &stats);
+		const bool rendered =
+			render_hdr_stats(pattern, 1280, 720, GS_CS_709_EXTENDED, &stats);
 		obs_source_filter_remove(pattern, filter);
 		obs_source_release(filter);
 
@@ -765,8 +759,8 @@ static void run_hdr_matrix(void)
 				 preset->id);
 			expect(stats.in_range, message);
 			snprintf(message, sizeof(message),
-				 "16F %s must preserve opaque alpha (max error %.3f)",
-				 preset->id, stats.max_alpha_error);
+				 "16F %s must preserve opaque alpha (max error %.3f)", preset->id,
+				 stats.max_alpha_error);
 			expect(stats.max_alpha_error < 0.01f, message);
 			printf("16F %-10s max %.3f min %.3f alpha_err %.4f\n", preset->id,
 			       stats.max_rgb, stats.min_rgb, stats.max_alpha_error);

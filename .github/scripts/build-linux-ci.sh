@@ -4,6 +4,7 @@ set -eu
 apk add --no-cache \
   build-base \
   clang \
+  clang-extra-tools \
   cmake \
   compiler-rt \
   mesa-dri-gallium \
@@ -17,9 +18,15 @@ apk add --no-cache \
 # Clang plus compiler-rt.  The release build stays on GCC.
 
 rm -rf build build-sanitize package
+
+# Formatting is checked before compiling so a style failure is reported
+# immediately instead of after several minutes of OBS-dependent work.
+clang-format --dry-run --Werror src/*.c src/*.h tests/*.c
+
 cmake -S . -B build \
   -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-  -DBEAUTY_BUILD_TESTS=ON
+  -DBEAUTY_BUILD_TESTS=ON \
+  -DBEAUTY_WERROR=ON
 
 cmake --build build -j"$(nproc)"
 

@@ -19,3 +19,6 @@ release/
 .vs/
 .idea/
 .DS_Store
+compile_commands.json
+.cache/
+CMakeUserPresets.json

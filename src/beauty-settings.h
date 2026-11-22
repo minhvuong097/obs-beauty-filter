@@ -30,11 +30,13 @@
 #define S_CLARITY               "clarity"
 #define S_GLOW                  "glow"
 #define S_LIGHT_BALANCE         "light_balance"
+#define S_EVEN_TONE             "even_tone"
 
 #define S_FACE_AWARE            "face_aware"
 #define S_TEMPORAL              "temporal_strength"
 #define S_TEETH                 "teeth_whiten"
 #define S_EYES                  "eye_brighten"
+#define S_UNDER_EYE             "under_eye"
 #define S_ZONE_PREVIEW          "zone_preview"
 #define S_FACE_MANUAL           "face_manual"
 #define S_FACE_CX               "face_cx"

@@ -5,6 +5,53 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.9.0] - 2026-11-21
+
+### Added
+
+- **Even skin tone** (`even_tone`) in **Complexion**. It averages only the
+  chroma component over a wide neighbourhood (13 taps, luma restored
+  afterwards), so redness and blotches flatten while pores and fine luma
+  texture stay intact. A smooth complexion produces no shift at all, and `0`
+  keeps the old output bit-for-bit.
+- **Under-eye correction** (`under_eye`) in **Face & eyes**. Two elliptical
+  zones below the eyes lift the shadow and pull the colour toward neutral,
+  weighted by how dark the pixel is, so the lower lid keeps its shape instead
+  of receiving a flat brightness. The zones follow the automatic face box or
+  the manual box and are disabled when face zones are off.
+- **Under-eye zone preview** uses violet, next to the existing green prior,
+  blue eyes and yellow mouth.
+- **Preset schema 2.** Custom presets now persist **Auto light balance**,
+  **Even skin tone** and **Under-eye**. Version 1 files still load; keys that
+  are missing fall back to the built-in Default preset.
+- **Defensive settings clamping.** Every numeric control is clamped to its
+  documented range when settings are applied, so a hand-edited scene
+  collection or an older custom preset cannot feed an out-of-range uniform to
+  the shader. Turning light balance off also resets the measured gain.
+- **Shader uniform audit.** Creation now logs the exact missing uniform names
+  once, instead of silently rendering with a dead control.
+- **Project tooling.** `.clang-format`, `.editorconfig`, `CMakePresets.json`,
+  `BEAUTY_WERROR`, `format` / `format-check` targets, Dependabot, a pull
+  request template and an automatic GitHub release job that publishes all
+  packages plus `SHA256SUMS.txt`.
+- **Expanded tests.** The preset test covers the new fields, a schema 2
+  round-trip and a version 1 fallback. The load test checks that under-eye
+  correction brightens only its zone, that even skin tone halves chroma
+  contrast while preserving luma detail, and that every property key exists.
+
+### Changed
+
+- The Linux CI build now enables `-Werror`, adds `-Wshadow`,
+  `-Wstrict-prototypes`, `-Wmissing-prototypes`, `-Wpointer-arith` and
+  `-Wcast-qual`, and fails when `clang-format` would change a source file.
+- Tooltips and labels for the new controls are translated in English and
+  Vietnamese.
+
+### Compatibility
+
+- Built-in presets and their values are unchanged; the new controls default to
+  `0`, so existing scenes and the render-matrix golden image are unaffected.
+
 ## [1.8.0] - 2026-11-13
 
 ### Added
@@ -243,6 +290,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - OBS 33+ plugin layout on Windows, legacy layout for OBS 32 and older.
 - Linux and Windows CI builds with packaged artifacts.
 
+[1.9.0]: https://github.com/minhvuong097/obs-beauty-filter/releases/tag/v1.9.0
 [1.8.0]: https://github.com/minhvuong097/obs-beauty-filter/releases/tag/v1.8.0
 [1.7.0]: https://github.com/minhvuong097/obs-beauty-filter/releases/tag/v1.7.0
 [1.6.0]: https://github.com/minhvuong097/obs-beauty-filter/releases/tag/v1.6.0
