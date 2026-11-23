@@ -10,6 +10,23 @@
 
 [![Build](https://github.com/minhvuong097/obs-beauty-filter/actions/workflows/build.yml/badge.svg)](https://github.com/minhvuong097/obs-beauty-filter/actions/workflows/build.yml)
 [![Latest release](https://img.shields.io/github/v/release/minhvuong097/obs-beauty-filter?display_name=tag)](https://github.com/minhvuong097/obs-beauty-filter/releases/latest)
+[![License](https://img.shields.io/badge/license-GPL--2.0--or--later-blue)](LICENSE)
+[![OBS Studio](https://img.shields.io/badge/OBS%20Studio-30.2%2B%20%7C%2033.0.1-6b46c1)](https://obsproject.com)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-0078d4)](#cài-đặt-trên-windows)
+[![Renderer](https://img.shields.io/badge/render-GPU--only%20%C2%B7%20no%20AI-success)](#kiến-trúc-kỹ-thuật)
+
+<p align="center">
+  <a href="#demo">Demo</a> ·
+  <a href="#tính-năng">Tính năng</a> ·
+  <a href="#cài-đặt-trên-windows">Cài đặt</a> ·
+  <a href="#sử-dụng-nhanh">Sử dụng nhanh</a> ·
+  <a href="#thông-số">Thông số</a> ·
+  <a href="#kiến-trúc-kỹ-thuật">Kiến trúc</a> ·
+  <a href="#hiệu-năng">Hiệu năng</a> ·
+  <a href="#kiểm-thử">Kiểm thử</a> ·
+  <a href="#changelog-và-tương-thích">Changelog</a> ·
+  <a href="#giấy-phép">Giấy phép</a>
+</p>
 
 Plugin bộ lọc làm đẹp cho **OBS Studio** trên Windows và Linux (macOS có thể build từ source nhưng chưa được kiểm thử). Phiên bản **1.9.0** chạy hoàn toàn trên GPU, hòa vào pipeline filter tiêu chuẩn của OBS, không cần model AI, không đọc ngược frame full-resolution về CPU và không phụ thuộc runtime bên thứ ba.
 
