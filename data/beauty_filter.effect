@@ -483,7 +483,10 @@ float4 beauty_finish(float2 uv, float4 src, float3 center, float3 base)
 		acc += sample_linear(uv + float2(0.0, 3.0 * tap.y));
 		acc += sample_linear(uv - float2(0.0, 3.0 * tap.y));
 		float3 chroma_shift = acc / 13.0 - center;
-		chroma_shift -= float3(luminance(chroma_shift));
+		/* HLSL rejects a one-component float3 constructor even though
+		 * GLSL accepts a scalar splat, so spell out all three. */
+		float chroma_luma = luminance(chroma_shift);
+		chroma_shift -= float3(chroma_luma, chroma_luma, chroma_luma);
 		float3 evened = result + chroma_shift * (tone * mask);
 		evened += luminance(result) - luminance(evened);
 		result = evened;
