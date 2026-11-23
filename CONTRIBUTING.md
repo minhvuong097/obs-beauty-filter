@@ -117,10 +117,12 @@ invariants hold.
   the README download names and `CHANGELOG.md` in the same commit.
 - Pushing a `v*` tag runs the full build and test matrix; the `release` job
   then publishes every artifact plus `SHA256SUMS.txt` through `gh release
-  create`. Do not upload binaries by hand. The body starts from GitHub's
-  generated notes: edit it after publishing so it matches the `CHANGELOG.md`
-  entry in **both languages, Vietnamese first then English** (the README
-  default is Vietnamese).
+  create`. Do not upload binaries by hand. The release body is taken from
+  `.github/release-notes/<tag>.md`, falling back to the matching
+  `CHANGELOG.md` section, so write the bilingual notes (Vietnamese first,
+  then English, matching the README default) in that file when the changelog
+  entry is English-only. Re-running the job updates an existing release
+  instead of failing.
 
 ## Assets
 
