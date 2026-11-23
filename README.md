@@ -6,14 +6,20 @@
   </picture>
 </p>
 
-[English](README.en.md) | **Tiếng Việt**
+<p align="center">
+  <a href="README.en.md">English</a> | <strong>Tiếng Việt</strong>
+</p>
 
-[![Build](https://github.com/minhvuong097/obs-beauty-filter/actions/workflows/build.yml/badge.svg)](https://github.com/minhvuong097/obs-beauty-filter/actions/workflows/build.yml)
-[![Latest release](https://img.shields.io/github/v/release/minhvuong097/obs-beauty-filter?display_name=tag)](https://github.com/minhvuong097/obs-beauty-filter/releases/latest)
-[![License](https://img.shields.io/badge/license-GPL--2.0--or--later-blue)](LICENSE)
-[![OBS Studio](https://img.shields.io/badge/OBS%20Studio-30.2%2B%20%7C%2033.0.1-6b46c1)](https://obsproject.com)
-[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-0078d4)](#cài-đặt-trên-windows)
-[![Renderer](https://img.shields.io/badge/render-GPU--only%20%C2%B7%20no%20AI-success)](#kiến-trúc-kỹ-thuật)
+<p align="center">
+  <a href="https://github.com/minhvuong097/obs-beauty-filter/actions/workflows/build.yml"><img alt="Build" src="https://github.com/minhvuong097/obs-beauty-filter/actions/workflows/build.yml/badge.svg"></a>
+  <a href="https://github.com/minhvuong097/obs-beauty-filter/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/minhvuong097/obs-beauty-filter?display_name=tag"></a>
+  <br>
+  <a href="LICENSE"><img alt="License: GPL-2.0-or-later" src="https://img.shields.io/badge/license-GPL--2.0--or--later-blue"></a>
+  <a href="https://obsproject.com"><img alt="OBS Studio 30.2+ | 33.0.1" src="https://img.shields.io/badge/OBS%20Studio-30.2%2B%20%7C%2033.0.1-6b46c1"></a>
+  <br>
+  <a href="#cài-đặt-trên-windows"><img alt="Platform: Windows | Linux" src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-0078d4"></a>
+  <a href="#kiến-trúc-kỹ-thuật"><img alt="Renderer: GPU-only, no AI" src="https://img.shields.io/badge/render-GPU--only%20%C2%B7%20no%20AI-success"></a>
+</p>
 
 <p align="center">
   <a href="#demo">Demo</a> ·
