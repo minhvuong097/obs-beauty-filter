@@ -37,9 +37,11 @@ uniform float clarity;           /* 0..1, non-skin detail               */
 uniform float glow;              /* 0..1, soft skin glow                */
 uniform float light_balance;     /* 0..1 auto light balance strength    */
 uniform float auto_gain;         /* measured exposure gain (linear)     */
+uniform float strength;          /* 0..1, master intensity              */
 uniform float opacity;           /* 0..1, global mix                    */
 uniform float mask_preview;      /* 0/1                                 */
 uniform float split_view;        /* 0/1, left = original                */
+uniform float split_position;    /* 0..1, split divider from the left   */
 
 uniform float temporal_strength; /* 0..1 mask history blend             */
 uniform float history_valid;     /* 0/1                                 */
@@ -614,9 +616,16 @@ float4 beauty_finish(float2 uv, float4 src, float3 center, float3 base)
 	if (is_hdr < 0.5)
 		result = saturate(result);
 
+	/* Master intensity scales every effect without touching the stored
+	 * per-control values, so a saved preset can be dialled back for one
+	 * shot and restored later.  Skipping the mix at 1.0 keeps the output
+	 * of existing scenes bit-identical. */
+	if (strength < 0.999)
+		result = lerp(center, result, saturate(strength));
+
 	result = lerp(center, result, saturate(opacity));
 
-	if (split_view > 0.5 && uv.x < 0.5)
+	if (split_view > 0.5 && uv.x < split_position)
 		result = center;
 
 	if (zone_preview > 0.5) {
@@ -636,7 +645,7 @@ float4 beauty_finish(float2 uv, float4 src, float3 center, float3 base)
 	 * Bypassed and split-view-original pixels are left untouched. */
 	if (dither_strength > 0.0 && opacity > 0.0001 &&
 	    mask_preview < 0.5 && zone_preview < 0.5 &&
-	    !(split_view > 0.5 && uv.x < 0.5)) {
+	    !(split_view > 0.5 && uv.x < split_position)) {
 		float3 d = linear_to_srgb(saturate(result));
 		float n1 = frac(sin(dot(uv, float2(12.9898, 78.233))) * 43758.5453);
 		float n2 = frac(sin(dot(uv, float2(39.3467, 11.1351))) * 24634.6345);

@@ -486,18 +486,47 @@ int main(int argc, char **argv)
 	{
 		obs_properties_t *props = obs_source_properties(filter);
 		static const char *const required[] = {
-			"preset",	 "preset_name",	     "preset_save",
-			"preset_delete", "preset_reset",     "light_balance",
-			"amount",	 "radius",	     "detail",
-			"skin_detect",	 "skin_sensitivity", "mask_preview",
-			"brightness",	 "warmth",	     "saturation",
-			"rosy",		 "even_tone",	     "clarity",
-			"glow",		 "face_aware",	     "temporal_strength",
-			"teeth_whiten",	 "eye_brighten",     "under_eye",
-			"zone_preview",	 "face_manual",	     "face_cx",
-			"face_cy",	 "face_w",	     "face_h",
-			"quality",	 "split_view",	     "opacity",
+			"preset",
+			"preset_name",
+			"preset_save",
+			"preset_delete",
+			"preset_reset",
+			"light_balance",
+			"amount",
+			"radius",
+			"detail",
+			"skin_detect",
+			"skin_sensitivity",
+			"mask_preview",
+			"brightness",
+			"warmth",
+			"saturation",
+			"rosy",
+			"even_tone",
+			"clarity",
+			"glow",
+			"face_aware",
+			"temporal_strength",
+			"teeth_whiten",
+			"eye_brighten",
+			"under_eye",
+			"zone_preview",
+			"face_manual",
+			"face_cx",
+			"face_cy",
+			"face_w",
+			"face_h",
+			"quality",
+			"split_view",
+			"opacity",
+			"strength",
+			"split_position",
 			"anti_banding",
+			"reset_smoothing",
+			"reset_complexion",
+			"reset_detail",
+			"reset_face",
+			"reset_advanced",
 		};
 		if (!props)
 			return fail("filter properties");
@@ -619,6 +648,100 @@ int main(int argc, char **argv)
 
 		obs_source_filter_remove(color, opacity_filter);
 		obs_source_release(opacity_filter);
+
+		/* ------------------------------------------------------------- */
+		/* Master intensity: 0 bypasses every effect, 1 keeps the full    */
+		/* result, and the value is clamped on the way in                 */
+		/* ------------------------------------------------------------- */
+		uint8_t strength_off[4];
+		uint8_t strength_full[4];
+
+		for (int pass = 0; pass < 2; pass++) {
+			obs_data_t *strength_settings = obs_data_create();
+			set_test_defaults(strength_settings);
+			obs_data_set_double(strength_settings, "amount", 1.0);
+			obs_data_set_double(strength_settings, "radius", 24.0);
+			obs_data_set_double(strength_settings, "brightness", 40.0);
+			obs_data_set_double(strength_settings, "saturation", 30.0);
+			obs_data_set_double(strength_settings, "light_balance", 0.0);
+			obs_data_set_bool(strength_settings, "anti_banding", false);
+			obs_data_set_double(strength_settings, "strength", pass == 0 ? 0.0 : 1.0);
+			obs_source_t *strength_filter = make_filter(
+				pass == 0 ? "beauty-strength-off" : "beauty-strength-full",
+				strength_settings);
+			if (!strength_filter) {
+				obs_source_release(color);
+				return fail("master intensity filter creation");
+			}
+
+			obs_source_filter_add(color, strength_filter);
+			if (!render_center(color, 1280, 720,
+					   pass == 0 ? strength_off : strength_full)) {
+				obs_source_release(color);
+				obs_source_release(strength_filter);
+				return fail("render master intensity");
+			}
+			obs_source_filter_remove(color, strength_filter);
+			obs_source_release(strength_filter);
+		}
+		printf("center pixel RGBA (strength 0): %u %u %u\n", strength_off[0],
+		       strength_off[1], strength_off[2]);
+		printf("center pixel RGBA (strength 1): %u %u %u\n", strength_full[0],
+		       strength_full[1], strength_full[2]);
+
+		if (!color_near(strength_off, original[0], original[1], original[2], 1)) {
+			obs_source_release(color);
+			return fail("master intensity 0 did not bypass the filter");
+		}
+		if (color_near(strength_full, original[0], original[1], original[2], 3)) {
+			obs_source_release(color);
+			return fail("master intensity 1 did not apply the filter");
+		}
+
+		/* ------------------------------------------------------------- */
+		/* Split compare: the divider position decides which side is the  */
+		/* untouched source                                               */
+		/* ------------------------------------------------------------- */
+		obs_data_t *split_settings = obs_data_create();
+		set_test_defaults(split_settings);
+		obs_data_set_double(split_settings, "brightness", 40.0);
+		obs_data_set_double(split_settings, "light_balance", 0.0);
+		obs_data_set_bool(split_settings, "anti_banding", false);
+		obs_data_set_bool(split_settings, "split_view", true);
+		obs_data_set_double(split_settings, "split_position", 0.25);
+		obs_source_t *split_filter = make_filter("beauty-split-test", split_settings);
+		if (!split_filter) {
+			obs_source_release(color);
+			return fail("split compare filter creation");
+		}
+
+		obs_source_filter_add(color, split_filter);
+
+		uint8_t split_left[4];
+		uint8_t split_right[4];
+		if (!render_pixel(color, 1280, 720, 128, 360, split_left) ||
+		    !render_pixel(color, 1280, 720, 768, 360, split_right)) {
+			obs_source_release(color);
+			obs_source_release(split_filter);
+			return fail("render split compare");
+		}
+		printf("split compare RGBA left/right:  %u %u %u / %u %u %u\n", split_left[0],
+		       split_left[1], split_left[2], split_right[0], split_right[1],
+		       split_right[2]);
+
+		if (!color_near(split_left, original[0], original[1], original[2], 1)) {
+			obs_source_release(color);
+			obs_source_release(split_filter);
+			return fail("split compare did not keep the left side untouched");
+		}
+		if (split_right[2] <= original[2] + 3) {
+			obs_source_release(color);
+			obs_source_release(split_filter);
+			return fail("split compare did not process the right side");
+		}
+
+		obs_source_filter_remove(color, split_filter);
+		obs_source_release(split_filter);
 
 		/* ------------------------------------------------------------- */
 		/* Face zones: manual box + teeth/eye enhancement                 */
@@ -1298,7 +1421,8 @@ int main(int argc, char **argv)
 	printf("OK: module loaded, filter created, effect compiled");
 	if (argc >= 5)
 		printf(", filter rendered, mask/opacity/face zones/texture/even "
-		       "tone/under-eye/light balance/HDR verified");
+		       "tone/under-eye/light balance/master intensity/split "
+		       "compare/HDR verified");
 	printf("\n");
 
 	obs_shutdown();

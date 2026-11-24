@@ -80,10 +80,14 @@
 #define T_FACE_H                obs_module_text("Face.Height")
 
 #define T_GROUP_ADVANCED        obs_module_text("Group.Advanced")
+#define T_STRENGTH              obs_module_text("Master.Strength")
 #define T_QUALITY               obs_module_text("Advanced.Quality")
 #define T_SPLIT_VIEW            obs_module_text("Advanced.SplitView")
+#define T_SPLIT_POSITION        obs_module_text("Advanced.SplitPosition")
 #define T_OPACITY               obs_module_text("Advanced.Opacity")
 #define T_ANTI_BANDING          obs_module_text("Advanced.AntiBanding")
+#define T_RESET_GROUP           obs_module_text("Group.Reset")
+#define T_STATUS_GROUP_RESET    obs_module_text("Group.StatusReset")
 
 #define T_QUALITY_FAST          obs_module_text("Quality.Fast")
 #define T_QUALITY_BALANCED      obs_module_text("Quality.Balanced")
@@ -130,9 +134,11 @@ struct beauty_filter {
 	gs_eparam_t *p_glow;
 	gs_eparam_t *p_light_balance;
 	gs_eparam_t *p_auto_gain;
+	gs_eparam_t *p_strength;
 	gs_eparam_t *p_opacity;
 	gs_eparam_t *p_mask_preview;
 	gs_eparam_t *p_split_view;
+	gs_eparam_t *p_split_position;
 
 	gs_eparam_t *p_temporal_strength;
 	gs_eparam_t *p_history_valid;
@@ -162,6 +168,7 @@ struct beauty_filter {
 	float clarity;
 	float glow;
 	float light_balance;
+	float strength;
 	float opacity;
 
 	/* Measured exposure gain for the automatic light balance.  Smoothed
@@ -182,6 +189,7 @@ struct beauty_filter {
 	bool skin_detect;
 	bool mask_preview;
 	bool split_view;
+	float split_position;
 	bool face_aware;
 	bool zone_preview;
 	bool face_manual;
@@ -267,7 +275,9 @@ static void beauty_update(void *data, obs_data_t *settings)
 	filter->clarity = beauty_setting_float(settings, S_CLARITY, 0.0f, 1.0f);
 	filter->glow = beauty_setting_float(settings, S_GLOW, 0.0f, 1.0f);
 	filter->light_balance = beauty_setting_float(settings, S_LIGHT_BALANCE, 0.0f, 1.0f);
+	filter->strength = beauty_setting_float(settings, S_STRENGTH, 0.0f, 1.0f);
 	filter->opacity = beauty_setting_float(settings, S_OPACITY, 0.0f, 1.0f);
+	filter->split_position = beauty_setting_float(settings, S_SPLIT_POSITION, 0.0f, 1.0f);
 
 	filter->temporal_strength = beauty_setting_float(settings, S_TEMPORAL, 0.0f, 1.0f);
 	filter->teeth_whiten = beauty_setting_float(settings, S_TEETH, 0.0f, 1.0f);
@@ -484,9 +494,11 @@ static void beauty_check_effect_params(struct beauty_filter *filter)
 		{"glow", filter->p_glow},
 		{"light_balance", filter->p_light_balance},
 		{"auto_gain", filter->p_auto_gain},
+		{"strength", filter->p_strength},
 		{"opacity", filter->p_opacity},
 		{"mask_preview", filter->p_mask_preview},
 		{"split_view", filter->p_split_view},
+		{"split_position", filter->p_split_position},
 		{"temporal_strength", filter->p_temporal_strength},
 		{"history_valid", filter->p_history_valid},
 		{"use_mask_tex", filter->p_use_mask_tex},
@@ -1036,12 +1048,16 @@ static void beauty_render(void *data, gs_effect_t *unused)
 	if (filter->p_auto_gain)
 		gs_effect_set_float(filter->p_auto_gain,
 				    filter->auto_gain_valid ? filter->auto_gain : 1.0f);
+	if (filter->p_strength)
+		gs_effect_set_float(filter->p_strength, filter->strength);
 	if (filter->p_opacity)
 		gs_effect_set_float(filter->p_opacity, filter->opacity);
 	if (filter->p_mask_preview)
 		gs_effect_set_float(filter->p_mask_preview, filter->mask_preview ? 1.0f : 0.0f);
 	if (filter->p_split_view)
 		gs_effect_set_float(filter->p_split_view, filter->split_view ? 1.0f : 0.0f);
+	if (filter->p_split_position)
+		gs_effect_set_float(filter->p_split_position, filter->split_position);
 	if (filter->p_use_mask_tex)
 		gs_effect_set_float(filter->p_use_mask_tex, use_mask_tex ? 1.0f : 0.0f);
 	if (filter->p_face_valid)
@@ -1126,7 +1142,9 @@ static void beauty_set_defaults_as_values(obs_data_t *settings)
 	obs_data_set_double(settings, S_FACE_W, 0.32);
 	obs_data_set_double(settings, S_FACE_H, 0.42);
 	obs_data_set_double(settings, S_LIGHT_BALANCE, 0.35);
+	obs_data_set_double(settings, S_STRENGTH, 1.0);
 	obs_data_set_bool(settings, S_SPLIT_VIEW, false);
+	obs_data_set_double(settings, S_SPLIT_POSITION, 0.5);
 	obs_data_set_double(settings, S_OPACITY, 1.0);
 	obs_data_set_string(settings, S_PRESET, "default");
 	obs_data_set_string(settings, S_PRESET_NAME, "");
@@ -1282,6 +1300,125 @@ static obs_property_t *add_bool_setting(obs_properties_t *group, const char *nam
 	return property;
 }
 
+/* --- Per-group reset ---------------------------------------------------- */
+
+/* Each group gets its own "reset" button so a single experiment (a warmer
+ * complexion, a different eye zone) can be undone without losing the rest of
+ * the tuning.  The values come from the registered defaults, which are the
+ * same numbers "Reset all" uses. */
+enum reset_kind {
+	RESET_DOUBLE,
+	RESET_BOOL,
+	RESET_STRING,
+};
+
+struct reset_key {
+	const char *name;
+	enum reset_kind kind;
+};
+
+static const struct reset_key reset_smoothing[] = {
+	{S_AMOUNT, RESET_DOUBLE},	    {S_RADIUS, RESET_DOUBLE},
+	{S_DETAIL, RESET_DOUBLE},	    {S_SKIN_DETECT, RESET_BOOL},
+	{S_SKIN_SENSITIVITY, RESET_DOUBLE}, {S_MASK_PREVIEW, RESET_BOOL},
+};
+
+static const struct reset_key reset_complexion[] = {
+	{S_BRIGHTNESS, RESET_DOUBLE}, {S_WARMTH, RESET_DOUBLE},	   {S_SATURATION, RESET_DOUBLE},
+	{S_ROSY, RESET_DOUBLE},	      {S_EVEN_TONE, RESET_DOUBLE},
+};
+
+static const struct reset_key reset_detail[] = {
+	{S_CLARITY, RESET_DOUBLE},
+	{S_GLOW, RESET_DOUBLE},
+	{S_LIGHT_BALANCE, RESET_DOUBLE},
+};
+
+static const struct reset_key reset_face[] = {
+	{S_FACE_AWARE, RESET_BOOL},  {S_TEMPORAL, RESET_DOUBLE},  {S_TEETH, RESET_DOUBLE},
+	{S_EYES, RESET_DOUBLE},	     {S_UNDER_EYE, RESET_DOUBLE}, {S_ZONE_PREVIEW, RESET_BOOL},
+	{S_FACE_MANUAL, RESET_BOOL}, {S_FACE_CX, RESET_DOUBLE},	  {S_FACE_CY, RESET_DOUBLE},
+	{S_FACE_W, RESET_DOUBLE},    {S_FACE_H, RESET_DOUBLE},
+};
+
+static const struct reset_key reset_advanced[] = {
+	{S_QUALITY, RESET_STRING}, {S_SPLIT_VIEW, RESET_BOOL},	 {S_SPLIT_POSITION, RESET_DOUBLE},
+	{S_OPACITY, RESET_DOUBLE}, {S_ANTI_BANDING, RESET_BOOL},
+};
+
+static const struct {
+	const char *property;
+	const struct reset_key *keys;
+	size_t count;
+} reset_groups[] = {
+	{"reset_smoothing", reset_smoothing, OBS_COUNTOF(reset_smoothing)},
+	{"reset_complexion", reset_complexion, OBS_COUNTOF(reset_complexion)},
+	{"reset_detail", reset_detail, OBS_COUNTOF(reset_detail)},
+	{"reset_face", reset_face, OBS_COUNTOF(reset_face)},
+	{"reset_advanced", reset_advanced, OBS_COUNTOF(reset_advanced)},
+};
+
+static void reset_key_to_default(obs_data_t *settings, const struct reset_key *key)
+{
+	switch (key->kind) {
+	case RESET_DOUBLE:
+		obs_data_set_double(settings, key->name,
+				    obs_data_get_default_double(settings, key->name));
+		break;
+	case RESET_BOOL:
+		obs_data_set_bool(settings, key->name,
+				  obs_data_get_default_bool(settings, key->name));
+		break;
+	case RESET_STRING:
+		obs_data_set_string(settings, key->name,
+				    obs_data_get_default_string(settings, key->name));
+		break;
+	}
+}
+
+static bool reset_group_clicked(obs_properties_t *props, obs_property_t *property, void *data)
+{
+	struct beauty_filter *filter = properties_filter(props, data);
+	const char *name = obs_property_name(property);
+	obs_data_t *settings;
+	size_t i;
+	size_t k;
+
+	if (!filter || !filter->context || !name)
+		return false;
+
+	settings = obs_source_get_settings(filter->context);
+	if (!settings)
+		return false;
+
+	for (i = 0; i < OBS_COUNTOF(reset_groups); i++) {
+		if (strcmp(reset_groups[i].property, name) != 0)
+			continue;
+
+		for (k = 0; k < reset_groups[i].count; k++)
+			reset_key_to_default(settings, &reset_groups[i].keys[k]);
+
+		beauty_mark_custom(settings);
+		beauty_set_status(filter, T_STATUS_GROUP_RESET);
+		obs_source_update(filter->context, settings);
+		break;
+	}
+
+	obs_data_release(settings);
+	return true;
+}
+
+static bool split_view_modified(obs_properties_t *props, obs_property_t *property,
+				obs_data_t *settings)
+{
+	UNUSED_PARAMETER(property);
+
+	beauty_set_status(obs_properties_get_param(props), NULL);
+	beauty_mark_custom(settings);
+	beauty_is_visible(props, S_SPLIT_POSITION, obs_data_get_bool(settings, S_SPLIT_VIEW));
+	return false;
+}
+
 static bool preset_modified(obs_properties_t *props, obs_property_t *property, obs_data_t *settings)
 {
 	struct beauty_filter *filter = obs_properties_get_param(props);
@@ -1425,7 +1562,9 @@ static void add_tooltips(obs_properties_t *props)
 		{S_FACE_W, "Tooltip.FaceWidth"},
 		{S_FACE_H, "Tooltip.FaceHeight"},
 		{S_QUALITY, "Tooltip.Quality"},
+		{S_STRENGTH, "Tooltip.Strength"},
 		{S_SPLIT_VIEW, "Tooltip.SplitView"},
+		{S_SPLIT_POSITION, "Tooltip.SplitPosition"},
 		{S_OPACITY, "Tooltip.Opacity"},
 		{S_ANTI_BANDING, "Tooltip.AntiBanding"},
 	};
@@ -1499,6 +1638,11 @@ static obs_properties_t *beauty_properties(void *data)
 		obs_property_text_set_info_word_wrap(info, true);
 	}
 
+	/* --- Master intensity ------------------------------------------------ */
+	/* Kept outside the groups: it scales every effect at once, so it is the
+	 * quickest way to dial a saved preset up or down for one shot. */
+	add_float_setting(props, S_STRENGTH, T_STRENGTH, 0.0, 1.0, 0.01);
+
 	/* --- Skin smoothing ------------------------------------------------- */
 	group = obs_properties_create();
 	add_float_setting(group, S_AMOUNT, T_AMOUNT, 0.0, 1.0, 0.001);
@@ -1508,6 +1652,7 @@ static obs_properties_t *beauty_properties(void *data)
 	obs_property_set_modified_callback(p, skin_detect_modified);
 	add_float_setting(group, S_SKIN_SENSITIVITY, T_SKIN_SENSITIVITY, 0.0, 1.0, 0.01);
 	add_bool_setting(group, S_MASK_PREVIEW, T_MASK_PREVIEW);
+	obs_properties_add_button(group, "reset_smoothing", T_RESET_GROUP, reset_group_clicked);
 	obs_properties_add_group(props, "smoothing_group", T_GROUP_SMOOTHING, OBS_GROUP_NORMAL,
 				 group);
 
@@ -1518,6 +1663,7 @@ static obs_properties_t *beauty_properties(void *data)
 	add_float_setting(group, S_SATURATION, T_SATURATION, -50.0, 50.0, 1.0);
 	add_float_setting(group, S_ROSY, T_ROSY, 0.0, 1.0, 0.01);
 	add_float_setting(group, S_EVEN_TONE, T_EVEN_TONE, 0.0, 1.0, 0.01);
+	obs_properties_add_button(group, "reset_complexion", T_RESET_GROUP, reset_group_clicked);
 	obs_properties_add_group(props, "complexion_group", T_GROUP_COMPLEXION, OBS_GROUP_NORMAL,
 				 group);
 
@@ -1526,6 +1672,7 @@ static obs_properties_t *beauty_properties(void *data)
 	add_float_setting(group, S_CLARITY, T_CLARITY, 0.0, 1.0, 0.01);
 	add_float_setting(group, S_GLOW, T_GLOW, 0.0, 1.0, 0.01);
 	add_float_setting(group, S_LIGHT_BALANCE, T_LIGHT_BALANCE, 0.0, 1.0, 0.01);
+	obs_properties_add_button(group, "reset_detail", T_RESET_GROUP, reset_group_clicked);
 	obs_properties_add_group(props, "detail_group", T_GROUP_DETAIL, OBS_GROUP_NORMAL, group);
 
 	/* --- Face & eyes ---------------------------------------------------- */
@@ -1543,6 +1690,7 @@ static obs_properties_t *beauty_properties(void *data)
 	add_float_setting(group, S_FACE_CY, T_FACE_CY, 0.0, 1.0, 0.005);
 	add_float_setting(group, S_FACE_W, T_FACE_W, 0.05, 1.0, 0.005);
 	add_float_setting(group, S_FACE_H, T_FACE_H, 0.05, 1.0, 0.005);
+	obs_properties_add_button(group, "reset_face", T_RESET_GROUP, reset_group_clicked);
 	obs_properties_add_group(props, "face_group", T_GROUP_FACE, OBS_GROUP_NORMAL, group);
 
 	/* --- Performance & preview ----------------------------------------- */
@@ -1553,9 +1701,12 @@ static obs_properties_t *beauty_properties(void *data)
 	obs_property_list_add_string(p, T_QUALITY_BALANCED, "balanced");
 	obs_property_list_add_string(p, T_QUALITY_HIGH, "high");
 	obs_property_set_modified_callback(p, setting_modified);
-	add_bool_setting(group, S_SPLIT_VIEW, T_SPLIT_VIEW);
+	p = obs_properties_add_bool(group, S_SPLIT_VIEW, T_SPLIT_VIEW);
+	obs_property_set_modified_callback(p, split_view_modified);
+	add_float_setting(group, S_SPLIT_POSITION, T_SPLIT_POSITION, 0.05, 0.95, 0.01);
 	add_float_setting(group, S_OPACITY, T_OPACITY, 0.0, 1.0, 0.01);
 	add_bool_setting(group, S_ANTI_BANDING, T_ANTI_BANDING);
+	obs_properties_add_button(group, "reset_advanced", T_RESET_GROUP, reset_group_clicked);
 	obs_properties_add_group(props, "advanced_group", T_GROUP_ADVANCED, OBS_GROUP_NORMAL,
 				 group);
 
@@ -1563,6 +1714,7 @@ static obs_properties_t *beauty_properties(void *data)
 	beauty_update_visibility(props, filter ? filter->skin_detect : true,
 				 filter ? filter->face_aware : true,
 				 filter ? filter->face_manual : false);
+	beauty_is_visible(props, S_SPLIT_POSITION, filter ? filter->split_view : false);
 
 	/* Same identity as the log line, for when the user cannot find the log. */
 	{
@@ -1612,7 +1764,9 @@ static void beauty_defaults(obs_data_t *settings)
 	obs_data_set_default_double(settings, S_FACE_H, 0.42);
 
 	obs_data_set_default_string(settings, S_QUALITY, "balanced");
+	obs_data_set_default_double(settings, S_STRENGTH, 1.0);
 	obs_data_set_default_bool(settings, S_SPLIT_VIEW, false);
+	obs_data_set_default_double(settings, S_SPLIT_POSITION, 0.5);
 	obs_data_set_default_double(settings, S_OPACITY, 1.0);
 	obs_data_set_default_bool(settings, S_ANTI_BANDING, true);
 }
@@ -1660,10 +1814,13 @@ static void *beauty_create(obs_data_t *settings, obs_source_t *context)
 		filter->p_light_balance =
 			gs_effect_get_param_by_name(filter->effect, "light_balance");
 		filter->p_auto_gain = gs_effect_get_param_by_name(filter->effect, "auto_gain");
+		filter->p_strength = gs_effect_get_param_by_name(filter->effect, "strength");
 		filter->p_opacity = gs_effect_get_param_by_name(filter->effect, "opacity");
 		filter->p_mask_preview =
 			gs_effect_get_param_by_name(filter->effect, "mask_preview");
 		filter->p_split_view = gs_effect_get_param_by_name(filter->effect, "split_view");
+		filter->p_split_position =
+			gs_effect_get_param_by_name(filter->effect, "split_position");
 		filter->p_temporal_strength =
 			gs_effect_get_param_by_name(filter->effect, "temporal_strength");
 		filter->p_history_valid =

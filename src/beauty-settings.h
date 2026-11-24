@@ -45,7 +45,9 @@
 #define S_FACE_H                "face_h"
 
 #define S_QUALITY               "quality"
+#define S_STRENGTH              "strength"
 #define S_SPLIT_VIEW            "split_view"
+#define S_SPLIT_POSITION        "split_position"
 #define S_OPACITY               "opacity"
 #define S_ANTI_BANDING          "anti_banding"
 
