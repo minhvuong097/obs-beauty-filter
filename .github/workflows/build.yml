@@ -102,7 +102,7 @@ jobs:
       attestations: write
     steps:
       - name: Download build artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
           merge-multiple: true
@@ -148,7 +148,7 @@ jobs:
       # Signed in Sigstore's public transparency log.  Anyone can check that
       # the binaries came from this workflow instead of trusting the upload.
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: |
             artifacts/*.zip
