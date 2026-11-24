@@ -5,6 +5,37 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.10.0] - 2026-11-24
+
+### Added
+
+- **Master intensity** (`strength`) above the groups. One slider scales every
+  effect together without touching the stored controls: `1` keeps the preset as
+  saved and `0` returns the source. It is deliberately not part of the preset
+  schema, so saved looks stay identical and the slider is free to move per
+  shot.
+- **Split position** (`split_position`) in **Performance & preview**. The split
+  compare divider is no longer pinned to the centre; it can be dragged from 5%
+  to 95% of the frame width, measured from the left edge.
+- **Per-group reset.** Every property group now ends with a **Reset group**
+  button that restores only that group's registered defaults, so a single
+  experiment can be undone without losing the rest of the tuning.
+- **Tests** for master intensity (`0` restores the source, `1` applies the
+  effect) and for the moved split divider (`split_position = 0.25` keeps the
+  left 10% untouched and processes the right side). The property-coverage test
+  now also checks the new keys and reset buttons.
+
+### Changed
+
+- **Build provenance.** Release assets are attested with
+  `actions/attest-build-provenance`, so anyone can run
+  `gh attestation verify <file> --repo minhvuong097/obs-beauty-filter` and
+  confirm the file came from this repository's workflow. Documented in
+  `SECURITY.md` next to the `SHA256SUMS.txt` check.
+- All three new controls are neutral at their defaults (`strength = 1`,
+  `split_position = 0.5`, reset buttons unclicked), so existing scenes and the
+  render-matrix goldens stay bit-identical.
+
 ## [1.9.0] - 2026-11-21
 
 ### Added
@@ -290,6 +321,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - OBS 33+ plugin layout on Windows, legacy layout for OBS 32 and older.
 - Linux and Windows CI builds with packaged artifacts.
 
+[1.10.0]: https://github.com/minhvuong097/obs-beauty-filter/releases/tag/v1.10.0
 [1.9.0]: https://github.com/minhvuong097/obs-beauty-filter/releases/tag/v1.9.0
 [1.8.0]: https://github.com/minhvuong097/obs-beauty-filter/releases/tag/v1.8.0
 [1.7.0]: https://github.com/minhvuong097/obs-beauty-filter/releases/tag/v1.7.0

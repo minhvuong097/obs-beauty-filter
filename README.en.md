@@ -34,7 +34,7 @@
   <a href="#license">License</a>
 </p>
 
-A GPU beauty filter for **OBS Studio** on Windows and Linux (macOS can be built from source but is not tested). Version **1.9.0** runs entirely on the GPU, plugs into the standard OBS filter pipeline, uses no AI model, never reads a full-resolution frame back to the CPU, and has no third-party runtime dependency.
+A GPU beauty filter for **OBS Studio** on Windows and Linux (macOS can be built from source but is not tested). Version **1.10.0** runs entirely on the GPU, plugs into the standard OBS filter pipeline, uses no AI model, never reads a full-resolution frame back to the CPU, and has no third-party runtime dependency.
 
 Goal: natural-looking skin for livestreams/webcams **and high-resolution cameras** while preserving eyes, eyebrows, hair, pores and the face outline — with correct HDR handling.
 
@@ -145,7 +145,7 @@ obs-beauty-filter/
 
 ### Option A — installer `.exe` (recommended)
 
-Download `obs-beauty-filter-1.9.0-windows-x64-setup.exe` from
+Download `obs-beauty-filter-1.10.0-windows-x64-setup.exe` from
 **[GitHub Releases](https://github.com/minhvuong097/obs-beauty-filter/releases/latest)**
 and run it. The installer:
 
@@ -176,7 +176,7 @@ your OBS scenes, profiles and custom presets untouched.
 
 ### Option B — prebuilt ZIP (manual install)
 
-- Windows x64: `obs-beauty-filter-1.9.0-windows-x64.zip`
+- Windows x64: `obs-beauty-filter-1.10.0-windows-x64.zip`
 - Linux x86_64: `obs-beauty-filter-linux-x86_64.tar.gz`
 - Each release includes `SHA256SUMS.txt` so you can verify the download.
 
@@ -355,9 +355,13 @@ set `INSTALL_LIBDIR=...` for Debian/Ubuntu multiarch).
 | Quality | Balanced | Fast/Balanced/High | 1/4, 1/3 or 1/2 resolution base; High recommended for 1440p/4K |
 | Anti-banding | On | On/Off | Triangular dither for 8-bit output |
 | Split preview | Off | On/Off | Left = original, right = processed |
+| Split position | 0.5 | 0.05–0.95 | Divider position of the split preview, measured from the left |
 | Overall opacity | 1.0 | 0–1 | Global mix with the original frame |
+| Master intensity | 1.0 | 0–1 | Multiplies every effect without changing the stored controls; 0 = source |
 
 Note: `Face width/height` are full dimensions, not half-extents. For example a face covering 32% of the frame width and 42% of its height.
+
+Every group has a **Reset group** button that restores only that group's defaults, leaving the rest of the tuning untouched. **Master intensity** is deliberately not stored in presets: the preset keeps the look, and the slider dials the whole effect up or down for a single shot.
 
 ### Situation-based suggestions
 

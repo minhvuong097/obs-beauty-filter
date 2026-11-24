@@ -5,7 +5,7 @@ cmake_minimum_required(VERSION 3.28...3.30)
 #      add_core_module(obs-beauty-filter) to plugins/CMakeLists.txt.
 #   2. Standalone: point CMAKE_PREFIX_PATH at an OBS build/install tree that
 #      provides libobsConfig.cmake.
-set(BEAUTY_FILTER_VERSION "1.9.0")
+set(BEAUTY_FILTER_VERSION "1.10.0")
 
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   project(obs-beauty-filter VERSION ${BEAUTY_FILTER_VERSION} LANGUAGES C)

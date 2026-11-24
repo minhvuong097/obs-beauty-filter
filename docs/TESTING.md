@@ -123,6 +123,9 @@ center pixel RGBA (original):   200 150 120 255
 center pixel RGBA (processed):  201 151 121 255
 center pixel RGBA (skin mask):  255 255 255 255
 center pixel RGBA (opacity 0):  200 150 120 255
+center pixel RGBA (strength 0): 200 150 120
+center pixel RGBA (strength 1): 232 161 115
+split compare RGBA left/right:  200 150 120 / 222 166 134
 pattern eye/mouth luma before:  215 / 198
 pattern eye/mouth luma after:   243 / 204
 zone preview eye RGBA:          109 183 255 255
@@ -139,7 +142,7 @@ chroma contrast before:         50 (luma 8)
 chroma contrast off/on:         38 / 13 (luma 7 / 9)
 light balance luma:            161 -> 117
 light balance dark luma:       69 -> 105
-OK: module loaded, filter created, effect compiled, filter rendered, mask/opacity/face zones/texture/even tone/under-eye/light balance/HDR verified
+OK: module loaded, filter created, effect compiled, filter rendered, mask/opacity/face zones/texture/even tone/under-eye/light balance/master intensity/split compare/HDR verified
 ```
 
 Test kiểm tra:
@@ -174,6 +177,12 @@ Test kiểm tra:
     minh hiệu ứng nhắm vào chroma chứ không blur toàn ảnh.
 13. **Độ phủ thuộc tính**: mọi khóa trong `src/beauty-settings.h` phải tồn tại
     trên trang thuộc tính, để không thể thêm control vào shader mà quên UI.
+14. **Cường độ tổng**: với `strength = 0`, frame gốc được trả lại (sai số ±1);
+    với `strength = 1`, ảnh thực sự được xử lý. Test bắt được lỗi quên áp thanh
+    trượt vào kết quả cuối.
+15. **Split compare**: `split_view = on`, `split_position = 0.25`; pixel ở 10%
+    chiều rộng phải bằng ảnh gốc, pixel ở 60% phải sáng hơn ảnh gốc, chứng minh
+    vạch chia dời đúng chỗ thay vì cố định 0.5.
 
 Nếu ra `0,0,0,0`, filter creation fail, hoặc sai lệch màu lớn, xem log shader bên dưới.
 
@@ -267,7 +276,7 @@ Nếu chạy trên backend trả về bottom-up (một số driver/backend có t
 Mở **Help → Log Files → View Current Log** và tìm:
 
 - `Loading module: obs-beauty-filter` — module được load.
-- `[obs-beauty-filter] version 1.9.0 loaded (GPL-2.0-or-later)` — đúng phiên bản
+- `[obs-beauty-filter] version 1.10.0 loaded (GPL-2.0-or-later)` — đúng phiên bản
   đang chạy; dòng này cũng hiện ở cuối trang thuộc tính, dùng khi báo lỗi.
 - `Failed to load '...beauty_filter.effect'` — **không** được xuất hiện.
 - `Compiler warnings/errors for ...beauty_filter.effect` — **không** được xuất hiện.
@@ -431,7 +440,7 @@ CI Windows biên dịch `installer/obs-beauty-filter.iss` bằng Inno Setup 6 sa
 bước đóng gói, rồi cài silent vào thư mục tạm:
 
 ```powershell
-.\obs-beauty-filter-1.9.0-windows-x64-setup.exe /VERYSILENT /SUPPRESSMSGBOXES `
+.\obs-beauty-filter-1.10.0-windows-x64-setup.exe /VERYSILENT /SUPPRESSMSGBOXES `
   /NORESTART /SP- /DIR=C:\temp\beauty-installer-test /LOG=install.log
 ```
 

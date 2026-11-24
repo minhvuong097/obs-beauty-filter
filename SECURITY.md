@@ -4,7 +4,8 @@
 
 | Version | Supported |
 |---|---|
-| 1.9.x | ✅ |
+| 1.10.x | ✅ |
+| 1.9.x | ✅ (fixes are backported only for security issues) |
 | 1.8.x | ✅ (fixes are backported only for security issues) |
 | ≤ 1.7.x | ❌ |
 
@@ -23,7 +24,7 @@ It creates a private advisory visible only to the maintainer.
 Include:
 
 - the plugin version shown in the OBS log
-  (`[obs-beauty-filter] version 1.9.0 loaded`) or in the properties page;
+  (`[obs-beauty-filter] version 1.10.0 loaded`) or in the properties page;
 - OBS version, OS and GPU/driver;
 - what an attacker can achieve and the steps to reproduce;
 - a crash dump or OBS log if the plugin crashed.
@@ -63,7 +64,7 @@ sha256sum -c SHA256SUMS.txt
 On Windows (PowerShell):
 
 ```powershell
-Get-FileHash -Algorithm SHA256 .\obs-beauty-filter-1.9.0-windows-x64-setup.exe
+Get-FileHash -Algorithm SHA256 .\obs-beauty-filter-1.10.0-windows-x64-setup.exe
 ```
 
 Compare the value with `SHA256SUMS.txt` and with the checksum printed in the
@@ -72,6 +73,21 @@ signed — a code-signing certificate is a paid subscription and this project ha
 no funding. Verify the checksum before choosing **More info → Run anyway** in
 SmartScreen. The same applies to macOS: builds are not notarized (that requires
 a paid Apple Developer account); Gatekeeper will warn on first launch.
+
+### Build provenance
+
+Every release asset is also attested by the publishing workflow and recorded in
+Sigstore's public transparency log. With the GitHub CLI installed:
+
+```sh
+gh attestation verify obs-beauty-filter-linux-x86_64.tar.gz \
+  --repo minhvuong097/obs-beauty-filter
+```
+
+A successful check proves the file was produced by
+`.github/workflows/build.yml` from this repository, even if a release were
+edited by hand afterwards. Attestation verification complements, but does not
+replace, the SHA-256 check above.
 
 ## Safe defaults
 

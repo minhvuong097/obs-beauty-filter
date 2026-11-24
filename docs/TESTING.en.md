@@ -125,6 +125,9 @@ center pixel RGBA (original):   200 150 120 255
 center pixel RGBA (processed):  201 151 121 255
 center pixel RGBA (skin mask):  255 255 255 255
 center pixel RGBA (opacity 0):  200 150 120 255
+center pixel RGBA (strength 0): 200 150 120
+center pixel RGBA (strength 1): 232 161 115
+split compare RGBA left/right:  200 150 120 / 222 166 134
 pattern eye/mouth luma before:  215 / 198
 pattern eye/mouth luma after:   243 / 204
 zone preview eye RGBA:          109 183 255 255
@@ -141,7 +144,7 @@ chroma contrast before:         50 (luma 8)
 chroma contrast off/on:         38 / 13 (luma 7 / 9)
 light balance luma:            161 -> 117
 light balance dark luma:       69 -> 105
-OK: module loaded, filter created, effect compiled, filter rendered, mask/opacity/face zones/texture/even tone/under-eye/light balance/HDR verified
+OK: module loaded, filter created, effect compiled, filter rendered, mask/opacity/face zones/texture/even tone/under-eye/light balance/master intensity/split compare/HDR verified
 ```
 
 The test checks:
@@ -180,6 +183,12 @@ The test checks:
 13. **Property coverage**: every key in `src/beauty-settings.h` must exist in the
     property page, so a control cannot be added to the shader and forgotten in
     the UI.
+14. **Master intensity**: with `strength = 0` the original frame comes back (±1);
+    with `strength = 1` the image is really processed. This catches a slider that
+    is exposed but never applied to the final result.
+15. **Split compare**: `split_view = on`, `split_position = 0.25`; the pixel at
+    10% of the width must equal the source and the pixel at 60% must be brighter
+    than the source, proving the divider moved instead of staying at 0.5.
 
 If you get `0,0,0,0`, filter creation fails, or colours are far off, check the shader log below.
 
@@ -275,7 +284,7 @@ If a backend returns bottom-up rows (some drivers/backends may), the `pattern ey
 Open **Help → Log Files → View Current Log** and look for:
 
 - `Loading module: obs-beauty-filter` — module loaded.
-- `[obs-beauty-filter] version 1.9.0 loaded (GPL-2.0-or-later)` — the build
+- `[obs-beauty-filter] version 1.10.0 loaded (GPL-2.0-or-later)` — the build
   actually running; the same line is shown at the bottom of the properties page,
   so mention it in a bug report.
 - `Failed to load '...beauty_filter.effect'` — must **not** appear.
@@ -444,7 +453,7 @@ Windows CI compiles `installer/obs-beauty-filter.iss` with Inno Setup 6 after
 packaging and then installs the setup silently into a temporary directory:
 
 ```powershell
-.\obs-beauty-filter-1.9.0-windows-x64-setup.exe /VERYSILENT /SUPPRESSMSGBOXES `
+.\obs-beauty-filter-1.10.0-windows-x64-setup.exe /VERYSILENT /SUPPRESSMSGBOXES `
   /NORESTART /SP- /DIR=C:\temp\beauty-installer-test /LOG=install.log
 ```
 

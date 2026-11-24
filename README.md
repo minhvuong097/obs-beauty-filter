@@ -34,7 +34,7 @@
   <a href="#giấy-phép">Giấy phép</a>
 </p>
 
-Plugin bộ lọc làm đẹp cho **OBS Studio** trên Windows và Linux (macOS có thể build từ source nhưng chưa được kiểm thử). Phiên bản **1.9.0** chạy hoàn toàn trên GPU, hòa vào pipeline filter tiêu chuẩn của OBS, không cần model AI, không đọc ngược frame full-resolution về CPU và không phụ thuộc runtime bên thứ ba.
+Plugin bộ lọc làm đẹp cho **OBS Studio** trên Windows và Linux (macOS có thể build từ source nhưng chưa được kiểm thử). Phiên bản **1.10.0** chạy hoàn toàn trên GPU, hòa vào pipeline filter tiêu chuẩn của OBS, không cần model AI, không đọc ngược frame full-resolution về CPU và không phụ thuộc runtime bên thứ ba.
 
 Mục tiêu: làn da mịn tự nhiên cho livestream/webcam **và camera độ phân giải cao** mà vẫn giữ chi tiết mắt, lông mày, tóc, lỗ chân lông và viền khuôn mặt; đồng thời xử lý đúng nguồn HDR.
 
@@ -145,7 +145,7 @@ obs-beauty-filter/
 
 ### Cách A — bộ cài `.exe` (khuyến nghị)
 
-Tải `obs-beauty-filter-1.9.0-windows-x64-setup.exe` tại
+Tải `obs-beauty-filter-1.10.0-windows-x64-setup.exe` tại
 **[GitHub Releases](https://github.com/minhvuong097/obs-beauty-filter/releases/latest)**
 rồi chạy. Bộ cài sẽ:
 
@@ -176,7 +176,7 @@ hay custom preset của OBS.
 
 ### Cách B — gói ZIP build sẵn (cài thủ công)
 
-- Windows x64: `obs-beauty-filter-1.9.0-windows-x64.zip`
+- Windows x64: `obs-beauty-filter-1.10.0-windows-x64.zip`
 - Linux x86_64: `obs-beauty-filter-linux-x86_64.tar.gz`
 - Mỗi release có kèm `SHA256SUMS.txt` để kiểm tra tệp tải về.
 
@@ -352,9 +352,13 @@ Hoặc `./scripts/build-linux.sh` rồi `sudo cmake --install build` (mặc đ�
 | Quality | Balanced | Fast/Balanced/High | Base 1/4, 1/3 hoặc 1/2 độ phân giải; High khuyến nghị cho 1440p/4K |
 | Anti-banding | On | On/Off | Triangular dithering cho ngõ ra 8-bit |
 | Split preview | Off | On/Off | Nửa trái gốc, nửa phải đã xử lý |
+| Split position | 0.5 | 0.05–0.95 | Vị trí vạch chia của split preview, tính từ mép trái |
 | Overall opacity | 1.0 | 0–1 | Trộn tổng với ảnh gốc |
+| Cường độ tổng | 1.0 | 0–1 | Nhân cho toàn bộ hiệu ứng mà không đổi từng control; 0 = ảnh gốc |
 
 Ghi chú: `Face width/height` là kích thước đầy đủ (full width/height), không phải bán kính. Ví dụ mặt chiếm 32% chiều rộng và 42% chiều cao khung hình.
+
+Mỗi nhóm có nút **Đặt lại nhóm** để trả riêng nhóm đó về mặc định, không mất phần chỉnh còn lại. **Cường độ tổng** không nằm trong preset đã lưu: preset giữ nguyên "look", thanh này chỉ kéo nhanh toàn bộ hiệu ứng lên/xuống cho từng cảnh quay.
 
 ### Gợi ý theo tình huống
 

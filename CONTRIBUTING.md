@@ -111,10 +111,13 @@ invariants hold.
 
 ## Versioning and releases
 
-- Semantic versioning; each release bumps the **minor** part: 1.9.0 → 1.10.0.
+- Semantic versioning; each release bumps the **minor** part: 1.10.0 → 1.11.0.
 - `BEAUTY_FILTER_VERSION` in `CMakeLists.txt` is the single source of truth; the
   demo captions read it automatically. Also bump `installer/obs-beauty-filter.iss`,
   the README download names and `CHANGELOG.md` in the same commit.
+  `.github/scripts/check-version.sh` enforces this in the `meta` CI job and
+  compares a `v*` tag against the same value; run it locally before tagging
+  with `sh .github/scripts/check-version.sh v1.10.0`.
 - Pushing a `v*` tag runs the full build and test matrix; the `release` job
   then publishes every artifact plus `SHA256SUMS.txt` through `gh release
   create`. Do not upload binaries by hand. The release body is taken from
