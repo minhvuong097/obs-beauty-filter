@@ -94,7 +94,9 @@ của jonas.svidras; ghi công, miễn trừ và cách tạo lại nằm trong
 - **Soft glow**: ánh sáng mềm chỉ trên highlight, vùng tối vẫn sạch.
 - **Chống dải màu**: triangular dithering cho ngõ ra 8-bit, tránh banding khi da mịn trên nền gradient.
 - **HDR-safe**: xử lý `GS_CS_709_EXTENDED`, `GS_CS_709_SCRGB` và `GS_CS_SRGB_16F` trong linear light, giữ highlight > mức trắng SDR (không bypass, không clip).
-- **Preview**: skin mask, split view và face/eye/mouth/under-eye zones.
+- **Preview**: skin mask, split view (vạch chia kéo được từ 5% đến 95%) và face/eye/mouth/under-eye zones.
+- **Cường độ tổng**: một thanh trượt nhân toàn bộ hiệu ứng mà không đổi giá trị từng control; preset vẫn giữ nguyên look, thanh này chỉ kéo nhanh cho từng cảnh quay.
+- **Đặt lại từng nhóm**: mỗi nhóm có nút reset riêng, trả nhóm đó về mặc định mà không mất phần chỉnh còn lại.
 - **Preset khởi đầu**: Natural, Cinema, Studio, Soft, Beard, Dark skin, HDR và Default. Chọn preset rồi tinh chỉnh; mọi thay đổi tay sẽ được đánh dấu là **Tùy chỉnh**.
 - **Preset tùy chỉnh**: lưu, ghi đè, tải lại và xóa phong cách của bạn. Dữ liệu nằm trong `custom-presets.json` ở thư mục cấu hình module OBS, tồn tại qua thay đổi scene collection và khởi động lại.
 - **Đặt lại mặc định**: đưa toàn bộ thông số về preset Default mà không cần xóa và thêm lại filter.
@@ -158,6 +160,19 @@ obs-beauty-filter/
     ├── build-linux.sh
     └── build-windows.ps1
 ```
+
+## Yêu cầu hệ thống
+
+| Thành phần | Yêu cầu |
+|---|---|
+| OBS Studio | 30.2 trở lên, bản 64-bit; layout plugin mới (OBS 33+) được khuyến nghị |
+| Windows | Windows 10/11 x64, GPU hỗ trợ D3D11 |
+| Linux | x86_64, driver OpenGL 3.3, X11 hoặc XWayland |
+| macOS | Build từ source; chưa có gói build sẵn và chưa được kiểm thử |
+| Runtime | Không cần Python, .NET, ONNX hay model AI — chỉ cần `libobs` của OBS |
+| Build từ source | CMake 3.28, trình biên dịch C99, OBS SDK 30.2+ |
+
+Ma trận đầy đủ theo từng phiên bản OBS và không gian màu: [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
 
 ## Cài đặt trên Windows
 

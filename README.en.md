@@ -94,7 +94,9 @@ steps are in [`assets/demo/README.md`](assets/demo/README.md).
 - **Soft glow** only on highlights, useful with ring lights and clean shadows.
 - **Anti-banding**: triangular dithering for 8-bit output prevents banding in smooth skin gradients.
 - **HDR-safe**: `GS_CS_709_EXTENDED`, `GS_CS_709_SCRGB` and `GS_CS_SRGB_16F` are processed in linear light; highlights above SDR white are preserved (no bypass, no clipping).
-- **Previews**: skin mask, split view and face/eye/mouth/under-eye zones.
+- **Previews**: skin mask, split view (divider draggable from 5% to 95%) and face/eye/mouth/under-eye zones.
+- **Master intensity**: one slider scales the whole effect without changing the stored controls; presets keep their look and the slider dials it per shot.
+- **Per-group reset**: each group has its own reset button that restores that group's defaults without losing the rest of the tuning.
 - **Built-in starting presets**: Natural, Cinema, Studio, Soft, Beard, Dark skin, HDR and Default. Pick one, then fine-tune; any manual change marks the selection as **Custom**.
 - **Custom presets**: save, overwrite, reload and delete your own looks. They are stored as `custom-presets.json` in the OBS module config directory and survive scene-collection changes and restarts.
 - **Reset button**: return every control to the Default preset without removing the filter.
@@ -158,6 +160,19 @@ obs-beauty-filter/
     ├── build-linux.sh
     └── build-windows.ps1
 ```
+
+## System requirements
+
+| Component | Requirement |
+|---|---|
+| OBS Studio | 30.2 or newer, 64-bit; the new plugin layout (OBS 33+) is recommended |
+| Windows | Windows 10/11 x64 with a D3D11-capable GPU |
+| Linux | x86_64, OpenGL 3.3 driver, X11 or XWayland |
+| macOS | Build from source; no prebuilt package and not tested |
+| Runtime | No Python, .NET, ONNX or AI model — only OBS `libobs` |
+| Building from source | CMake 3.28, a C99 compiler, OBS SDK 30.2+ |
+
+Full matrix per OBS version and colour space: [docs/COMPATIBILITY.en.md](docs/COMPATIBILITY.en.md).
 
 ## Windows installation
 
