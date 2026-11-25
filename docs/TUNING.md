@@ -16,13 +16,16 @@
 10. **Cân bằng sáng tự động**: để 0.35 cho hầu hết cảnh, tăng khi phòng quá tối hoặc ngược sáng mạnh.
 11. **Temporal mask stability**: tăng nếu mask nhấp nháy; giảm nếu thấy bóng mờ khi đầu quay nhanh.
 12. **Giảm quầng mắt / Teeth / Eyes**: bật sau cùng, ở mức nhỏ, và kiểm tra bằng **Hiện vùng mặt** (quầng mắt màu tím).
-13. **So sánh trái/phải** để kiểm tra, rồi tắt trước khi lên sóng.
+13. **Cường độ tổng**: khi look đã vừa ý, dùng thanh này để hạ toàn bộ hiệu ứng cho một cảnh cụ thể mà không sửa preset (`1` = giữ nguyên preset, `0` = ảnh gốc).
+14. **So sánh trái/phải** để kiểm tra, kéo **Split position** nếu cần nhìn kỹ một vùng, rồi tắt trước khi lên sóng.
 
 ## 2. Preset gợi ý
 
 Bảng điều khiển bắt đầu bằng menu **Preset khởi đầu**. Chọn mục gần với camera và ánh sáng của bạn, sau đó tinh chỉnh các nút bên dưới. Chỉnh bất kỳ thông số sáng tạo nào sẽ đánh dấu lựa chọn là **Tùy chỉnh (giữ thông số hiện tại)**; các con số trong mục này là giá trị chính xác mà mỗi preset áp dụng.
 
 **Mặc định** khôi phục thiết lập gốc của plugin (Amount 0.35, Radius 6, Detail 0.35, sensitivity 0.50, Rosy 0.15, Clarity 0.10, Glow 0.05, cân bằng sáng 0.35, temporal 0.60, chất lượng Balanced, bật chống dải màu). Dùng preset này làm mốc sạch trước khi chọn preset theo camera.
+
+Nếu chỉ một nhóm đi quá xa, **Đặt lại nhóm** ở cuối nhóm đó trả riêng nhóm về mặc định, giữ nguyên phần còn lại. **Đặt lại mặc định** vẫn là nút reset toàn bộ.
 
 ### Natural — webcam 1080p, đèn trong nhà
 

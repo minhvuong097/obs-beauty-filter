@@ -466,6 +466,21 @@ chroma dịch chuyển nên lỗ chân lông và nếp nhăn nhỏ không bị �
 Khoảng cách mẫu đi theo `radius`, nên control nhất quán ở 720p, 1080p và 4K sau
 khi C scale bán kính.
 
+### 6.3. Cường độ tổng
+
+`strength` là một multiplier cho toàn bộ kết quả, đặt sau khi xử lý màu và trước
+`opacity`:
+
+```hlsl
+if (strength < 0.999)
+	result = lerp(center, result, saturate(strength));
+result = lerp(center, result, saturate(opacity));
+```
+
+Nó không ghi vào preset và không thay đổi giá trị từng control, nên preset vẫn
+giữ đúng "look". Nhánh `if` giữ output của scene cũ giống từng bit: ở
+`strength = 1` phép trộn không chạy, tránh sai số làm tròn của `lerp` với hệ số 1.
+
 ## 7. Alpha, color space và HDR
 
 - Texture OBS thường là premultiplied alpha. Helper `sample_linear()` vừa unpremultiply vừa quy đổi về linear tương đối SDR:
@@ -498,7 +513,7 @@ khi C scale bán kính.
 ## 8. Preview
 
 - **Mask preview**: trả `float3(mask)` (premultiplied), cho thấy vùng da trắng và vùng khác đen.
-- **Split preview**: `uv.x < 0.5` trả màu gốc; nửa phải là kết quả.
+- **Split preview**: `uv.x < split_position` trả màu gốc; phần còn lại là kết quả. `split_position` mặc định 0.5 nên hành vi cũ giữ nguyên.
 - **Zone preview**: tô face prior xanh lá, eye zones xanh dương, quầng mắt tím và mouth zone vàng, dùng để kiểm tra face box.
 - Preview được đặt sau opacity để vẫn nhìn thấy mask dù opacity = 0 (trừ split).
 
@@ -557,7 +572,9 @@ Hướng phát triển: preset, compute shader cho radius lớn, đo GPU time, v
 | `face_h` | double | 0.02..1, full height |
 | `quality` | string | `fast`/`balanced`/`high` |
 | `split_view` | bool | |
+| `split_position` | double | 0.05..0.95, vị trí vạch chia tính từ mép trái |
 | `opacity` | double | 0..1 |
+| `strength` | double | 0..1, multiplier toàn cục; không nằm trong preset |
 | `anti_banding` | bool | dithering cho ngõ ra 8-bit |
 
 `src/beauty-presets.c` quản lý bảng preset có sẵn. Khi áp preset, plugin ghi các khóa tinh chỉnh ở trên nhưng không ghi `preset`; callback của property lưu lựa chọn và chuyển sang `custom` sau lần chỉnh tay đầu tiên.

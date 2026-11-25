@@ -14,10 +14,12 @@
   <a href="https://github.com/minhvuong097/obs-beauty-filter/actions/workflows/build.yml"><img alt="Build" src="https://github.com/minhvuong097/obs-beauty-filter/actions/workflows/build.yml/badge.svg"></a>
   <a href="https://github.com/minhvuong097/obs-beauty-filter/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/minhvuong097/obs-beauty-filter?display_name=tag"></a>
   <br>
+  <a href="https://github.com/minhvuong097/obs-beauty-filter/releases"><img alt="Total downloads" src="https://img.shields.io/github/downloads/minhvuong097/obs-beauty-filter/total"></a>
   <a href="LICENSE"><img alt="License: GPL-2.0-or-later" src="https://img.shields.io/badge/license-GPL--2.0--or--later-blue"></a>
-  <a href="https://obsproject.com"><img alt="OBS Studio 30.2+ | 33.0.1" src="https://img.shields.io/badge/OBS%20Studio-30.2%2B%20%7C%2033.0.1-6b46c1"></a>
   <br>
+  <a href="https://obsproject.com"><img alt="OBS Studio 30.2+ | 33.0.1" src="https://img.shields.io/badge/OBS%20Studio-30.2%2B%20%7C%2033.0.1-6b46c1"></a>
   <a href="#windows-installation"><img alt="Platform: Windows | Linux" src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-0078d4"></a>
+  <br>
   <a href="#technical-architecture"><img alt="Renderer: GPU-only, no AI" src="https://img.shields.io/badge/render-GPU--only%20%C2%B7%20no%20AI-success"></a>
 </p>
 
@@ -37,6 +39,18 @@
 A GPU beauty filter for **OBS Studio** on Windows and Linux (macOS can be built from source but is not tested). Version **1.10.0** runs entirely on the GPU, plugs into the standard OBS filter pipeline, uses no AI model, never reads a full-resolution frame back to the CPU, and has no third-party runtime dependency.
 
 Goal: natural-looking skin for livestreams/webcams **and high-resolution cameras** while preserving eyes, eyebrows, hair, pores and the face outline — with correct HDR handling.
+
+### Documentation
+
+| Document | Contents |
+|---|---|
+| [docs/TUNING.en.md](docs/TUNING.en.md) | Recipes per situation: webcam, cinema, close-up, dark skin, HDR |
+| [docs/ARCHITECTURE.en.md](docs/ARCHITECTURE.en.md) | Multi-pass flow, shader math and design decisions |
+| [docs/TESTING.en.md](docs/TESTING.en.md) | Test matrix, how to read the output, benchmark and diagnostics |
+| [docs/COMPATIBILITY.en.md](docs/COMPATIBILITY.en.md) | Tested OBS, platform and colour-space matrix |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Build, test, style and release process |
+| [SECURITY.md](SECURITY.md) | Reporting vulnerabilities, SHA-256 and build provenance |
+| [CHANGELOG.md](CHANGELOG.md) | Release notes per version |
 
 ## Demo
 
@@ -96,6 +110,10 @@ steps are in [`assets/demo/README.md`](assets/demo/README.md).
 
 ```
 obs-beauty-filter/
+├── .github/
+│   ├── workflows/build.yml  # CI: build, test, release + checksums
+│   ├── scripts/             # build-linux/windows, release-notes, check-version
+│   └── release-notes/       # release body per tag
 ├── CMakeLists.txt
 ├── CHANGELOG.md
 ├── CONTRIBUTING.md          # build/test/style/release conventions
@@ -317,11 +335,12 @@ set `INSTALL_LIBDIR=...` for Debian/Ubuntu multiarch).
    - **Rosy tint** `0.15`
    - **Auto light balance** `0.35`
    - **Teeth whitening / Eye brightening** `0` (enable when needed)
-3. When the look is right, type a name under **Preset name** and press **Save preset**; it appears in the dropdown as `Custom: <name>`. **Reset to defaults** returns everything to Default.
+   - **Master intensity** `1.0` (lower it to soften the whole effect for one shot without editing the preset)
+3. When the look is right, type a name under **Preset name** and press **Save preset**; it appears in the dropdown as `Custom: <name>`. **Reset to defaults** returns everything to Default, while **Reset group** restores only that group.
 4. Enable **Show skin mask** to inspect the skin mask. If skin-coloured walls/wood also turn white, keep **Face-aware zones** on and lower **Skin sensitivity**.
 5. Enable **Show face zones** to inspect the face box, eyes and mouth. If the box is wrong, enable **Manual face box** and adjust `Face center X/Y`, `Face width/height`.
 6. Raise **Teeth whitening** to `0.2–0.5` and **Eye brightening** to `0.1–0.3`. If surrounding skin brightens too, reduce these values.
-7. Enable **Split preview** to compare the left half (original) with the right half (processed), then turn it off.
+7. Enable **Split preview** to compare the left half (original) with the right half (processed), then drag **Split position** to place the divider where you need it and turn it off.
 8. If skin looks flat, raise **Detail preservation**, lower **Amount** or **Radius**.
 9. If the mask flickers during head motion, raise **Temporal mask stability** (`0.6–0.75`). If you see ghosting, lower it to `0.3–0.5`.
 
@@ -507,10 +526,10 @@ Expected final lines:
 ```text
 OK: built-in and custom presets, lookup, apply, defaults and NULL handling verified
 OK: render matrix verified 4 resolutions x 8 presets, opaque alpha, 16F range and finite output
-OK: module loaded, filter created, effect compiled, filter rendered, mask/opacity/face zones/texture/light balance/HDR verified
+OK: module loaded, filter created, effect compiled, filter rendered, mask/opacity/face zones/texture/even tone/under-eye/light balance/master intensity/split compare/HDR verified
 ```
 
-The integration test covers: default filter output, skin mask, opacity 0, teeth/eye zones (with a manual face box), zone preview colours, frequency separation on a textured skin pattern (contrast drops at low Detail and returns at high Detail), automatic light balance (a bright frame is pulled down after the readback tick), Rec.709 extended HDR and scRGB HDR (values above 1.0 are preserved, actually processed, and not double-scaled). It also checks that the preset/save/delete/reset property controls exist. The render matrix runs all 8 presets at 360p, 720p, 1080p and 1440p (opt-in 4K), verifies opaque alpha and finite 16F output, and compares a sampled golden image on Linux. See [docs/TESTING.en.md](docs/TESTING.en.md) for the full test matrix and the i5-1235U benchmark guide.
+The integration test covers: default filter output, skin mask, opacity 0, **master intensity** (`0` restores the source, `1` really processes), **split position** (divider moved off 0.5), teeth/eye zones (with a manual face box), zone preview colours, frequency separation on a textured skin pattern (contrast drops at low Detail and returns at high Detail), automatic light balance (a bright frame is pulled down after the readback tick), Rec.709 extended HDR and scRGB HDR (values above 1.0 are preserved, actually processed, and not double-scaled). It also checks that the preset/save/delete/reset property controls exist. The render matrix runs all 8 presets at 360p, 720p, 1080p and 1440p (opt-in 4K), verifies opaque alpha and finite 16F output, and compares a sampled golden image on Linux. See [docs/TESTING.en.md](docs/TESTING.en.md) for the full test matrix and the i5-1235U benchmark guide.
 
 > **Test status:** GitHub Actions builds and tests on both platforms. Linux (Alpine 3.21, OBS 30.2.3, OpenGL/Mesa llvmpipe) runs the full `beauty-face-region-test`, `beauty-preset-test`, `beauty-render-matrix-test` (with golden image) and `beauty-load-test` suite, then repeats the suite under ASan/UBSan. Windows x64 builds directly against OBS 33.0.1 source plus `obs-deps`, runs the same tests on the real D3D11 path (matrix invariants, module load + effect compilation), packages the new plugin layout, builds the `.exe` installer and silently installs/uninstalls it in a smoke test. A manual in-OBS render/HDR check on real hardware is still recommended; see [docs/TESTING.en.md](docs/TESTING.en.md) and the [compatibility matrix](docs/COMPATIBILITY.en.md).
 

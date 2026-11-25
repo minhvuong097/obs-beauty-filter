@@ -14,10 +14,12 @@
   <a href="https://github.com/minhvuong097/obs-beauty-filter/actions/workflows/build.yml"><img alt="Build" src="https://github.com/minhvuong097/obs-beauty-filter/actions/workflows/build.yml/badge.svg"></a>
   <a href="https://github.com/minhvuong097/obs-beauty-filter/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/minhvuong097/obs-beauty-filter?display_name=tag"></a>
   <br>
+  <a href="https://github.com/minhvuong097/obs-beauty-filter/releases"><img alt="Total downloads" src="https://img.shields.io/github/downloads/minhvuong097/obs-beauty-filter/total"></a>
   <a href="LICENSE"><img alt="License: GPL-2.0-or-later" src="https://img.shields.io/badge/license-GPL--2.0--or--later-blue"></a>
-  <a href="https://obsproject.com"><img alt="OBS Studio 30.2+ | 33.0.1" src="https://img.shields.io/badge/OBS%20Studio-30.2%2B%20%7C%2033.0.1-6b46c1"></a>
   <br>
+  <a href="https://obsproject.com"><img alt="OBS Studio 30.2+ | 33.0.1" src="https://img.shields.io/badge/OBS%20Studio-30.2%2B%20%7C%2033.0.1-6b46c1"></a>
   <a href="#cài-đặt-trên-windows"><img alt="Platform: Windows | Linux" src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-0078d4"></a>
+  <br>
   <a href="#kiến-trúc-kỹ-thuật"><img alt="Renderer: GPU-only, no AI" src="https://img.shields.io/badge/render-GPU--only%20%C2%B7%20no%20AI-success"></a>
 </p>
 
@@ -37,6 +39,18 @@
 Plugin bộ lọc làm đẹp cho **OBS Studio** trên Windows và Linux (macOS có thể build từ source nhưng chưa được kiểm thử). Phiên bản **1.10.0** chạy hoàn toàn trên GPU, hòa vào pipeline filter tiêu chuẩn của OBS, không cần model AI, không đọc ngược frame full-resolution về CPU và không phụ thuộc runtime bên thứ ba.
 
 Mục tiêu: làn da mịn tự nhiên cho livestream/webcam **và camera độ phân giải cao** mà vẫn giữ chi tiết mắt, lông mày, tóc, lỗ chân lông và viền khuôn mặt; đồng thời xử lý đúng nguồn HDR.
+
+### Tài liệu
+
+| Tài liệu | Nội dung |
+|---|---|
+| [docs/TUNING.md](docs/TUNING.md) | Công thức chỉnh theo từng tình huống: webcam, cinema, close-up, da sẫm màu, HDR |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Luồng multi-pass, công thức shader và các quyết định thiết kế |
+| [docs/TESTING.md](docs/TESTING.md) | Test matrix, cách đọc output, benchmark và chẩn đoán |
+| [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) | Ma trận OBS, nền tảng và không gian màu đã kiểm thử |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Build, test, style và quy trình phát hành |
+| [SECURITY.md](SECURITY.md) | Báo lỗi bảo mật, xác minh SHA-256 và build provenance |
+| [CHANGELOG.md](CHANGELOG.md) | Ghi chú phát hành theo từng phiên bản |
 
 ## Demo
 
@@ -96,6 +110,10 @@ của jonas.svidras; ghi công, miễn trừ và cách tạo lại nằm trong
 
 ```
 obs-beauty-filter/
+├── .github/
+│   ├── workflows/build.yml  # CI: build, test, release + checksum
+│   ├── scripts/             # build-linux/windows, release-notes, check-version
+│   └── release-notes/       # nội dung release theo từng tag
 ├── CHANGELOG.md
 ├── CMakeLists.txt
 ├── CONTRIBUTING.md          # quy ước build/test/style/phát hành
@@ -314,11 +332,12 @@ Hoặc `./scripts/build-linux.sh` rồi `sudo cmake --install build` (mặc đ�
    - **Rosy tint** `0.15`
    - **Cân bằng sáng tự động** `0.35`
    - **Teeth whitening / Eye brightening** `0` (bật khi cần)
-3. Khi đã vừa ý, nhập tên vào **Tên preset** và bấm **Lưu preset**; preset xuất hiện trong menu dưới dạng `Tùy chỉnh: <tên>`. **Đặt lại mặc định** đưa mọi thông số về Default.
+   - **Cường độ tổng** `1.0` (hạ xuống để giảm toàn bộ hiệu ứng cho cảnh đó mà không đổi preset)
+3. Khi đã vừa ý, nhập tên vào **Tên preset** và bấm **Lưu preset**; preset xuất hiện trong menu dưới dạng `Tùy chỉnh: <tên>`. **Đặt lại mặc định** đưa mọi thông số về Default, còn **Đặt lại nhóm** chỉ trả riêng nhóm đó về mặc định.
 4. Bật **Show skin mask** để kiểm tra mask da. Nếu tường/gỗ màu da cũng trắng, giữ **Face-aware zones** bật và giảm **Skin sensitivity**.
 5. Bật **Show face zones** để kiểm tra khung mặt, hai mắt và miệng. Nếu khung sai, bật **Manual face box** rồi chỉnh `Face center X/Y`, `Face width/height`.
 6. Tăng **Teeth whitening** `0.2–0.5` và **Eye brightening** `0.1–0.3`. Nếu vùng da quanh mắt/miệng bị sáng theo, giảm hai thông số này.
-7. Bật **Split preview** để so sánh nửa trái (gốc) và nửa phải (đã xử lý), sau đó tắt.
+7. Bật **Split preview** để so sánh nửa trái (gốc) và nửa phải (đã xử lý), rồi kéo **Split position** để đặt vạch chia đúng chỗ cần xem; sau đó tắt.
 8. Nếu da bị bệt: tăng **Detail preservation**, giảm **Amount** hoặc **Radius**.
 9. Nếu mask nhấp nháy khi đầu chuyển động: tăng **Temporal mask stability** (`0.6–0.75`). Nếu bị bóng mờ (ghosting), giảm xuống `0.3–0.5`.
 
@@ -497,10 +516,10 @@ Kỳ vọng các dòng cuối:
 ```text
 OK: built-in and custom presets, lookup, apply, defaults and NULL handling verified
 OK: render matrix verified 4 resolutions x 8 presets, opaque alpha, 16F range and finite output
-OK: module loaded, filter created, effect compiled, filter rendered, mask/opacity/face zones/texture/light balance/HDR verified
+OK: module loaded, filter created, effect compiled, filter rendered, mask/opacity/face zones/texture/even tone/under-eye/light balance/master intensity/split compare/HDR verified
 ```
 
-Test integration kiểm tra: filter mặc định, skin mask, opacity 0, teeth/eye zones (có mặt thủ công), zone preview, **frequency separation trên pattern da có texture** (contrast giảm khi Detail thấp và quay lại khi Detail cao), **cân bằng sáng tự động** (khung sáng bị hạ xuống sau readback tick), HDR Rec.709 extended và scRGB (giữ giá trị > 1, thực sự được xử lý và không bị scale hai lần), và các control preset/lưu/xóa/reset có tồn tại. Render matrix chạy cả 8 preset ở 360p, 720p, 1080p và 1440p (4K tùy chọn), kiểm tra alpha đục, ngõ ra 16F hữu hạn và so golden image dạng lấy mẫu trên Linux. Không được có lỗi shader trong log. Xem [docs/TESTING.md](docs/TESTING.md) cho test matrix đầy đủ và hướng dẫn benchmark i5-1235U.
+Test integration kiểm tra: filter mặc định, skin mask, opacity 0, **cường độ tổng** (`0` trả lại ảnh gốc, `1` xử lý thật), **split position** (vạch chia dời khỏi 0.5), teeth/eye zones (có mặt thủ công), zone preview, **frequency separation trên pattern da có texture** (contrast giảm khi Detail thấp và quay lại khi Detail cao), **cân bằng sáng tự động** (khung sáng bị hạ xuống sau readback tick), HDR Rec.709 extended và scRGB (giữ giá trị > 1, thực sự được xử lý và không bị scale hai lần), và các control preset/lưu/xóa/reset có tồn tại. Render matrix chạy cả 8 preset ở 360p, 720p, 1080p và 1440p (4K tùy chọn), kiểm tra alpha đục, ngõ ra 16F hữu hạn và so golden image dạng lấy mẫu trên Linux. Không được có lỗi shader trong log. Xem [docs/TESTING.md](docs/TESTING.md) cho test matrix đầy đủ và hướng dẫn benchmark i5-1235U.
 
 > **Trạng thái kiểm thử:** GitHub Actions build và chạy test tự động trên hai nền tảng. Linux (Alpine 3.21, OBS 30.2.3, OpenGL/Mesa llvmpipe) chạy đầy đủ `beauty-face-region-test`, `beauty-preset-test`, `beauty-render-matrix-test` (kèm golden image) và `beauty-load-test` (render, mask, texture, HDR), sau đó lặp lại dưới ASan/UBSan. Windows x64 build trực tiếp với source OBS 33.0.1 + `obs-deps`, chạy cùng bộ test trên đường D3D11 thật (render matrix invariant, load module + compile effect), rồi đóng gói theo layout plugin mới, tạo bộ cài `.exe` và chạy smoke test cài/gỡ silent. Vẫn nên xác nhận render/HDR thủ công trong OBS trên phần cứng thật; xem [docs/TESTING.md](docs/TESTING.md) và [ma trận tương thích](docs/COMPATIBILITY.md).
 

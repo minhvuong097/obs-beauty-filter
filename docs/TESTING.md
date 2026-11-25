@@ -120,7 +120,7 @@ Kỳ vọng (giá trị có thể xê dịch ±1–2 do làm tròn):
 
 ```text
 center pixel RGBA (original):   200 150 120 255
-center pixel RGBA (processed):  201 151 121 255
+center pixel RGBA (processed):  201 150 121 255
 center pixel RGBA (skin mask):  255 255 255 255
 center pixel RGBA (opacity 0):  200 150 120 255
 center pixel RGBA (strength 0): 200 150 120

@@ -16,13 +16,16 @@
 10. **Auto light balance**: keep 0.35 for most scenes; raise it in very dark rooms or strong backlight.
 11. **Temporal mask stability**: raise if the mask flickers; lower if fast head turns produce ghosting.
 12. **Under-eye correction / Teeth / Eyes**: enable last, at small values, and verify with **Show face zones** (under-eye is violet).
-13. **Split compare** to check, then turn it off before going live.
+13. **Master intensity**: once the look is right, use this slider to soften the whole effect for one shot without editing the preset (`1` = preset as saved, `0` = source).
+14. **Split compare** to check, drag **Split position** when you need a closer look at one area, then turn it off before going live.
 
 ## 2. Suggested presets
 
 The filter panel starts with a **Starting preset** dropdown. Pick the entry closest to your camera and lighting, then fine-tune the controls below. Changing any creative control marks the selection as **Custom (use current settings)**; the numbers in this section are the exact values each preset applies.
 
 **Default** restores the plugin defaults (Amount 0.35, Radius 6, Detail 0.35, sensitivity 0.50, Rosy 0.15, Clarity 0.10, Glow 0.05, light balance 0.35, temporal 0.60, Balanced quality, anti-banding on). Use it as a clean baseline before choosing a camera-specific preset.
+
+If only one group drifts too far, **Reset group** at the bottom of that group restores just that group and leaves the rest of the tuning alone. **Reset to defaults** still resets everything.
 
 ### Natural — 1080p webcam, indoor lighting
 

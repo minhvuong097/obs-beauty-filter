@@ -474,6 +474,22 @@ matrix golden output identical). The tap distance follows `radius`, so the
 control behaves consistently at 720p, 1080p and 4K after the C-side radius
 scaling.
 
+### 6.3. Master intensity
+
+`strength` is one multiplier for the whole result, applied after the colour work
+and before `opacity`:
+
+```hlsl
+if (strength < 0.999)
+	result = lerp(center, result, saturate(strength));
+result = lerp(center, result, saturate(opacity));
+```
+
+It is not stored in presets and does not touch the per-control values, so a
+preset keeps its look. The `if` keeps existing scenes bit-identical: at
+`strength = 1` the mix never runs, avoiding the rounding of a `lerp` with a
+factor of 1.
+
 ## 7. Alpha, colour space and HDR
 
 - OBS textures are usually premultiplied alpha. The `sample_linear()` helper both unpremultiplies and converts to SDR-relative linear:
@@ -506,7 +522,7 @@ scaling.
 ## 8. Previews
 
 - **Mask preview**: returns `float3(mask)` (premultiplied), showing skin as white and other areas as black.
-- **Split preview**: `uv.x < 0.5` returns the original; the right half is the result.
+- **Split preview**: `uv.x < split_position` returns the original; the rest is the result. `split_position` defaults to 0.5, so the old behaviour is unchanged.
 - **Zone preview**: tints the face prior green, eye zones blue, under-eye zone violet and mouth zone yellow, for checking the face box.
 - Previews are applied after opacity so the mask remains visible at opacity 0 (except split).
 
@@ -565,7 +581,9 @@ Future direction: presets, compute shaders for large radii, GPU timing, and opti
 | `face_h` | double | 0.02..1, full height |
 | `quality` | string | `fast`/`balanced`/`high` |
 | `split_view` | bool | |
+| `split_position` | double | 0.05..0.95, divider position from the left edge |
 | `opacity` | double | 0..1 |
+| `strength` | double | 0..1, global multiplier; not part of presets |
 | `anti_banding` | bool | 8-bit output dithering |
 
 `src/beauty-presets.c` owns the built-in preset table. Applying a preset writes the tuning keys above but never writes `preset` itself; the property callback stores the selection and switches it to `custom` after the first manual edit.
