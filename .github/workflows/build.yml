@@ -115,6 +115,11 @@ jobs:
       id-token: write
       attestations: write
     steps:
+      # The notes extractor and CHANGELOG.md live in the repository, and this
+      # job does not inherit the build jobs' checkouts.
+      - name: Checkout
+        uses: actions/checkout@v7
+
       - name: Download build artifacts
         uses: actions/download-artifact@v8
         with:
