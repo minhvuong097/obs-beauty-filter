@@ -11,6 +11,10 @@
 </p>
 
 <p align="center">
+  <sub><strong>Languages:</strong> C · HLSL · CMake · PowerShell · Python</sub>
+</p>
+
+<p align="center">
   <a href="https://github.com/minhvuong097/obs-beauty-filter/actions/workflows/build.yml"><img alt="Build" src="https://github.com/minhvuong097/obs-beauty-filter/actions/workflows/build.yml/badge.svg"></a>
   <a href="https://github.com/minhvuong097/obs-beauty-filter/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/minhvuong097/obs-beauty-filter?display_name=tag"></a>
   <br>
