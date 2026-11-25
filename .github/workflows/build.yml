@@ -125,6 +125,7 @@ jobs:
         working-directory: artifacts
         run: |
           sha256sum * > SHA256SUMS.txt
+          sha256sum -c SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       # GitHub's generated notes only contain a "Full Changelog" link, so the
