@@ -100,7 +100,9 @@ invariants hold.
   `data/locale/vi-VN.ini`; a missing key is skipped at runtime, which is harder
   to notice than a compile error.
 - Vietnamese and English documentation are kept in parallel files
-  (`README.md`/`README.en.md`, `docs/*.md`/`docs/*.en.md`). Update both.
+  (`README.md`/`README.en.md`, `docs/*.md`/`docs/*.en.md`). Update both;
+  `.github/scripts/check-docs.py` fails CI on a missing twin, a broken relative
+  link or a dead in-page anchor.
 - A new control needs a key in `src/beauty-settings.h`, a property in
   `beauty_properties()`, a default in `beauty_defaults()`, a uniform in
   `beauty_check_effect_params()`, both locale files and the README parameter
