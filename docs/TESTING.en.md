@@ -284,7 +284,7 @@ If a backend returns bottom-up rows (some drivers/backends may), the `pattern ey
 Open **Help → Log Files → View Current Log** and look for:
 
 - `Loading module: obs-beauty-filter` — module loaded.
-- `[obs-beauty-filter] version 1.10.0 loaded (GPL-2.0-or-later)` — the build
+- `[obs-beauty-filter] version 1.10.1 loaded (GPL-2.0-or-later)` — the build
   actually running; the same line is shown at the bottom of the properties page,
   so mention it in a bug report.
 - `Failed to load '...beauty_filter.effect'` — must **not** appear.
@@ -430,7 +430,7 @@ The plugin never reads back a full frame. CPU cost is only the 64×N grid (at mo
 
 ## 11. Windows-specific testing
 
-- Windows 10/11, OBS 30.2+ (64-bit); confirm on OBS 33.0.1 or newer first.
+- Windows 10/11, OBS 30.2+ (64-bit); confirm on OBS 33.0.3 or newer first.
 - Intel iGPU, NVIDIA and AMD GPUs.
 - Use **Dependencies** or **Process Monitor** if OBS does not see the DLL.
 - OBS 33+ layout: the DLL and data must sit in the same plugin directory:
@@ -453,7 +453,7 @@ Windows CI compiles `installer/obs-beauty-filter.iss` with Inno Setup 6 after
 packaging and then installs the setup silently into a temporary directory:
 
 ```powershell
-.\obs-beauty-filter-1.10.0-windows-x64-setup.exe /VERYSILENT /SUPPRESSMSGBOXES `
+.\obs-beauty-filter-1.10.1-windows-x64-setup.exe /VERYSILENT /SUPPRESSMSGBOXES `
   /NORESTART /SP- /DIR=C:\temp\beauty-installer-test /LOG=install.log
 ```
 
@@ -481,7 +481,7 @@ A Linux job can run:
 ```
 
 Windows CI needs OBS deps + the libobs package; follow the same approach as
-`obs-plugintemplate`. This repository's CI builds OBS 33.0.1 from source with
+`obs-plugintemplate`. This repository's CI builds OBS 33.0.3 from source with
 `obs-deps` and runs `beauty-load-test` on D3D11 (module load + effect
 compilation) before packaging. The full render/mask/HDR matrix still runs on
 Linux/OpenGL; keep the manual matrix in section 7 for GPU-specific validation.

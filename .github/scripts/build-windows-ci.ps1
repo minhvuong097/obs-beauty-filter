@@ -1,7 +1,7 @@
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 
-$ObsVersion = "33.0.1"
+$ObsVersion = "33.0.3"
 $DepsVersion = "2026-10-23"
 $DepsSha256 = "7508972a867a0ef68c26cd8bdba61fd999edd0a92fa9eb9585774de9bf51bfbe"
 

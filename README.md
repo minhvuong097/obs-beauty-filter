@@ -21,7 +21,7 @@
   <a href="https://github.com/minhvuong097/obs-beauty-filter/releases"><img alt="Total downloads" src="https://img.shields.io/github/downloads/minhvuong097/obs-beauty-filter/total"></a>
   <a href="LICENSE"><img alt="License: GPL-2.0-or-later" src="https://img.shields.io/badge/license-GPL--2.0--or--later-blue"></a>
   <br>
-  <a href="https://obsproject.com"><img alt="OBS Studio 30.2+ | 33.0.1" src="https://img.shields.io/badge/OBS%20Studio-30.2%2B%20%7C%2033.0.1-6b46c1"></a>
+  <a href="https://obsproject.com"><img alt="OBS Studio 30.2+ | 33.0.3" src="https://img.shields.io/badge/OBS%20Studio-30.2%2B%20%7C%2033.0.3-6b46c1"></a>
   <a href="#cài-đặt-trên-windows"><img alt="Platform: Windows | Linux" src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-0078d4"></a>
   <br>
   <a href="#kiến-trúc-kỹ-thuật"><img alt="Renderer: GPU-only, no AI" src="https://img.shields.io/badge/render-GPU--only%20%C2%B7%20no%20AI-success"></a>
@@ -40,7 +40,7 @@
   <a href="#giấy-phép">Giấy phép</a>
 </p>
 
-Plugin bộ lọc làm đẹp cho **OBS Studio** trên Windows và Linux (macOS có thể build từ source nhưng chưa được kiểm thử). Phiên bản **1.10.0** chạy hoàn toàn trên GPU, hòa vào pipeline filter tiêu chuẩn của OBS, không cần model AI, không đọc ngược frame full-resolution về CPU và không phụ thuộc runtime bên thứ ba.
+Plugin bộ lọc làm đẹp cho **OBS Studio** trên Windows và Linux (macOS có thể build từ source nhưng chưa được kiểm thử). Phiên bản **1.10.1** chạy hoàn toàn trên GPU, hòa vào pipeline filter tiêu chuẩn của OBS, không cần model AI, không đọc ngược frame full-resolution về CPU và không phụ thuộc runtime bên thứ ba.
 
 Mục tiêu: làn da mịn tự nhiên cho livestream/webcam **và camera độ phân giải cao** mà vẫn giữ chi tiết mắt, lông mày, tóc, lỗ chân lông và viền khuôn mặt; đồng thời xử lý đúng nguồn HDR.
 
@@ -182,7 +182,7 @@ Ma trận đầy đủ theo từng phiên bản OBS và không gian màu: [docs/
 
 ### Cách A — bộ cài `.exe` (khuyến nghị)
 
-Tải `obs-beauty-filter-1.10.0-windows-x64-setup.exe` tại
+Tải `obs-beauty-filter-1.10.1-windows-x64-setup.exe` tại
 **[GitHub Releases](https://github.com/minhvuong097/obs-beauty-filter/releases/latest)**
 rồi chạy. Bộ cài sẽ:
 
@@ -213,7 +213,7 @@ hay custom preset của OBS.
 
 ### Cách B — gói ZIP build sẵn (cài thủ công)
 
-- Windows x64: `obs-beauty-filter-1.10.0-windows-x64.zip`
+- Windows x64: `obs-beauty-filter-1.10.1-windows-x64.zip`
 - Linux x86_64: `obs-beauty-filter-linux-x86_64.tar.gz`
 - Mỗi release có kèm `SHA256SUMS.txt` để kiểm tra tệp tải về.
 
@@ -540,7 +540,7 @@ OK: module loaded, filter created, effect compiled, filter rendered, mask/opacit
 
 Test integration kiểm tra: filter mặc định, skin mask, opacity 0, **cường độ tổng** (`0` trả lại ảnh gốc, `1` xử lý thật), **split position** (vạch chia dời khỏi 0.5), teeth/eye zones (có mặt thủ công), zone preview, **frequency separation trên pattern da có texture** (contrast giảm khi Detail thấp và quay lại khi Detail cao), **cân bằng sáng tự động** (khung sáng bị hạ xuống sau readback tick), HDR Rec.709 extended và scRGB (giữ giá trị > 1, thực sự được xử lý và không bị scale hai lần), và các control preset/lưu/xóa/reset có tồn tại. Render matrix chạy cả 8 preset ở 360p, 720p, 1080p và 1440p (4K tùy chọn), kiểm tra alpha đục, ngõ ra 16F hữu hạn và so golden image dạng lấy mẫu trên Linux. Không được có lỗi shader trong log. Xem [docs/TESTING.md](docs/TESTING.md) cho test matrix đầy đủ và hướng dẫn benchmark i5-1235U.
 
-> **Trạng thái kiểm thử:** GitHub Actions build và chạy test tự động trên hai nền tảng. Linux (Alpine 3.21, OBS 30.2.3, OpenGL/Mesa llvmpipe) chạy đầy đủ `beauty-face-region-test`, `beauty-preset-test`, `beauty-render-matrix-test` (kèm golden image) và `beauty-load-test` (render, mask, texture, HDR), sau đó lặp lại dưới ASan/UBSan. Windows x64 build trực tiếp với source OBS 33.0.1 + `obs-deps`, chạy cùng bộ test trên đường D3D11 thật (render matrix invariant, load module + compile effect), rồi đóng gói theo layout plugin mới, tạo bộ cài `.exe` và chạy smoke test cài/gỡ silent. Vẫn nên xác nhận render/HDR thủ công trong OBS trên phần cứng thật; xem [docs/TESTING.md](docs/TESTING.md) và [ma trận tương thích](docs/COMPATIBILITY.md).
+> **Trạng thái kiểm thử:** GitHub Actions build và chạy test tự động trên hai nền tảng. Linux (Alpine 3.21, OBS 30.2.3, OpenGL/Mesa llvmpipe) chạy đầy đủ `beauty-face-region-test`, `beauty-preset-test`, `beauty-render-matrix-test` (kèm golden image) và `beauty-load-test` (render, mask, texture, HDR), sau đó lặp lại dưới ASan/UBSan. Windows x64 build trực tiếp với source OBS 33.0.3 + `obs-deps`, chạy cùng bộ test trên đường D3D11 thật (render matrix invariant, load module + compile effect), rồi đóng gói theo layout plugin mới, tạo bộ cài `.exe` và chạy smoke test cài/gỡ silent. Vẫn nên xác nhận render/HDR thủ công trong OBS trên phần cứng thật; xem [docs/TESTING.md](docs/TESTING.md) và [ma trận tương thích](docs/COMPATIBILITY.md).
 
 ## Changelog và tương thích
 

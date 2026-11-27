@@ -24,7 +24,7 @@ It creates a private advisory visible only to the maintainer.
 Include:
 
 - the plugin version shown in the OBS log
-  (`[obs-beauty-filter] version 1.10.0 loaded`) or in the properties page;
+  (`[obs-beauty-filter] version 1.10.1 loaded`) or in the properties page;
 - OBS version, OS and GPU/driver;
 - what an attacker can achieve and the steps to reproduce;
 - a crash dump or OBS log if the plugin crashed.
@@ -64,7 +64,7 @@ sha256sum -c SHA256SUMS.txt
 On Windows (PowerShell):
 
 ```powershell
-Get-FileHash -Algorithm SHA256 .\obs-beauty-filter-1.10.0-windows-x64-setup.exe
+Get-FileHash -Algorithm SHA256 .\obs-beauty-filter-1.10.1-windows-x64-setup.exe
 ```
 
 Compare the value with `SHA256SUMS.txt` and with the checksum printed in the

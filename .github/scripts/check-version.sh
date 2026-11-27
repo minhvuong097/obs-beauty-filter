@@ -4,7 +4,7 @@
 # Usage: check-version.sh [tag]
 #
 # CMakeLists.txt is the single source of truth.  The installer, both READMEs
-# and CHANGELOG.md must match it; when a tag is given (v1.10.0) the tag must
+# and CHANGELOG.md must match it; when a tag is given (v1.10.1) the tag must
 # match as well.  Runs in CI on every push and pull request so a forgotten
 # version bump fails before a release is published.
 set -eu

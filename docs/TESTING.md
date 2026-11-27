@@ -276,7 +276,7 @@ Nếu chạy trên backend trả về bottom-up (một số driver/backend có t
 Mở **Help → Log Files → View Current Log** và tìm:
 
 - `Loading module: obs-beauty-filter` — module được load.
-- `[obs-beauty-filter] version 1.10.0 loaded (GPL-2.0-or-later)` — đúng phiên bản
+- `[obs-beauty-filter] version 1.10.1 loaded (GPL-2.0-or-later)` — đúng phiên bản
   đang chạy; dòng này cũng hiện ở cuối trang thuộc tính, dùng khi báo lỗi.
 - `Failed to load '...beauty_filter.effect'` — **không** được xuất hiện.
 - `Compiler warnings/errors for ...beauty_filter.effect` — **không** được xuất hiện.
@@ -417,7 +417,7 @@ Không có CPU readback full-frame trong plugin. Chi phí CPU chỉ là grid 64�
 
 ## 11. Test trên Windows cụ thể
 
-- Windows 10/11, OBS 30.2+ (64-bit); ưu tiên xác nhận trên OBS 33.0.1 trở lên.
+- Windows 10/11, OBS 30.2+ (64-bit); ưu tiên xác nhận trên OBS 33.0.3 trở lên.
 - GPU Intel iGPU, NVIDIA, AMD.
 - Kiểm tra DLL load bằng **Dependencies** hoặc **Process Monitor** nếu OBS không thấy filter.
 - Layout OBS 33+: DLL và data phải nằm trong cùng một thư mục plugin:
@@ -440,7 +440,7 @@ CI Windows biên dịch `installer/obs-beauty-filter.iss` bằng Inno Setup 6 sa
 bước đóng gói, rồi cài silent vào thư mục tạm:
 
 ```powershell
-.\obs-beauty-filter-1.10.0-windows-x64-setup.exe /VERYSILENT /SUPPRESSMSGBOXES `
+.\obs-beauty-filter-1.10.1-windows-x64-setup.exe /VERYSILENT /SUPPRESSMSGBOXES `
   /NORESTART /SP- /DIR=C:\temp\beauty-installer-test /LOG=install.log
 ```
 
@@ -467,7 +467,7 @@ Có thể chạy job Linux:
 ```
 
 Windows CI cần OBS deps + libobs package; dùng cùng quy trình với
-`obs-plugintemplate`. CI của repo này build OBS 33.0.1 từ source với
+`obs-plugintemplate`. CI của repo này build OBS 33.0.3 từ source với
 `obs-deps` và chạy `beauty-load-test` trên D3D11 (load module + compile effect)
 trước khi đóng gói. Matrix render/mask/HDR đầy đủ vẫn chạy trên Linux/OpenGL;
 giữ matrix thủ công ở mục 7 để xác nhận theo từng GPU.

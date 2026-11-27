@@ -73,7 +73,7 @@ jobs:
           retention-days: 30
 
   windows:
-    name: Windows x64 (OBS 33.0.1)
+    name: Windows x64 (OBS 33.0.3)
     runs-on: windows-2022
     timeout-minutes: 120
     steps:

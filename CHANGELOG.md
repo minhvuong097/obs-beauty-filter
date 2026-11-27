@@ -5,6 +5,17 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.10.1] - 2026-11-27
+
+### Changed
+
+- **Built and tested against OBS Studio 33.0.3**, the current stable Windows
+  release, instead of 33.0.1. No plugin code changed: this release ships the
+  same features rebuilt and verified on the newer OBS patch, and the version
+  string in the OBS log now matches the artifact.
+- Windows CI, the installer, both READMEs, the issue template, the testing
+  guide and the compatibility matrix now reference 33.0.3.
+
 ## [1.10.0] - 2026-11-24
 
 ### Added
@@ -321,6 +332,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - OBS 33+ plugin layout on Windows, legacy layout for OBS 32 and older.
 - Linux and Windows CI builds with packaged artifacts.
 
+[1.10.1]: https://github.com/minhvuong097/obs-beauty-filter/releases/tag/v1.10.1
 [1.10.0]: https://github.com/minhvuong097/obs-beauty-filter/releases/tag/v1.10.0
 [1.9.0]: https://github.com/minhvuong097/obs-beauty-filter/releases/tag/v1.9.0
 [1.8.0]: https://github.com/minhvuong097/obs-beauty-filter/releases/tag/v1.8.0

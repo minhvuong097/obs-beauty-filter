@@ -51,7 +51,7 @@ body:
     attributes:
       label: OBS Studio version
       description: Help → About.
-      placeholder: "33.0.1"
+      placeholder: "33.0.3"
     validations:
       required: true
 
